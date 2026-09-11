@@ -1,6 +1,7 @@
-// Amazon AI Image Studio — W1 Prisma schema (users, workspaces, auth, projects)
+// Amazon AI Image Studio — W1+W2 Prisma schema
 // IDs: UUIDv7 generated in application code; DB type uuid.
 // Times: timestamptz via Prisma DateTime (@db.Timestamptz)
+// Tenancy: workspace_id on all tenant tables; composite FK (workspace_id, parent_id).
 
 generator client {
   provider = "prisma-client-js"
@@ -28,6 +29,60 @@ enum ProjectStatus {
   ARCHIVED
 }
 
+enum UploadSessionStatus {
+  CREATED
+  UPLOADING
+  UPLOADED
+  INSPECTING
+  READY
+  REJECTED
+  EXPIRED
+}
+
+enum AssetKind {
+  PRODUCT_PHOTO
+  REFERENCE
+  MASK
+  GENERATED
+  OTHER
+}
+
+enum AssetStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  REJECTED
+  ARCHIVED
+}
+
+enum AssetRepresentationKind {
+  ORIGINAL_UPLOAD
+  NORMALIZED_PNG
+  THUMBNAIL_WEBP
+  MASK_PNG
+  EDITOR_PREVIEW
+}
+
+enum TruthRevisionStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  SUPERSEDED
+}
+
+enum FactStatus {
+  EXTRACTED
+  CONFIRMED
+  REJECTED
+  LOCKED
+}
+
+enum ConstraintKind {
+  LOCK
+  ALLOW
+  UNKNOWN
+}
+
 model User {
   id             String     @id @db.Uuid
   email          String     @unique
@@ -40,10 +95,10 @@ model User {
   updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt      DateTime?  @map("deleted_at") @db.Timestamptz
 
-  accounts          Account[]
-  sessions          Session[]
-  ownedWorkspaces   Workspace[]       @relation("WorkspaceOwner")
-  memberships       WorkspaceMember[]
+  accounts        Account[]
+  sessions        Session[]
+  ownedWorkspaces Workspace[]       @relation("WorkspaceOwner")
+  memberships     WorkspaceMember[]
 
   @@map("users")
 }
@@ -99,9 +154,18 @@ model Workspace {
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
 
-  owner     User              @relation("WorkspaceOwner", fields: [ownerUserId], references: [id])
-  members   WorkspaceMember[]
-  projects  Project[]
+  owner               User                   @relation("WorkspaceOwner", fields: [ownerUserId], references: [id])
+  members             WorkspaceMember[]
+  projects            Project[]
+  uploadSessions      UploadSession[]
+  assets              Asset[]
+  assetVersions       AssetVersion[]
+  assetRepresentations AssetRepresentation[]
+  masks               Mask[]
+  truthDocuments      ProductTruthDocument[]
+  truthRevisions      ProductTruthRevision[]
+  productFacts        ProductFact[]
+  productConstraints  ProductConstraint[]
 
   @@index([ownerUserId])
   @@unique([id]) // enables composite FK targets (workspace_id, id)
@@ -139,10 +203,211 @@ model Project {
   updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt   DateTime?     @map("deleted_at") @db.Timestamptz
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace      Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploadSessions UploadSession[]
+  assets         Asset[]
+  truthDocument  ProductTruthDocument?
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, sku])
   @@index([workspaceId, status])
   @@map("projects")
+}
+
+model UploadSession {
+  id                     String              @id @db.Uuid
+  workspaceId            String              @map("workspace_id") @db.Uuid
+  projectId              String              @map("project_id") @db.Uuid
+  assetId                String              @map("asset_id") @db.Uuid
+  expectedKey            String              @map("expected_key")
+  expectedMime           String              @map("expected_mime")
+  expectedBytes          Int                 @map("expected_bytes")
+  expectedChecksumSha256 String?             @map("expected_checksum_sha256")
+  status                 UploadSessionStatus @default(CREATED)
+  /// Idempotency key for complete(); unique when set.
+  completionKey          String?             @unique @map("completion_key")
+  expiresAt              DateTime            @map("expires_at") @db.Timestamptz
+  rejectionReason        String?             @map("rejection_reason") @db.Text
+  createdByUserId        String              @map("created_by_user_id") @db.Uuid
+  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  project   Project   @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
+  asset     Asset     @relation(fields: [workspaceId, assetId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, projectId, status])
+  @@index([expiresAt])
+  @@map("upload_sessions")
+}
+
+model Asset {
+  id               String      @id @db.Uuid
+  workspaceId      String      @map("workspace_id") @db.Uuid
+  projectId        String      @map("project_id") @db.Uuid
+  kind             AssetKind   @default(PRODUCT_PHOTO)
+  status           AssetStatus @default(UPLOADING)
+  currentVersionId String?     @map("current_version_id") @db.Uuid
+  originalFilename String?     @map("original_filename")
+  createdByUserId  String      @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime?   @map("deleted_at") @db.Timestamptz
+
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  project        Project         @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
+  versions       AssetVersion[]
+  uploadSessions UploadSession[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, projectId, status])
+  @@map("assets")
+}
+
+model AssetVersion {
+  id                     String   @id @db.Uuid
+  workspaceId            String   @map("workspace_id") @db.Uuid
+  assetId                String   @map("asset_id") @db.Uuid
+  versionNumber          Int      @map("version_number")
+  primaryParentVersionId String?  @map("primary_parent_version_id") @db.Uuid
+  sha256                 String
+  mime                   String
+  width                  Int?
+  height                 Int?
+  colorSpace             String?  @map("color_space")
+  byteSize               Int      @map("byte_size")
+  metadataJson           Json     @default("{}") @map("metadata_json")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz
+  /// Content is immutable — no updatedAt; soft-delete only via asset.
+
+  workspace       Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  asset           Asset                 @relation(fields: [workspaceId, assetId], references: [workspaceId, id], onDelete: Restrict)
+  representations AssetRepresentation[]
+  masks           Mask[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, assetId, versionNumber])
+  @@index([workspaceId, sha256])
+  @@map("asset_versions")
+}
+
+model AssetRepresentation {
+  id             String                  @id @db.Uuid
+  workspaceId    String                  @map("workspace_id") @db.Uuid
+  assetVersionId String                  @map("asset_version_id") @db.Uuid
+  kind           AssetRepresentationKind
+  storageKey     String                  @map("storage_key")
+  sha256         String
+  bytes          Int
+  width          Int?
+  height         Int?
+  contentType    String                  @map("content_type")
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  assetVersion AssetVersion @relation(fields: [workspaceId, assetVersionId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, assetVersionId, kind])
+  @@index([workspaceId, assetVersionId])
+  @@map("asset_representations")
+}
+
+model Mask {
+  id             String   @id @db.Uuid
+  workspaceId    String   @map("workspace_id") @db.Uuid
+  assetVersionId String   @map("asset_version_id") @db.Uuid
+  strokesJson    Json     @default("[]") @map("strokes_json")
+  coordinateSpace String  @default("normalized_0_1") @map("coordinate_space")
+  metadataJson   Json     @default("{}") @map("metadata_json")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  assetVersion AssetVersion @relation(fields: [workspaceId, assetVersionId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, assetVersionId])
+  @@map("masks")
+}
+
+model ProductTruthDocument {
+  id                 String   @id @db.Uuid
+  workspaceId        String   @map("workspace_id") @db.Uuid
+  projectId          String   @map("project_id") @db.Uuid
+  currentRevisionId  String?  @map("current_revision_id") @db.Uuid
+  approvedRevisionId String?  @map("approved_revision_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  project   Project               @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
+  revisions ProductTruthRevision[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, projectId])
+  @@map("product_truth_documents")
+}
+
+model ProductTruthRevision {
+  id              String              @id @db.Uuid
+  workspaceId     String              @map("workspace_id") @db.Uuid
+  documentId      String              @map("document_id") @db.Uuid
+  revision        Int
+  status          TruthRevisionStatus @default(DRAFT)
+  schemaVersion   Int                 @default(1) @map("schema_version")
+  approvedByUserId String?            @map("approved_by_user_id") @db.Uuid
+  approvedAt      DateTime?           @map("approved_at") @db.Timestamptz
+  createdByUserId String              @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  document    ProductTruthDocument @relation(fields: [workspaceId, documentId], references: [workspaceId, id], onDelete: Restrict)
+  facts       ProductFact[]
+  constraints ProductConstraint[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, documentId, revision])
+  @@map("product_truth_revisions")
+}
+
+model ProductFact {
+  id                       String     @id @db.Uuid
+  workspaceId              String     @map("workspace_id") @db.Uuid
+  truthRevisionId          String     @map("truth_revision_id") @db.Uuid
+  key                      String
+  valueJson                Json       @map("value_json")
+  confidence               Float      @default(0)
+  status                   FactStatus @default(EXTRACTED)
+  evidenceAssetVersionIds  Json       @default("[]") @map("evidence_asset_version_ids")
+  createdAt                DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace     Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  truthRevision ProductTruthRevision @relation(fields: [workspaceId, truthRevisionId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, truthRevisionId, key])
+  @@index([workspaceId, truthRevisionId])
+  @@map("product_facts")
+}
+
+model ProductConstraint {
+  id              String         @id @db.Uuid
+  workspaceId     String         @map("workspace_id") @db.Uuid
+  truthRevisionId String         @map("truth_revision_id") @db.Uuid
+  kind            ConstraintKind
+  path            String
+  rule            String
+  severity        String         @default("MUST")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace     Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  truthRevision ProductTruthRevision @relation(fields: [workspaceId, truthRevisionId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, truthRevisionId, kind])
+  @@map("product_constraints")
 }
