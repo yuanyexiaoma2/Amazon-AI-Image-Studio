@@ -49,3 +49,6 @@ W2+ remain TODO per spec §24.
 ## Delivery note
 
 Feature branch `feat/w0-w1-baseline` opened as PR against `main` after greenfield scaffold landed on `main` (empty-repo bootstrap).
+
+## PR
+Opened from `feat/w0-w1-baseline` for review of W0/W1 baseline.
