@@ -29,14 +29,16 @@ enum ProjectStatus {
 }
 
 model User {
-  id           String     @id @db.Uuid
-  email        String     @unique
-  passwordHash String     @map("password_hash")
-  name         String?
-  status       UserStatus @default(ACTIVE)
-  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt    DateTime?  @map("deleted_at") @db.Timestamptz
+  id             String     @id @db.Uuid
+  email          String     @unique
+  passwordHash   String     @map("password_hash")
+  name           String?
+  status         UserStatus @default(ACTIVE)
+  /// Bumped on password change/reset/disable to invalidate JWT sessions (ADR-0002).
+  sessionVersion Int        @default(0) @map("session_version")
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt      DateTime?  @map("deleted_at") @db.Timestamptz
 
   accounts          Account[]
   sessions          Session[]

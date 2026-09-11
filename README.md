@@ -12,6 +12,19 @@ Greenfield MVP scaffold for an Amazon product-image production studio (Web + Wor
 - **Spec**: `docs/specs/amazon-ai-image-studio-v1.1.md`
 - **Progress**: `docs/progress.md`
 
+
+## Branch policy
+
+- **Do not** push feature or fix commits directly to `main`.
+- Use `feat/**` / `fix/**` branches and open a Pull Request.
+- `main` accepts merges only after review + green CI.
+
+## Auth (MVP)
+
+- Auth.js **Credentials + JWT Session** (24h `maxAge`).
+- `User.sessionVersion` invalidates JWTs on password change/reset/disable.
+- See `docs/adr/0002-auth-jwt-session.md` and `docs/architecture.md` (deviation from v1.1 DB-session preference).
+
 ## Prerequisites
 
 - Node.js **20+**
@@ -81,7 +94,9 @@ docs/             specs, progress, ADR, runbooks
 
 - Register at `/register` (email + password). Password is hashed with **Argon2id**.
 - Login at `/login` via Auth.js Credentials.
-- Auth.js cannot attach **database** sessions to the Credentials provider, so MVP uses **JWT sessions**. Prisma still has `sessions` / `accounts` tables for future OAuth and revocation work.
+- Auth.js cannot attach **database** sessions to the Credentials provider, so MVP uses **JWT sessions** (24h) plus `User.sessionVersion` revocation (ADR-0002 / CR-0001).
+- Prisma still has `sessions` / `accounts` tables for future OAuth and rollback.
+- Protected APIs use `requireActiveSession()` (active user + matching `sessionVersion`).
 
 ## Provider notes
 

@@ -4,16 +4,20 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma, UserRepository } from '@studio/db';
 import { verifyPassword } from './password';
 
+/** JWT lifetime: 24 hours (ADR-0002 / CR-0001). */
+export const JWT_MAX_AGE_SECONDS = 60 * 60 * 24;
+
 /**
- * Auth.js Credentials + Prisma models.
- * Note: Auth.js does not support database session strategy with the Credentials
- * provider (sessions would never be created). We use JWT sessions for email/password
- * MVP while keeping Session/Account tables in Prisma for future OAuth and revocation hooks.
- * See docs/progress.md W1-05 evidence.
+ * Auth.js Credentials + JWT Session (not DB session).
+ * Credentials provider cannot create DB sessions; we use JWT + User.sessionVersion
+ * for revocation. See docs/adr/0002-auth-jwt-session.md.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma) as never,
-  session: { strategy: 'jwt' },
+  session: {
+    strategy: 'jwt',
+    maxAge: JWT_MAX_AGE_SECONDS,
+  },
   pages: {
     signIn: '/login',
   },
@@ -42,6 +46,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: user.id,
           email: user.email,
           name: user.name,
+          sessionVersion: user.sessionVersion,
         };
       },
     }),
@@ -50,12 +55,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.sub = user.id;
+        token.sessionVersion = user.sessionVersion ?? 0;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user && token.sub) {
         session.user.id = token.sub;
+        session.sessionVersion =
+          typeof token.sessionVersion === 'number' ? token.sessionVersion : 0;
       }
       return session;
     },

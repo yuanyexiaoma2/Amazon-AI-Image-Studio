@@ -7,6 +7,9 @@
 5. Domain package must stay free of Next.js / BullMQ / Prisma client imports.
 6. Every task: implementation + tests + evidence in `docs/progress.md`.
 7. Never commit secrets — only `.env.example`.
+8. **Branch policy:** never push feature/fix commits straight to `main`. Use `feat/**` or `fix/**` branches and open a PR. Never force-push `main`.
+9. Do **not** self-mark `VERIFIED` in `docs/progress.md`. `VERIFIED` requires an independent reviewer or fresh AI context.
+10. Auth: JWT + `sessionVersion` (ADR-0002) — not silent DB-session assumption from v1.1.
 
 ## Standard commands
 
@@ -20,4 +23,7 @@ pnpm dev          # web
 pnpm worker       # bullmq worker
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 pnpm openapi:generate
+# E2E (server must be running):
+pnpm --filter @studio/web start &
+pnpm test:e2e
 ```

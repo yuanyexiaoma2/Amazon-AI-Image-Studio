@@ -35,6 +35,7 @@ export class UserRepository {
           email,
           passwordHash: input.passwordHash,
           name: input.name ?? null,
+          sessionVersion: 0,
         },
       });
 
@@ -57,5 +58,47 @@ export class UserRepository {
 
       return { user, workspace, membership };
     });
+  }
+
+  /** Increment sessionVersion to invalidate outstanding JWTs (ADR-0002). */
+  async bumpSessionVersion(userId: string): Promise<User> {
+    return this.db.user.update({
+      where: { id: userId },
+      data: { sessionVersion: { increment: 1 } },
+    });
+  }
+
+  async changePassword(userId: string, passwordHash: string): Promise<User> {
+    return this.db.user.update({
+      where: { id: userId },
+      data: {
+        passwordHash,
+        sessionVersion: { increment: 1 },
+      },
+    });
+  }
+
+  async disableAccount(userId: string): Promise<User> {
+    return this.db.user.update({
+      where: { id: userId },
+      data: {
+        status: 'DISABLED',
+        sessionVersion: { increment: 1 },
+      },
+    });
+  }
+
+  async listMemberships(userId: string) {
+    return this.db.workspaceMember.findMany({
+      where: { userId, deletedAt: null },
+      include: { workspace: true },
+    });
+  }
+
+  async isMemberOfWorkspace(userId: string, workspaceId: string): Promise<boolean> {
+    const m = await this.db.workspaceMember.findFirst({
+      where: { userId, workspaceId, deletedAt: null },
+    });
+    return Boolean(m);
   }
 }
