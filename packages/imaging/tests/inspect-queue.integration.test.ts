@@ -139,47 +139,7 @@ describe.skipIf(!run)('inspect queue path (NO INSPECT_INLINE)', () => {
     };
   }
 
-  async function publishOutboxLikeProduction(outbox: {
-    id: string;
-    workspaceId: string;
-    jobId: string;
-    payload: unknown;
-  }) {
-    const queueName = `asset-inspect-test-${newId().slice(0, 8)}`;
-    const connection = redisConn();
-    const queue = new Queue<InspectInput>(queueName, { connection });
-    const results: unknown[] = [];
-    const worker = new Worker<InspectInput>(
-      queueName,
-      async (job) => {
-        const r = await inspectUploadedAsset({
-          db,
-          storage,
-          input: job.data,
-        });
-        results.push(r);
-        return r;
-      },
-      { connection },
-    );
-    await queue.add('inspect', outbox.payload as InspectInput, {
-      jobId: outbox.jobId,
-      attempts: 5,
-      backoff: { type: 'fixed', delay: 50 },
-    });
-    await outboxRepo.markPublished(outbox.workspaceId, outbox.id);
-    // wait for job
-    for (let i = 0; i < 80; i++) {
-      if (results.length > 0) break;
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    await worker.close();
-    await queue.obliterate({ force: true });
-    await queue.close();
-    return results[0] as Awaited<ReturnType<typeof inspectUploadedAsset>>;
-  }
-
-  it('enqueue failure then recovery: DB INSPECTING + PENDING outbox, relay publishes with stable jobId', async () => {
+  it('enqueue failure then recovery: real Queue.add fail, relayPendingInspectOutbox recovers with exactly one stable jobId', async () => {
     const png = await makePng();
     const ctx = await seedUpload('recover', png);
     const { outbox } = await uploads.markInspectingWithOutbox({
@@ -195,20 +155,106 @@ describe.skipIf(!run)('inspect queue path (NO INSPECT_INLINE)', () => {
     expect(outbox.status).toBe('PENDING');
     expect(outbox.jobId).toBe(inspectJobId(ctx.session.id));
 
-    const session = await uploads.findSession(ctx.workspace.id, ctx.session.id);
-    expect(session?.status).toBe('INSPECTING');
+    const queueName = `asset-inspect-recover-${newId().slice(0, 8)}`;
+    const connection = redisConn();
+    const queue = new Queue<InspectInput>(queueName, { connection });
 
-    // Simulate publish failure: leave PENDING, then recovery relay
-    const pending = await outboxRepo.listPending(100);
-    expect(pending.some((p) => p.jobId === outbox.jobId)).toBe(true);
+    // --- Real first Queue.add() failure (not a simulated skip) ---
+    const originalAdd = queue.add.bind(queue);
+    let addCalls = 0;
+    queue.add = (async (...args: Parameters<typeof queue.add>) => {
+      addCalls += 1;
+      if (addCalls === 1) {
+        throw new Error('simulated Queue.add failure');
+      }
+      return originalAdd(...args);
+    }) as typeof queue.add;
 
-    const result = await publishOutboxLikeProduction(outbox);
-    expect(result.ok).toBe(true);
+    await expect(
+      queue.add('inspect', outbox.payload as InspectInput, {
+        jobId: outbox.jobId,
+        removeOnComplete: 100,
+        removeOnFail: 50,
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 2000 },
+      }),
+    ).rejects.toThrow(/simulated Queue\.add failure/);
 
-    const after = await outboxRepo.findByJobId(outbox.jobId);
-    expect(after?.status).toBe('PUBLISHED');
-    const ready = await uploads.findSession(ctx.workspace.id, ctx.session.id);
-    expect(ready?.status).toBe('READY');
+    // DB must remain INSPECTING + Outbox PENDING after publish failure
+    expect((await uploads.findSession(ctx.workspace.id, ctx.session.id))?.status).toBe(
+      'INSPECTING',
+    );
+    expect((await outboxRepo.findByJobId(outbox.jobId))?.status).toBe('PENDING');
+    expect(await queue.getJob(outbox.jobId)).toBeUndefined();
+
+    // Restore real add for production recovery path
+    queue.add = originalAdd;
+
+    // Isolate: only our PENDING row should be relayed onto this test queue
+    for (const row of await outboxRepo.listPending(500)) {
+      if (row.jobId !== outbox.jobId) {
+        await outboxRepo.markFailed(row.workspaceId, row.id, 'test-isolation');
+      }
+    }
+
+    const results: Array<Awaited<ReturnType<typeof inspectUploadedAsset>>> = [];
+    const worker = new Worker<InspectInput>(
+      queueName,
+      async (job) => {
+        const r = await inspectUploadedAsset({ db, storage, input: job.data });
+        results.push(r);
+        return r;
+      },
+      { connection },
+    );
+
+    // Production recovery relay (worker startup / interval path)
+    const { relayPendingInspectOutbox } = await import(
+      '../../../apps/worker/src/jobs/inspect-asset.js'
+    );
+    const published = await relayPendingInspectOutbox(queue, 100);
+    expect(published).toBe(1);
+
+    // Redis has exactly one job for the stable jobId
+    const job = await queue.getJob(outbox.jobId);
+    expect(job).toBeTruthy();
+    expect(job!.id).toBe(outbox.jobId);
+    const listed = await queue.getJobs([
+      'waiting',
+      'active',
+      'delayed',
+      'completed',
+      'failed',
+      'paused',
+    ]);
+    expect(listed.filter((j) => j?.id === outbox.jobId)).toHaveLength(1);
+
+    for (let i = 0; i < 100; i++) {
+      const ready = await uploads.findSession(ctx.workspace.id, ctx.session.id);
+      if (ready?.status === 'READY') break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+
+    expect((await outboxRepo.findByJobId(outbox.jobId))?.status).toBe('PUBLISHED');
+    expect((await uploads.findSession(ctx.workspace.id, ctx.session.id))?.status).toBe('READY');
+    expect(results.some((r) => r.ok)).toBe(true);
+
+    // Second recovery pass must not enqueue another job for the same jobId
+    const publishedAgain = await relayPendingInspectOutbox(queue, 100);
+    expect(publishedAgain).toBe(0);
+    const listedAfter = await queue.getJobs([
+      'waiting',
+      'active',
+      'delayed',
+      'completed',
+      'failed',
+      'paused',
+    ]);
+    expect(listedAfter.filter((j) => j?.id === outbox.jobId)).toHaveLength(1);
+
+    await worker.close();
+    await queue.obliterate({ force: true });
+    await queue.close();
   });
 
   it('worker double execution is idempotent: one Asset Version and one Representation per kind', async () => {

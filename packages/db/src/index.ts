@@ -8,7 +8,14 @@ export {
   type CreateVersionInput,
   type CreateRepresentationInput,
 } from './repositories/assets.js';
-export { TruthPackRepository, type SaveTruthRevisionInput } from './repositories/truth.js';
+export {
+  TruthPackRepository,
+  TruthPackConflictError,
+  TruthPackValidationError,
+  TruthPackForbiddenError,
+  TruthPackNotFoundError,
+  type SaveTruthRevisionInput,
+} from './repositories/truth.js';
 export {
   OutboxRepository,
   inspectJobId,

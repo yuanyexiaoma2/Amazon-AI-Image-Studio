@@ -1,9 +1,10 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '@prisma/client';
-import { canRoleApproveTruth } from '@studio/domain';
+import { canRoleApproveTruth, canRoleWriteTruth } from '@studio/domain';
 import {
   AssetRepository,
   ProjectRepository,
+  TruthPackConflictError,
   TruthPackRepository,
   UserRepository,
   newId,
@@ -27,6 +28,13 @@ describe.skipIf(!run)('Truth Pack approve hardening', () => {
     expect(canRoleApproveTruth('OWNER')).toBe(true);
     expect(canRoleApproveTruth('ADMIN')).toBe(true);
     expect(canRoleApproveTruth('REVIEWER')).toBe(true);
+  });
+
+  it('domain: REVIEWER cannot write Truth; OWNER/ADMIN/MEMBER can', () => {
+    expect(canRoleWriteTruth('REVIEWER')).toBe(false);
+    expect(canRoleWriteTruth('OWNER')).toBe(true);
+    expect(canRoleWriteTruth('ADMIN')).toBe(true);
+    expect(canRoleWriteTruth('MEMBER')).toBe(true);
   });
 
   it('cross-project revision approve rejected', async () => {
@@ -54,7 +62,6 @@ describe.skipIf(!run)('Truth Pack approve hardening', () => {
     });
     await truth.setRevisionStatus(workspace.id, revA.id, 'PENDING_REVIEW');
 
-    // Attempt approve revision of p1 while targeting p2
     await expect(
       truth.approveRevision(workspace.id, p2.id, revA.id, user.id),
     ).rejects.toThrow();
@@ -70,7 +77,6 @@ describe.skipIf(!run)('Truth Pack approve hardening', () => {
       email: `mem-${suffix}@example.com`,
       passwordHash: 'hash',
     });
-    // Add memberUser as MEMBER of owner's workspace
     await users.addMember({
       workspaceId: owner.workspace.id,
       userId: memberUser.user.id,
@@ -102,7 +108,6 @@ describe.skipIf(!run)('Truth Pack approve hardening', () => {
       name: 'B',
     });
 
-    // Create asset+version in workspace B
     const assetB = await db.asset.create({
       data: {
         id: newId(),
@@ -147,7 +152,6 @@ describe.skipIf(!run)('Truth Pack approve hardening', () => {
       createdByUserId: user.id,
       facts: [{ key: 'brand', value: 'Acme', status: 'CONFIRMED' }],
     });
-    // Still DRAFT — should fail
     await expect(
       truth.approveRevision(workspace.id, project.id, revision.id, user.id),
     ).rejects.toThrow(/PENDING_REVIEW/);
@@ -160,5 +164,163 @@ describe.skipIf(!run)('Truth Pack approve hardening', () => {
       user.id,
     );
     expect(approved.status).toBe('APPROVED');
+  });
+
+  it('concurrency: approve vs create new revision — no stale approve / no current pointer rewind', async () => {
+    const suffix = `${Date.now()}-${newId().slice(0, 8)}`;
+    const { user, workspace } = await users.createWithDefaultWorkspace({
+      email: `conc-rev-${suffix}@example.com`,
+      passwordHash: 'hash',
+    });
+    const project = await projects.create({
+      workspaceId: workspace.id,
+      sku: `CR-${suffix}`,
+      name: 'Concurrent Rev',
+    });
+    const { revision: revA } = await truth.saveNewRevision({
+      workspaceId: workspace.id,
+      projectId: project.id,
+      createdByUserId: user.id,
+      facts: [{ key: 'brand', value: 'Acme', status: 'CONFIRMED' }],
+    });
+    await truth.setRevisionStatus(workspace.id, revA.id, 'PENDING_REVIEW');
+
+    const outcomes = await Promise.allSettled([
+      truth.approveRevision(workspace.id, project.id, revA.id, user.id),
+      truth.saveNewRevision({
+        workspaceId: workspace.id,
+        projectId: project.id,
+        createdByUserId: user.id,
+        facts: [{ key: 'brand', value: 'Acme2', status: 'EXTRACTED' }],
+      }),
+    ]);
+
+    const approveOutcome = outcomes[0]!;
+    const createOutcome = outcomes[1]!;
+    expect(createOutcome.status).toBe('fulfilled');
+
+    const doc = await truth.getDocument(workspace.id, project.id);
+    expect(doc).toBeTruthy();
+    const current = await truth.getRevisionWithDetails(workspace.id, doc!.currentRevisionId!);
+    expect(current).toBeTruthy();
+
+    if (approveOutcome.status === 'fulfilled') {
+      // Approve won (before or after create). Must not leave approved pointer on a non-matching stale state:
+      // approved revision is A; current may still be A (approve after create failed to move? create always moves)
+      // or current is the newer revision if create ran after approve.
+      expect(approveOutcome.value.status).toBe('APPROVED');
+      expect(doc!.approvedRevisionId).toBe(revA.id);
+      // Current pointer must never be rewound incorrectly: if current !== A, it must be a newer revision.
+      if (doc!.currentRevisionId !== revA.id) {
+        expect(current!.revision).toBeGreaterThan(revA.revision);
+      }
+      // Exactly one APPROVED among A and any newer — A is APPROVED
+      const revAAfter = await truth.getRevisionWithDetails(workspace.id, revA.id);
+      expect(revAAfter!.status).toBe('APPROVED');
+    } else {
+      // Create won first: approve must fail; current is the new revision; A not APPROVED via successful approve
+      expect(approveOutcome.status).toBe('rejected');
+      expect(doc!.currentRevisionId).not.toBe(revA.id);
+      expect(doc!.approvedRevisionId).not.toBe(revA.id);
+      const revAAfter = await truth.getRevisionWithDetails(workspace.id, revA.id);
+      expect(revAAfter!.status).not.toBe('APPROVED');
+      expect(current!.id).toBe(doc!.currentRevisionId);
+    }
+
+    // Never: approved=A while current was moved to B and then rewound back by a late approve
+    // (conditional update prevents rewind). If approved=A and current=A, create must not have left a
+    // higher revision as current — already covered above.
+  });
+
+  it('concurrency: approve vs confirm — no APPROVED+EXTRACTED; no mutate after approve', async () => {
+    const suffix = `${Date.now()}-${newId().slice(0, 8)}`;
+    const { user, workspace } = await users.createWithDefaultWorkspace({
+      email: `conc-cf-${suffix}@example.com`,
+      passwordHash: 'hash',
+    });
+    const project = await projects.create({
+      workspaceId: workspace.id,
+      sku: `CF-${suffix}`,
+      name: 'Concurrent Confirm',
+    });
+    const { revision } = await truth.saveNewRevision({
+      workspaceId: workspace.id,
+      projectId: project.id,
+      createdByUserId: user.id,
+      facts: [{ key: 'material', value: 'steel', status: 'CONFIRMED' }],
+    });
+    await truth.setRevisionStatus(workspace.id, revision.id, 'PENDING_REVIEW');
+    const factId = revision.facts[0]!.id;
+
+    const outcomes = await Promise.allSettled([
+      truth.approveRevision(workspace.id, project.id, revision.id, user.id),
+      truth.updateFactStatuses(workspace.id, [{ factId, status: 'EXTRACTED' }]),
+    ]);
+
+    const approveOutcome = outcomes[0]!;
+    const confirmOutcome = outcomes[1]!;
+
+    const after = await truth.getRevisionWithDetails(workspace.id, revision.id);
+    expect(after).toBeTruthy();
+
+    if (after!.status === 'APPROVED') {
+      expect(approveOutcome.status).toBe('fulfilled');
+      // Must not still have EXTRACTED facts
+      expect(after!.facts.every((f) => f.status !== 'EXTRACTED')).toBe(true);
+      // Confirm must not have mutated after approve (either failed or ran before)
+      if (confirmOutcome.status === 'fulfilled') {
+        // confirm ran first then approve — facts were EXTRACTED then approve would fail.
+        // So if APPROVED, confirm cannot have left EXTRACTED; if confirm fulfilled while APPROVED,
+        // that would mean confirm mutated after — forbidden. With locks, confirm after approve rejects.
+        expect(after!.facts[0]!.status).not.toBe('EXTRACTED');
+      } else {
+        expect(confirmOutcome.status).toBe('rejected');
+        expect(confirmOutcome.reason).toBeInstanceOf(TruthPackConflictError);
+      }
+    } else {
+      // Approve failed because confirm flipped to EXTRACTED first
+      expect(approveOutcome.status).toBe('rejected');
+      expect(after!.facts.some((f) => f.status === 'EXTRACTED')).toBe(true);
+      expect(confirmOutcome.status).toBe('fulfilled');
+    }
+
+    // Hard invariant
+    if (after!.status === 'APPROVED') {
+      expect(after!.facts.some((f) => f.status === 'EXTRACTED')).toBe(false);
+    }
+  });
+
+  it('atomic approve: concurrent double-approve allows exactly one success', async () => {
+    const suffix = `${Date.now()}-${newId().slice(0, 8)}`;
+    const { user, workspace } = await users.createWithDefaultWorkspace({
+      email: `dbl-${suffix}@example.com`,
+      passwordHash: 'hash',
+    });
+    const project = await projects.create({
+      workspaceId: workspace.id,
+      sku: `DBL-${suffix}`,
+      name: 'Double Approve',
+    });
+    const { revision } = await truth.saveNewRevision({
+      workspaceId: workspace.id,
+      projectId: project.id,
+      createdByUserId: user.id,
+      facts: [{ key: 'size', value: 'L', status: 'CONFIRMED' }],
+    });
+    await truth.setRevisionStatus(workspace.id, revision.id, 'PENDING_REVIEW');
+
+    const outcomes = await Promise.allSettled([
+      truth.approveRevision(workspace.id, project.id, revision.id, user.id),
+      truth.approveRevision(workspace.id, project.id, revision.id, user.id),
+    ]);
+    const successes = outcomes.filter((o) => o.status === 'fulfilled');
+    const failures = outcomes.filter((o) => o.status === 'rejected');
+    expect(successes).toHaveLength(1);
+    expect(failures).toHaveLength(1);
+
+    const after = await truth.getRevisionWithDetails(workspace.id, revision.id);
+    expect(after!.status).toBe('APPROVED');
+    const doc = await truth.getDocument(workspace.id, project.id);
+    expect(doc!.approvedRevisionId).toBe(revision.id);
   });
 });

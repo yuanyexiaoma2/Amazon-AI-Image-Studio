@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server';
 import { ConfirmFactsRequestSchema, makeApiError } from '@studio/contracts';
 import { canTransitionFact, type FactStatus } from '@studio/domain';
-import { prisma, ProjectRepository, TruthPackRepository } from '@studio/db';
+import {
+  prisma,
+  ProjectRepository,
+  TruthPackRepository,
+  TruthPackConflictError,
+  TruthPackNotFoundError,
+} from '@studio/db';
 import { getOrCreateRequestId } from '@/lib/request-id';
-import { requireWorkspaceMember } from '@/lib/workspace-access';
+import { requireWorkspaceRoles } from '@/lib/workspace-access';
+import { TRUTH_WRITE_ROLES } from '@studio/domain';
 import { serializeTruthPack } from '@/lib/truth-serialize';
 
 type Ctx = { params: Promise<{ workspaceId: string; projectId: string }> };
@@ -11,7 +18,7 @@ type Ctx = { params: Promise<{ workspaceId: string; projectId: string }> };
 export async function POST(request: Request, context: Ctx) {
   const requestId = getOrCreateRequestId(request.headers.get('x-request-id'));
   const { workspaceId, projectId } = await context.params;
-  const access = await requireWorkspaceMember(workspaceId, requestId);
+  const access = await requireWorkspaceRoles(workspaceId, requestId, TRUTH_WRITE_ROLES);
   if (!access.ok) return access.response;
 
   const projects = new ProjectRepository(prisma);
@@ -78,15 +85,31 @@ export async function POST(request: Request, context: Ctx) {
     }
   }
 
-  await truth.updateFactStatuses(
-    workspaceId,
-    parsed.data.updates.map((u) => ({ factId: u.factId, status: u.status })),
-  );
+  try {
+    await truth.updateFactStatuses(
+      workspaceId,
+      parsed.data.updates.map((u) => ({ factId: u.factId, status: u.status })),
+    );
 
-  // Move draft to pending review when all extracteds are resolved
-  const refreshed = await truth.getRevisionWithDetails(workspaceId, document.currentRevisionId);
-  if (refreshed && refreshed.facts.every((f) => f.status !== 'EXTRACTED')) {
-    await truth.setRevisionStatus(workspaceId, refreshed.id, 'PENDING_REVIEW');
+    // Move draft to pending review when all extracteds are resolved
+    const refreshed = await truth.getRevisionWithDetails(workspaceId, document.currentRevisionId);
+    if (refreshed && refreshed.facts.every((f) => f.status !== 'EXTRACTED')) {
+      await truth.setRevisionStatus(workspaceId, refreshed.id, 'PENDING_REVIEW');
+    }
+  } catch (err) {
+    if (err instanceof TruthPackNotFoundError) {
+      return NextResponse.json(makeApiError('NOT_FOUND', err.message, requestId), {
+        status: 404,
+        headers: { 'x-request-id': requestId },
+      });
+    }
+    if (err instanceof TruthPackConflictError) {
+      return NextResponse.json(makeApiError('CONFLICT', err.message, requestId), {
+        status: 409,
+        headers: { 'x-request-id': requestId },
+      });
+    }
+    throw err;
   }
 
   const finalRev = await truth.getRevisionWithDetails(workspaceId, document.currentRevisionId);

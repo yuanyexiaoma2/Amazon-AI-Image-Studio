@@ -8,7 +8,8 @@ import {
   AssetRepository,
 } from '@studio/db';
 import { getOrCreateRequestId } from '@/lib/request-id';
-import { requireWorkspaceMember } from '@/lib/workspace-access';
+import { requireWorkspaceRoles } from '@/lib/workspace-access';
+import { TRUTH_WRITE_ROLES } from '@studio/domain';
 import { serializeTruthPack } from '@/lib/truth-serialize';
 
 type Ctx = { params: Promise<{ workspaceId: string; projectId: string }> };
@@ -20,7 +21,7 @@ type Ctx = { params: Promise<{ workspaceId: string; projectId: string }> };
 export async function POST(request: Request, context: Ctx) {
   const requestId = getOrCreateRequestId(request.headers.get('x-request-id'));
   const { workspaceId, projectId } = await context.params;
-  const access = await requireWorkspaceMember(workspaceId, requestId);
+  const access = await requireWorkspaceRoles(workspaceId, requestId, TRUTH_WRITE_ROLES);
   if (!access.ok) return access.response;
 
   const projects = new ProjectRepository(prisma);

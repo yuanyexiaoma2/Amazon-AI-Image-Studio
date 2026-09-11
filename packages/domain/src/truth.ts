@@ -47,11 +47,29 @@ export const DEFAULT_LOCK_PATHS = [
 
 export const DEFAULT_ALLOW_PATHS = ['background', 'surface', 'ambient lighting'] as const;
 
-
 export type WorkspaceRoleName = 'OWNER' | 'ADMIN' | 'MEMBER' | 'REVIEWER';
 
-const APPROVE_ROLES: ReadonlySet<WorkspaceRoleName> = new Set(['OWNER', 'ADMIN', 'REVIEWER']);
+/** Mutating Truth Pack ops (PUT / extract / confirm): OWNER/ADMIN/MEMBER only. */
+export const TRUTH_WRITE_ROLES: ReadonlyArray<WorkspaceRoleName> = [
+  'OWNER',
+  'ADMIN',
+  'MEMBER',
+];
+
+/** Approve: OWNER/ADMIN/REVIEWER. REVIEWER may read + approve only. */
+export const TRUTH_APPROVE_ROLES: ReadonlyArray<WorkspaceRoleName> = [
+  'OWNER',
+  'ADMIN',
+  'REVIEWER',
+];
+
+const APPROVE_ROLES: ReadonlySet<WorkspaceRoleName> = new Set(TRUTH_APPROVE_ROLES);
+const WRITE_ROLES: ReadonlySet<WorkspaceRoleName> = new Set(TRUTH_WRITE_ROLES);
 
 export function canRoleApproveTruth(role: string): boolean {
   return APPROVE_ROLES.has(role as WorkspaceRoleName);
+}
+
+export function canRoleWriteTruth(role: string): boolean {
+  return WRITE_ROLES.has(role as WorkspaceRoleName);
 }

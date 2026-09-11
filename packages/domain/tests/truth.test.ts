@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canApproveTruthRevision, canRoleApproveTruth, canTransitionFact } from '../src/truth.js';
+import { canApproveTruthRevision, canRoleApproveTruth, canRoleWriteTruth, canTransitionFact } from '../src/truth.js';
 
 describe('truth pack gates', () => {
   it('allows EXTRACTED -> CONFIRMED', () => {
@@ -32,5 +32,12 @@ describe('truth pack gates', () => {
     expect(canRoleApproveTruth('OWNER')).toBe(true);
     expect(canRoleApproveTruth('ADMIN')).toBe(true);
     expect(canRoleApproveTruth('REVIEWER')).toBe(true);
+  });
+
+  it('REVIEWER cannot write Truth; OWNER ADMIN MEMBER can', () => {
+    expect(canRoleWriteTruth('REVIEWER')).toBe(false);
+    expect(canRoleWriteTruth('OWNER')).toBe(true);
+    expect(canRoleWriteTruth('ADMIN')).toBe(true);
+    expect(canRoleWriteTruth('MEMBER')).toBe(true);
   });
 });
