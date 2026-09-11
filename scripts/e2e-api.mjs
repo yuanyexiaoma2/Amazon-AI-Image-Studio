@@ -3,9 +3,13 @@
  * Real API E2E (not a noop):
  * 1) register → login → create project → cross-workspace denied
  * 2) sessionVersion: old cookie 401 after password change / disable; password swap
+ * 3) W2: upload → inspect → extract → confirm → approve Truth Pack
  * Expects a running Next.js server at APP_URL (default http://127.0.0.1:3000).
+ * Prefer INSPECT_INLINE=1 so complete() finishes inspect without a separate worker.
  */
 import { setTimeout as sleep } from 'node:timers/promises';
+import { createHash } from 'node:crypto';
+import sharp from 'sharp';
 
 const base = (process.env.APP_URL ?? 'http://127.0.0.1:3000').replace(/\/$/, '');
 const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -341,6 +345,147 @@ async function main() {
   ok(`SV: old cookie → ${afterDisable.status} after account disable`);
 
   console.log('E2E PASS: sessionVersion (password change + disable revoke old cookies)');
+
+  // --- W2 upload → Truth Pack approve ---
+  const emailW2 = `e2e-w2-${suffix}@example.com`;
+  await register(emailW2, password, 'W2 User');
+  const jarW2 = await login(emailW2, password);
+  const meW2 = await me(jarW2);
+  const wsW2 = meW2.workspaces[0].id;
+  const projW2 = await createProject(jarW2, wsW2, `W2-${suffix}`, 'W2 Truth Project');
+  if (projW2.status !== 201) fail('w2 create project', projW2);
+  const projectId = projW2.json.id;
+  ok(`W2 project ${projectId}`);
+
+  const png = await sharp({
+    create: { width: 128, height: 96, channels: 3, background: { r: 250, g: 250, b: 250 } },
+  })
+    .png()
+    .toBuffer();
+  const checksum = createHash('sha256').update(png).digest('hex');
+
+  const presignRes = await fetch(`${base}/api/workspaces/${wsW2}/uploads/presign`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      cookie: jarW2.header(),
+      'x-request-id': `e2e-presign-${suffix}`,
+    },
+    body: JSON.stringify({
+      projectId,
+      filename: 'front.png',
+      mimeType: 'image/png',
+      bytes: png.length,
+    }),
+  });
+  const presign = await presignRes.json();
+  if (presignRes.status !== 201) fail('presign', { status: presignRes.status, presign });
+  ok(`W2 presign uploadId=${presign.uploadId}`);
+
+  const putRes = await fetch(presign.uploadUrl, {
+    method: 'PUT',
+    headers: presign.headers ?? { 'Content-Type': 'image/png' },
+    body: png,
+  });
+  if (!putRes.ok) fail('S3 PUT', { status: putRes.status, text: await putRes.text() });
+  ok('W2 PUT original to MinIO');
+
+  const completeRes = await fetch(
+    `${base}/api/workspaces/${wsW2}/uploads/${presign.uploadId}/complete`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-complete-${suffix}`,
+      },
+      body: JSON.stringify({
+        checksumSha256: checksum,
+        completionKey: `e2e-complete-${presign.uploadId}`,
+      }),
+    },
+  );
+  const complete = await completeRes.json();
+  if (completeRes.status !== 200) fail('complete', { status: completeRes.status, complete });
+  ok(`W2 complete status=${complete.status} asset=${complete.assetStatus}`);
+
+  let asset = null;
+  for (let i = 0; i < 40; i++) {
+    const aRes = await fetch(`${base}/api/workspaces/${wsW2}/assets/${presign.assetId}`, {
+      headers: { cookie: jarW2.header(), 'x-request-id': `e2e-asset-${suffix}-${i}` },
+    });
+    asset = await aRes.json();
+    if (aRes.status === 200 && (asset.status === 'READY' || asset.status === 'REJECTED')) break;
+    await sleep(250);
+  }
+  if (!asset || asset.status !== 'READY') fail('asset not READY', asset);
+  if (!asset.currentVersionId) fail('missing currentVersionId', asset);
+  const hasThumb = (asset.versions?.[0]?.representations ?? []).some((r) => r.kind === 'THUMBNAIL_WEBP');
+  if (!hasThumb) fail('missing THUMBNAIL_WEBP', asset.versions);
+  ok(`W2 asset READY version=${asset.currentVersionId} thumb=yes`);
+
+  // Cross-tenant: B cannot read A's asset
+  const crossAsset = await fetch(`${base}/api/workspaces/${wsW2}/assets/${presign.assetId}`, {
+    headers: { cookie: jarB.header(), 'x-request-id': `e2e-asset-x-${suffix}` },
+  });
+  if (crossAsset.status !== 403) fail('expected cross-workspace asset 403', { status: crossAsset.status });
+  ok('W2 cross-workspace asset denied');
+
+  const extractRes = await fetch(
+    `${base}/api/workspaces/${wsW2}/projects/${projectId}/truth-pack/extract`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-extract-${suffix}`,
+      },
+      body: JSON.stringify({ assetVersionIds: [asset.currentVersionId] }),
+    },
+  );
+  const extracted = await extractRes.json();
+  if (extractRes.status !== 201) fail('extract', { status: extractRes.status, extracted });
+  if (extracted.provider !== 'fake-vision') fail('expected fake-vision provider', extracted);
+  const pack = extracted.pack;
+  if (!pack?.revision?.facts?.length) fail('no facts', pack);
+  ok(`W2 extract facts=${pack.revision.facts.length}`);
+
+  const updates = pack.revision.facts.map((f) => ({ factId: f.id, status: 'CONFIRMED' }));
+  const confirmRes = await fetch(
+    `${base}/api/workspaces/${wsW2}/projects/${projectId}/truth-pack/confirm`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-confirm-${suffix}`,
+      },
+      body: JSON.stringify({ updates }),
+    },
+  );
+  const confirmed = await confirmRes.json();
+  if (confirmRes.status !== 200) fail('confirm', { status: confirmRes.status, confirmed });
+  ok('W2 facts confirmed');
+
+  const approveRes = await fetch(
+    `${base}/api/workspaces/${wsW2}/projects/${projectId}/truth-pack/approve`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-approve-${suffix}`,
+      },
+      body: JSON.stringify({ revisionId: confirmed.revision.id }),
+    },
+  );
+  const approved = await approveRes.json();
+  if (approveRes.status !== 200) fail('approve', { status: approveRes.status, approved });
+  if (approved.revision?.status !== 'APPROVED') fail('not APPROVED', approved);
+  if (!approved.approvedRevisionId) fail('missing approvedRevisionId', approved);
+  ok('W2 Truth Pack APPROVED');
+
+  console.log('E2E PASS: W2 upload → inspect → thumbnail → extract → confirm → approve');
 }
 
 main().catch((err) => {

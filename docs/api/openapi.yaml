@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: Amazon AI Image Studio API
-  version: 0.1.0
-  description: MVP OpenAPI skeleton generated from Zod contracts (W1-07).
+  version: 0.2.0
+  description: OpenAPI generated from Zod contracts (W1 + W2 upload / Truth Pack).
 servers:
   - url: http://localhost:3000
 components:
@@ -87,7 +87,7 @@ components:
           nullable: true
         status:
           type: string
-          enum: &a1
+          enum:
             - ACTIVE
             - ARCHIVED
         createdAt:
@@ -123,6 +123,255 @@ components:
             - requestId
       required:
         - error
+    PresignUploadRequest:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 255
+        mimeType:
+          type: string
+          enum: &a2
+            - image/png
+            - image/jpeg
+            - image/webp
+        bytes:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 20971520
+      required:
+        - projectId
+        - filename
+        - mimeType
+        - bytes
+    PresignUploadResponse:
+      type: object
+      properties:
+        uploadId:
+          type: string
+          format: uuid
+        assetId:
+          type: string
+          format: uuid
+        uploadUrl:
+          type: string
+          format: uri
+        storageKey:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - uploadId
+        - assetId
+        - uploadUrl
+        - storageKey
+        - expiresAt
+    CompleteUploadRequest:
+      type: object
+      properties:
+        checksumSha256:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        completionKey:
+          type: string
+          minLength: 8
+          maxLength: 128
+    CompleteUploadResponse:
+      type: object
+      properties:
+        uploadId:
+          type: string
+          format: uuid
+        assetId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: &a3
+            - CREATED
+            - UPLOADING
+            - UPLOADED
+            - INSPECTING
+            - READY
+            - REJECTED
+            - EXPIRED
+        assetStatus:
+          type: string
+          enum: &a4
+            - UPLOADING
+            - PROCESSING
+            - READY
+            - REJECTED
+            - ARCHIVED
+      required:
+        - uploadId
+        - assetId
+        - status
+        - assetStatus
+    TruthPackResponse:
+      type: object
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        currentRevisionId:
+          type: string
+          nullable: true
+          format: uuid
+        approvedRevisionId:
+          type: string
+          nullable: true
+          format: uuid
+        revision:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            revision:
+              type: integer
+            status:
+              type: string
+              enum: &a5
+                - DRAFT
+                - PENDING_REVIEW
+                - APPROVED
+                - SUPERSEDED
+            facts:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  key:
+                    type: string
+                  value:
+                    nullable: true
+                  confidence:
+                    type: number
+                  status:
+                    type: string
+                    enum: &a1
+                      - EXTRACTED
+                      - CONFIRMED
+                      - REJECTED
+                      - LOCKED
+                  evidenceAssetVersionIds:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                required:
+                  - id
+                  - key
+                  - confidence
+                  - status
+                  - evidenceAssetVersionIds
+            constraints:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  kind:
+                    type: string
+                    enum: &a6
+                      - LOCK
+                      - ALLOW
+                      - UNKNOWN
+                  path:
+                    type: string
+                  rule:
+                    type: string
+                  severity:
+                    type: string
+                required:
+                  - id
+                  - kind
+                  - path
+                  - rule
+                  - severity
+            approvedAt:
+              type: string
+              nullable: true
+              format: date-time
+            approvedByUserId:
+              type: string
+              nullable: true
+              format: uuid
+          required:
+            - id
+            - revision
+            - status
+            - facts
+            - constraints
+            - approvedAt
+            - approvedByUserId
+      required:
+        - documentId
+        - projectId
+        - currentRevisionId
+        - approvedRevisionId
+        - revision
+    SaveTruthPackRequest:
+      type: object
+      properties:
+        facts:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+                minLength: 1
+                maxLength: 128
+              value:
+                nullable: true
+              confidence:
+                type: number
+                minimum: 0
+                maximum: 1
+              status:
+                type: string
+                enum: *a1
+              evidenceAssetVersionIds:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+            required:
+              - key
+          minItems: 1
+        locks:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        allowedChanges:
+          type: array
+          items:
+            type: string
+            minLength: 1
+      required:
+        - facts
   parameters: {}
 paths:
   /api/register:
@@ -192,37 +441,35 @@ paths:
                       - requestId
                 required:
                   - error
-  /api/projects:
+  /api/workspaces/{workspaceId}/uploads/presign:
     post:
-      summary: Create a project in the current workspace
+      summary: Create presigned upload session + Asset stub
       requestBody:
         content:
           application/json:
             schema:
               type: object
               properties:
-                sku:
+                projectId:
+                  type: string
+                  format: uuid
+                filename:
                   type: string
                   minLength: 1
-                  maxLength: 64
-                name:
+                  maxLength: 255
+                mimeType:
                   type: string
-                  minLength: 1
-                  maxLength: 200
-                marketplace:
-                  type: string
-                  minLength: 2
-                  maxLength: 8
-                  default: US
-                category:
-                  type: string
-                  maxLength: 200
-                asin:
-                  type: string
-                  maxLength: 20
+                  enum: *a2
+                bytes:
+                  type: integer
+                  minimum: 0
+                  exclusiveMinimum: true
+                  maximum: 20971520
               required:
-                - sku
-                - name
+                - projectId
+                - filename
+                - mimeType
+                - bytes
       responses:
         "201":
           description: Created
@@ -231,42 +478,32 @@ paths:
               schema:
                 type: object
                 properties:
-                  id:
+                  uploadId:
                     type: string
                     format: uuid
-                  workspaceId:
+                  assetId:
                     type: string
                     format: uuid
-                  sku:
+                  uploadUrl:
                     type: string
-                  name:
+                    format: uri
+                  storageKey:
                     type: string
-                  marketplace:
-                    type: string
-                  category:
-                    type: string
-                    nullable: true
-                  asin:
-                    type: string
-                    nullable: true
-                  status:
-                    type: string
-                    enum: *a1
-                  createdAt:
+                  expiresAt:
                     type: string
                     format: date-time
+                  headers:
+                    type: object
+                    additionalProperties:
+                      type: string
                 required:
-                  - id
-                  - workspaceId
-                  - sku
-                  - name
-                  - marketplace
-                  - category
-                  - asin
-                  - status
-                  - createdAt
-        "401":
-          description: Unauthorized
+                  - uploadId
+                  - assetId
+                  - uploadUrl
+                  - storageKey
+                  - expiresAt
+        "403":
+          description: Forbidden
           content:
             application/json:
               schema:
@@ -289,3 +526,307 @@ paths:
                       - requestId
                 required:
                   - error
+  /api/workspaces/{workspaceId}/uploads/{uploadId}/complete:
+    post:
+      summary: Complete upload, verify checksum, enqueue inspect
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                checksumSha256:
+                  type: string
+                  pattern: ^[a-f0-9]{64}$
+                completionKey:
+                  type: string
+                  minLength: 8
+                  maxLength: 128
+      responses:
+        "200":
+          description: Inspecting / ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadId:
+                    type: string
+                    format: uuid
+                  assetId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: *a3
+                  assetStatus:
+                    type: string
+                    enum: *a4
+                required:
+                  - uploadId
+                  - assetId
+                  - status
+                  - assetStatus
+  /api/workspaces/{workspaceId}/projects/{projectId}/truth-pack:
+    get:
+      summary: Get current Product Truth Pack
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documentId:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  currentRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  approvedRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  revision:
+                    type: object
+                    nullable: true
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      revision:
+                        type: integer
+                      status:
+                        type: string
+                        enum: *a5
+                      facts:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            key:
+                              type: string
+                            value:
+                              nullable: true
+                            confidence:
+                              type: number
+                            status:
+                              type: string
+                              enum: *a1
+                            evidenceAssetVersionIds:
+                              type: array
+                              items:
+                                type: string
+                                format: uuid
+                          required:
+                            - id
+                            - key
+                            - confidence
+                            - status
+                            - evidenceAssetVersionIds
+                      constraints:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            kind:
+                              type: string
+                              enum: *a6
+                            path:
+                              type: string
+                            rule:
+                              type: string
+                            severity:
+                              type: string
+                          required:
+                            - id
+                            - kind
+                            - path
+                            - rule
+                            - severity
+                      approvedAt:
+                        type: string
+                        nullable: true
+                        format: date-time
+                      approvedByUserId:
+                        type: string
+                        nullable: true
+                        format: uuid
+                    required:
+                      - id
+                      - revision
+                      - status
+                      - facts
+                      - constraints
+                      - approvedAt
+                      - approvedByUserId
+                required:
+                  - documentId
+                  - projectId
+                  - currentRevisionId
+                  - approvedRevisionId
+                  - revision
+    put:
+      summary: Save a new Truth Pack draft revision
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                facts:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      key:
+                        type: string
+                        minLength: 1
+                        maxLength: 128
+                      value:
+                        nullable: true
+                      confidence:
+                        type: number
+                        minimum: 0
+                        maximum: 1
+                      status:
+                        type: string
+                        enum: *a1
+                      evidenceAssetVersionIds:
+                        type: array
+                        items:
+                          type: string
+                          format: uuid
+                    required:
+                      - key
+                  minItems: 1
+                locks:
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+                allowedChanges:
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+              required:
+                - facts
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documentId:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  currentRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  approvedRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  revision:
+                    type: object
+                    nullable: true
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      revision:
+                        type: integer
+                      status:
+                        type: string
+                        enum: *a5
+                      facts:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            key:
+                              type: string
+                            value:
+                              nullable: true
+                            confidence:
+                              type: number
+                            status:
+                              type: string
+                              enum: *a1
+                            evidenceAssetVersionIds:
+                              type: array
+                              items:
+                                type: string
+                                format: uuid
+                          required:
+                            - id
+                            - key
+                            - confidence
+                            - status
+                            - evidenceAssetVersionIds
+                      constraints:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            kind:
+                              type: string
+                              enum: *a6
+                            path:
+                              type: string
+                            rule:
+                              type: string
+                            severity:
+                              type: string
+                          required:
+                            - id
+                            - kind
+                            - path
+                            - rule
+                            - severity
+                      approvedAt:
+                        type: string
+                        nullable: true
+                        format: date-time
+                      approvedByUserId:
+                        type: string
+                        nullable: true
+                        format: uuid
+                    required:
+                      - id
+                      - revision
+                      - status
+                      - facts
+                      - constraints
+                      - approvedAt
+                      - approvedByUserId
+                required:
+                  - documentId
+                  - projectId
+                  - currentRevisionId
+                  - approvedRevisionId
+                  - revision

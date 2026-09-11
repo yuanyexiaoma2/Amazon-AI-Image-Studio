@@ -1,0 +1,13 @@
+{
+  "sku": "SKU-SYN-002",
+  "name": "Synthetic Water Bottle",
+  "marketplace": "US",
+  "category": "Sports > Bottles",
+  "expectedFacts": {
+    "brand": "Hydro",
+    "productType": "sports water bottle",
+    "capacity": { "value": 750, "unit": "ml" }
+  },
+  "locks": ["body silhouette", "cap geometry"],
+  "allowedChanges": ["background", "surface"]
+}

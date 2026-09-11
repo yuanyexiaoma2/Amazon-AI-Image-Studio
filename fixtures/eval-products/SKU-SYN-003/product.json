@@ -1,0 +1,13 @@
+{
+  "sku": "SKU-SYN-003",
+  "name": "Synthetic Earbud Case",
+  "marketplace": "US",
+  "category": "Electronics > Audio",
+  "expectedFacts": {
+    "brand": "SoundLite",
+    "productType": "wireless earbud charging case",
+    "includedItems": ["case", "earbuds", "usb-c cable"]
+  },
+  "locks": ["case silhouette", "logo spelling and placement", "number of included items"],
+  "allowedChanges": ["background", "ambient lighting"]
+}
