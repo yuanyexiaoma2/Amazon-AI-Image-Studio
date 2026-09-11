@@ -5,7 +5,7 @@
   "description": "Amazon AI Image Studio — MVP monorepo for Amazon product image production",
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "dev": "pnpm --filter @studio/web dev",
@@ -14,7 +14,7 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r --filter=./packages/* build && pnpm -r typecheck",
     "test": "pnpm -r test",
-    "test:e2e": "echo 'Playwright e2e placeholder — not configured in W1' && exit 0",
+    "test:e2e": "node scripts/e2e-api.mjs",
     "db:generate": "pnpm --filter @studio/db generate",
     "db:migrate": "pnpm --filter @studio/db migrate:dev",
     "db:migrate:deploy": "pnpm --filter @studio/db migrate:deploy",
@@ -22,7 +22,9 @@
     "openapi:generate": "pnpm --filter @studio/contracts openapi:generate",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
-    "pretest": "pnpm -r --filter=./packages/* build"
+    "pretest": "pnpm -r --filter=./packages/* build",
+    "test:integration": "RUN_INTEGRATION=1 pnpm -r test",
+    "ci:health": "node scripts/ci-health.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

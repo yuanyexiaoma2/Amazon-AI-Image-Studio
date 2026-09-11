@@ -12,10 +12,9 @@ components:
       properties:
         email:
           type: string
-          format: email
         password:
           type: string
-          minLength: 8
+          minLength: 12
           maxLength: 128
         name:
           type: string
@@ -137,10 +136,9 @@ paths:
               properties:
                 email:
                   type: string
-                  format: email
                 password:
                   type: string
-                  minLength: 8
+                  minLength: 12
                   maxLength: 128
                 name:
                   type: string

@@ -52,11 +52,11 @@ export default function RegisterPage() {
           />
         </label>
         <label>
-          Password (min 8)
+          Password (min 12)
           <input
             type="password"
             required
-            minLength={8}
+            minLength={12}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             style={{ display: 'block', width: '100%', padding: 8 }}

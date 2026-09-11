@@ -1,4 +1,5 @@
 import type { PrismaClient, User, Workspace, WorkspaceMember } from '@prisma/client';
+import { normalizeEmail } from '@studio/domain';
 import { newId } from '../ids.js';
 
 export type CreateUserWithWorkspaceInput = {
@@ -12,7 +13,7 @@ export class UserRepository {
   constructor(private readonly db: PrismaClient) {}
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.db.user.findUnique({ where: { email: email.toLowerCase() } });
+    return this.db.user.findUnique({ where: { email: normalizeEmail(email) } });
   }
 
   async findById(id: string): Promise<User | null> {
@@ -26,7 +27,7 @@ export class UserRepository {
     const userId = newId();
     const workspaceId = newId();
     const memberId = newId();
-    const email = input.email.toLowerCase();
+    const email = normalizeEmail(input.email);
 
     return this.db.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -35,6 +36,7 @@ export class UserRepository {
           email,
           passwordHash: input.passwordHash,
           name: input.name ?? null,
+          sessionVersion: 0,
         },
       });
 
@@ -57,5 +59,47 @@ export class UserRepository {
 
       return { user, workspace, membership };
     });
+  }
+
+  /** Increment sessionVersion to invalidate outstanding JWTs (ADR-0002). */
+  async bumpSessionVersion(userId: string): Promise<User> {
+    return this.db.user.update({
+      where: { id: userId },
+      data: { sessionVersion: { increment: 1 } },
+    });
+  }
+
+  async changePassword(userId: string, passwordHash: string): Promise<User> {
+    return this.db.user.update({
+      where: { id: userId },
+      data: {
+        passwordHash,
+        sessionVersion: { increment: 1 },
+      },
+    });
+  }
+
+  async disableAccount(userId: string): Promise<User> {
+    return this.db.user.update({
+      where: { id: userId },
+      data: {
+        status: 'DISABLED',
+        sessionVersion: { increment: 1 },
+      },
+    });
+  }
+
+  async listMemberships(userId: string) {
+    return this.db.workspaceMember.findMany({
+      where: { userId, deletedAt: null },
+      include: { workspace: true },
+    });
+  }
+
+  async isMemberOfWorkspace(userId: string, workspaceId: string): Promise<boolean> {
+    const m = await this.db.workspaceMember.findFirst({
+      where: { userId, workspaceId, deletedAt: null },
+    });
+    return Boolean(m);
   }
 }
