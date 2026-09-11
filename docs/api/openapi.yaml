@@ -1,0 +1,293 @@
+openapi: 3.0.3
+info:
+  title: Amazon AI Image Studio API
+  version: 0.1.0
+  description: MVP OpenAPI skeleton generated from Zod contracts (W1-07).
+servers:
+  - url: http://localhost:3000
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+      required:
+        - email
+        - password
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+          nullable: true
+      required:
+        - id
+        - email
+        - name
+    CreateProjectRequest:
+      type: object
+      properties:
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        marketplace:
+          type: string
+          minLength: 2
+          maxLength: 8
+          default: US
+        category:
+          type: string
+          maxLength: 200
+        asin:
+          type: string
+          maxLength: 20
+      required:
+        - sku
+        - name
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        name:
+          type: string
+        marketplace:
+          type: string
+        category:
+          type: string
+          nullable: true
+        asin:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: &a1
+            - ACTIVE
+            - ARCHIVED
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - workspaceId
+        - sku
+        - name
+        - marketplace
+        - category
+        - asin
+        - status
+        - createdAt
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            requestId:
+              type: string
+            details:
+              nullable: true
+          required:
+            - code
+            - message
+            - requestId
+      required:
+        - error
+  parameters: {}
+paths:
+  /api/register:
+    post:
+      summary: Register a new user (creates default workspace)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 128
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+              required:
+                - email
+                - password
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                    format: email
+                  name:
+                    type: string
+                    nullable: true
+                required:
+                  - id
+                  - email
+                  - name
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      requestId:
+                        type: string
+                      details:
+                        nullable: true
+                    required:
+                      - code
+                      - message
+                      - requestId
+                required:
+                  - error
+  /api/projects:
+    post:
+      summary: Create a project in the current workspace
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sku:
+                  type: string
+                  minLength: 1
+                  maxLength: 64
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                marketplace:
+                  type: string
+                  minLength: 2
+                  maxLength: 8
+                  default: US
+                category:
+                  type: string
+                  maxLength: 200
+                asin:
+                  type: string
+                  maxLength: 20
+              required:
+                - sku
+                - name
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  workspaceId:
+                    type: string
+                    format: uuid
+                  sku:
+                    type: string
+                  name:
+                    type: string
+                  marketplace:
+                    type: string
+                  category:
+                    type: string
+                    nullable: true
+                  asin:
+                    type: string
+                    nullable: true
+                  status:
+                    type: string
+                    enum: *a1
+                  createdAt:
+                    type: string
+                    format: date-time
+                required:
+                  - id
+                  - workspaceId
+                  - sku
+                  - name
+                  - marketplace
+                  - category
+                  - asin
+                  - status
+                  - createdAt
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      requestId:
+                        type: string
+                      details:
+                        nullable: true
+                    required:
+                      - code
+                      - message
+                      - requestId
+                required:
+                  - error

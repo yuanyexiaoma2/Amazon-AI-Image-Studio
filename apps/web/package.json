@@ -1,0 +1,35 @@
+{
+  "name": "@studio/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "next lint || true",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@auth/prisma-adapter": "^2.7.4",
+    "@studio/config": "workspace:*",
+    "@studio/contracts": "workspace:*",
+    "@studio/db": "workspace:*",
+    "@xyflow/react": "^12.3.6",
+    "argon2": "^0.41.1",
+    "next": "^15.1.2",
+    "next-auth": "5.0.0-beta.25",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "^15.1.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

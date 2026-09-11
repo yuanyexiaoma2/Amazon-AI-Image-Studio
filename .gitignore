@@ -1,0 +1,39 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# env / secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# logs / coverage
+logs/
+*.log
+coverage/
+.nyc_output/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# prisma
+packages/db/prisma/*.db
+packages/db/prisma/*.db-journal
+
+# generated openapi (keep committed docs/api/openapi.yaml; ignore temp)
+.tmp/
+
+# test / playwright
+test-results/
+playwright-report/

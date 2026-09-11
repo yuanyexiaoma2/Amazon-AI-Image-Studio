@@ -1,0 +1,146 @@
+// Amazon AI Image Studio — W1 Prisma schema (users, workspaces, auth, projects)
+// IDs: UUIDv7 generated in application code; DB type uuid.
+// Times: timestamptz via Prisma DateTime (@db.Timestamptz)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  REVIEWER
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model User {
+  id           String     @id @db.Uuid
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  name         String?
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime?  @map("deleted_at") @db.Timestamptz
+
+  accounts          Account[]
+  sessions          Session[]
+  ownedWorkspaces   Workspace[]       @relation("WorkspaceOwner")
+  memberships       WorkspaceMember[]
+
+  @@map("users")
+}
+
+/// Auth.js / NextAuth Account (OAuth / credentials linkage)
+model Account {
+  id                String  @id @db.Uuid
+  userId            String  @map("user_id") @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+/// Auth.js / NextAuth Session (database strategy)
+model Session {
+  id           String   @id @db.Uuid
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id") @db.Uuid
+  expires      DateTime @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime @db.Timestamptz
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+/// Tenant root — no self-referencing workspace_id
+model Workspace {
+  id          String    @id @db.Uuid
+  name        String
+  ownerUserId String    @map("owner_user_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  owner     User              @relation("WorkspaceOwner", fields: [ownerUserId], references: [id])
+  members   WorkspaceMember[]
+  projects  Project[]
+
+  @@index([ownerUserId])
+  @@unique([id]) // enables composite FK targets (workspace_id, id)
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @db.Uuid
+  workspaceId String        @map("workspace_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  role        WorkspaceRole @default(MEMBER)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime?     @map("deleted_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@unique([workspaceId, id])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+model Project {
+  id          String        @id @db.Uuid
+  workspaceId String        @map("workspace_id") @db.Uuid
+  sku         String
+  name        String
+  asin        String?
+  marketplace String        @default("US")
+  category    String?
+  status      ProjectStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime?     @map("deleted_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, sku])
+  @@index([workspaceId, status])
+  @@map("projects")
+}

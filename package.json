@@ -1,0 +1,35 @@
+{
+  "name": "amazon-ai-image-studio",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Amazon AI Image Studio — MVP monorepo for Amazon product image production",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @studio/web dev",
+    "worker": "pnpm --filter @studio/worker start",
+    "build": "pnpm -r --filter=./packages/* build && pnpm --filter @studio/web build && pnpm --filter @studio/worker build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r --filter=./packages/* build && pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "echo 'Playwright e2e placeholder — not configured in W1' && exit 0",
+    "db:generate": "pnpm --filter @studio/db generate",
+    "db:migrate": "pnpm --filter @studio/db migrate:dev",
+    "db:migrate:deploy": "pnpm --filter @studio/db migrate:deploy",
+    "db:seed": "pnpm --filter @studio/db seed",
+    "openapi:generate": "pnpm --filter @studio/contracts openapi:generate",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "pretest": "pnpm -r --filter=./packages/* build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "type": "module"
+}
