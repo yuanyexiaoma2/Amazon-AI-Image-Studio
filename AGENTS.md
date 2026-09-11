@@ -3,13 +3,26 @@
 1. Read `docs/specs/amazon-ai-image-studio-v1.1.md` (source of truth).
 2. Read `docs/progress.md` and continue from the first incomplete task with dependencies met.
 3. Do **not** copy Eximia or any reference-site branding/UI/assets.
-4. Prefer Fake Provider until ADR-0001 is updated with authorized keys.
+4. Prefer Fake Provider until ADR-0001 is updated with authorized keys. **Never** put real provider keys in the repo, `.env.example`, or commits.
 5. Domain package must stay free of Next.js / BullMQ / Prisma client imports.
 6. Every task: implementation + tests + evidence in `docs/progress.md`.
 7. Never commit secrets — only `.env.example`.
-8. **Branch policy:** never push feature/fix commits straight to `main`. Use `feat/**` or `fix/**` branches and open a PR. Never force-push `main`.
-9. Do **not** self-mark `VERIFIED` in `docs/progress.md`. `VERIFIED` requires an independent reviewer or fresh AI context.
+8. **Branch policy:** never push feature/fix commits straight to `main`. Use `feat/**`, `feature/**`, or `fix/**` branches and open a PR. Never force-push `main`.
+9. Do **not** self-mark `VERIFIED` in `docs/progress.md`. `VERIFIED` requires an independent reviewer or fresh AI context. Implementers mark at most `DONE`.
 10. Auth: JWT + `sessionVersion` (ADR-0002) — not silent DB-session assumption from v1.1.
+
+## Review & delivery policy (W2+)
+
+1. **Same-week related features** → one feature branch + **one milestone PR** (not one PR per tiny task).
+2. **Continuous commits OK** on the feature branch; no per-commit human confirmation required.
+3. **Every commit** must keep `lint` / `typecheck` / `test` / `build` runnable (CI-green trajectory).
+4. After the feature is complete **and CI is green** → open one PR for **independent review**. Do not merge yourself.
+5. **High-risk always need independent review before merge:** auth, tenant isolation, DB migrations, billing, real Provider calls, queue idempotency, deletion, compliance export.
+6. **Pure docs / copy / style / test-maintenance** with CI green and **no behavior change** → can merge directly (still prefer PR).
+7. **Weekly milestone acceptance**; not two-round review per small task.
+8. After reviewer **CHANGES**: if fixes are scoped to the named issues and CI is green → **same reviewer quick re-check only**.
+9. Status: implementer AI marks **DONE** (+ evidence). **VERIFIED** only at weekly / high-risk approval by an independent reviewer.
+10. **W2 acceptance unit** = full chain **upload → inspect → thumbnail → version → Truth Pack** (W2-01…W2-06 at minimum; W2-07 fixtures as far as practical).
 
 ## Standard commands
 
@@ -20,10 +33,11 @@ cp .env.example .env
 pnpm db:generate
 pnpm db:migrate
 pnpm dev          # web
-pnpm worker       # bullmq worker
+pnpm worker       # bullmq worker (inspect + truth extract)
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 pnpm openapi:generate
-# E2E (server must be running):
+# E2E (web + worker must be running; or set INSPECT_INLINE=1 for in-process inspect):
 pnpm --filter @studio/web start &
+pnpm worker &
 pnpm test:e2e
 ```

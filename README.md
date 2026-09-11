@@ -1,14 +1,14 @@
 # Amazon AI Image Studio
 
-Greenfield MVP scaffold for an Amazon product-image production studio (Web + Worker monorepo).
+MVP monorepo for Amazon product-image production (W0–W2: auth, projects, upload pipeline, Truth Pack).
 
 > **Audience:** programming beginners welcome. Follow the steps below in order.
 
 ## What this repo is
 
-- **Web app** (`apps/web`): Next.js App Router — home, register/login stubs, canvas stub (`@xyflow/react`).
-- **Worker** (`apps/worker`): BullMQ worker talking to Redis (health/noop job).
-- **Shared packages**: domain rules, Zod API contracts, Prisma DB, S3/MinIO storage stubs, Fake image provider, env/logging.
+- **Web app** (`apps/web`): Next.js App Router — auth, projects, **asset upload + Truth Pack UI**, canvas stub.
+- **Worker** (`apps/worker`): BullMQ — health + **asset inspect** (MIME/thumbnail/version).
+- **Shared packages**: domain, contracts, db, storage, providers (Fake image + Fake vision), config, **imaging**.
 - **Spec**: `docs/specs/amazon-ai-image-studio-v1.1.md`
 - **Progress**: `docs/progress.md`
 
@@ -16,7 +16,7 @@ Greenfield MVP scaffold for an Amazon product-image production studio (Web + Wor
 ## Branch policy
 
 - **Do not** push feature or fix commits directly to `main`.
-- Use `feat/**` / `fix/**` branches and open a Pull Request.
+- Use `feat/**` / `feature/**` / `fix/**` branches and open a Pull Request (same-week related work → one milestone PR; see `AGENTS.md`).
 - `main` accepts merges only after review + green CI.
 
 ## Auth (MVP)
@@ -64,6 +64,20 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:9000/minio/health/live
 ```
 
 MinIO console: http://localhost:9001 (user/pass from `.env.example`).
+
+
+## Try upload locally (W2)
+
+1. Start infra + migrate (see Quick start).
+2. Terminal A: `INSPECT_INLINE=1 pnpm dev` (inline inspect is easiest for beginners; or run `pnpm worker` separately without inline).
+3. Register / login at http://localhost:3000
+4. Open **Projects**, create a SKU, open the project.
+5. Upload a PNG/JPEG/WebP (≤20MB). Wait until asset status is `READY`.
+6. Click **Extract (Fake Vision)** → **Confirm all EXTRACTED** → **Approve revision**.
+
+Object storage is MinIO (`S3_*` in `.env`). Never add real AI provider API keys — Fake Provider only until W0-02 is unblocked.
+
+Synthetic eval fixtures: `pnpm fixtures:synth` → `fixtures/eval-products/`.
 
 ## Quality commands
 
