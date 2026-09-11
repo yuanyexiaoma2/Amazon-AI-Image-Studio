@@ -1,0 +1,13 @@
+{
+  "sku": "SKU-SYN-001",
+  "name": "Synthetic Insulated Mug",
+  "marketplace": "US",
+  "category": "Kitchen > Drinkware",
+  "expectedFacts": {
+    "brand": "Acme",
+    "productType": "insulated travel mug",
+    "capacity": { "value": 450, "unit": "ml" }
+  },
+  "locks": ["body silhouette", "logo spelling and placement"],
+  "allowedChanges": ["background", "ambient lighting"]
+}

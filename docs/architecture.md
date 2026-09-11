@@ -5,14 +5,18 @@
 ## Monorepo
 
 - `apps/web` — Next.js App Router + Auth.js
-- `apps/worker` — BullMQ worker (Redis)
-- `packages/*` — domain, contracts, db, storage, providers, config
+- `apps/worker` — BullMQ worker (Redis): health + **asset inspect**
+- `packages/*` — domain, contracts, db, storage, providers, config, **imaging**
 
-## Branch policy
+## Branch & review policy (see also `AGENTS.md`)
 
 - **Never push feature/fix work straight to `main`.**
-- All feature and fix work lands via PR (`feat/**`, `fix/**`) into `main`.
-- `main` is integration-only after review/CI.
+- Same-week related features → **one feature branch + one milestone PR**.
+- Continuous commits OK; every commit should keep lint/typecheck/test/build runnable.
+- After feature complete + CI green → one independent review. Implementer marks **DONE**; **VERIFIED** is weekly/high-risk only.
+- High-risk always need independent review before merge: auth, tenant isolation, **DB migrations**, billing, real Provider calls, queue idempotency, deletion, compliance export.
+- Pure docs/copy/style/test-maintenance with CI green + no behavior change → can merge directly.
+- W2 acceptance unit = **upload → inspect → thumbnail → version → Truth Pack**.
 
 ## Auth (deviation from v1.1)
 
@@ -34,17 +38,30 @@ and potential rollback to DB sessions.
 
 - `workspace_id` on tenant-owned rows; repository APIs require workspace scope.
 - Cross-workspace access returns 403 at the API layer.
+- Composite FKs `(workspace_id, parent_id)` on W2 asset / truth tables.
 
-## Storage
+## Storage & upload pipeline (W2)
 
 - Object storage port in `@studio/storage` with `MemoryObjectStorage` (unit) and
   `S3ObjectStorage` (MinIO / S3) for CI and local compose.
+- Presigned **PUT** upload → `complete` pre-checks (size / Content-Type / animated WebP) → **transactional outbox** (`outbox_messages`) in the same DB tx as `INSPECTING` → BullMQ publish with stable `jobId` (`inspect-<uploadId>`). Publish failure leaves `PENDING` for worker/API recovery relay. `INSPECT_INLINE=1` is e2e-only.
+- Inspect (`@studio/imaging`): idempotent (one version + one representation/kind); magic-byte MIME, size/pixel limits, reject animated WebP; sRGB normalize PNG (EXIF stripped; original object never overwritten); 512 WebP thumbnail; checksum. Transient S3/DB errors throw for retry; only definitive validation marks `REJECTED`.
+- Object keys: `workspaces/{ws}/projects/{p}/assets/{a}/original|normalized|thumbnails/...`
+- `completionKey` unique per `(workspaceId, completionKey)`; composite FKs on current/approved/parent pointers.
+
+## Product Truth Pack (W2)
+
+- `product_truth_documents` / `revisions` / `facts` / `constraints`
+- Extract via **Fake Vision Provider** only while W0-02 is `BLOCKED_EXTERNAL`
+- Confirm / lock / reject facts; approve requires `PENDING_REVIEW` **current** revision of the project document; roles OWNER/ADMIN/REVIEWER only; evidence AssetVersions must be in the same workspace+project
 
 ## Providers
 
 - Default Fake Provider until keys authorized (ADR-0001). W0-02 remains `BLOCKED_EXTERNAL`.
+- Never store real provider keys in repo / `.env.example` / commits.
 
 ## CI
 
 GitHub Actions verifies Postgres, Redis, MinIO health; runs `prisma migrate deploy`;
-unit + integration tests; build; real API E2E (`pnpm test:e2e`).
+unit + integration tests; build; real API E2E (`pnpm test:e2e`) including upload→Truth Pack when services are up.
+Triggers on `main`, `feat/**`, `feature/**`, `fix/**`.

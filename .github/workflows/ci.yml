@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "feat/**", "fix/**"]
+    branches: [main, "feat/**", "feature/**", "fix/**"]
   pull_request:
     branches: [main]
 
@@ -50,6 +50,8 @@ jobs:
       NODE_ENV: test
       CI: "true"
       RUN_INTEGRATION: "1"
+      INSPECT_INLINE: "1"
+      IMAGE_PROVIDER: fake
 
     steps:
       - uses: actions/checkout@v4

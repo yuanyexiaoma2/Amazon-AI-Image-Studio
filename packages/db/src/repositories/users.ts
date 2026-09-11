@@ -97,9 +97,31 @@ export class UserRepository {
   }
 
   async isMemberOfWorkspace(userId: string, workspaceId: string): Promise<boolean> {
-    const m = await this.db.workspaceMember.findFirst({
+    const m = await this.getMembership(userId, workspaceId);
+    return Boolean(m);
+  }
+
+  async getMembership(
+    userId: string,
+    workspaceId: string,
+  ): Promise<WorkspaceMember | null> {
+    return this.db.workspaceMember.findFirst({
       where: { userId, workspaceId, deletedAt: null },
     });
-    return Boolean(m);
+  }
+
+  async addMember(input: {
+    workspaceId: string;
+    userId: string;
+    role: WorkspaceMember['role'];
+  }): Promise<WorkspaceMember> {
+    return this.db.workspaceMember.create({
+      data: {
+        id: newId(),
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        role: input.role,
+      },
+    });
   }
 }

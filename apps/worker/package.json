@@ -14,7 +14,11 @@
     "@studio/config": "workspace:*",
     "@studio/providers": "workspace:*",
     "bullmq": "^5.34.5",
-    "ioredis": "^5.4.2"
+    "ioredis": "^5.4.2",
+    "@studio/db": "workspace:*",
+    "@studio/storage": "workspace:*",
+    "@studio/imaging": "workspace:*",
+    "@studio/domain": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.2",

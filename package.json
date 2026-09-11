@@ -24,14 +24,16 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
     "pretest": "pnpm -r --filter=./packages/* build",
     "test:integration": "RUN_INTEGRATION=1 pnpm -r test",
-    "ci:health": "node scripts/ci-health.mjs"
+    "ci:health": "node scripts/ci-health.mjs",
+    "fixtures:synth": "node scripts/generate-synth-fixtures.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "eslint": "^9.17.0",
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "sharp": "^0.33.5"
   },
   "type": "module"
 }
