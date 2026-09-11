@@ -16,14 +16,14 @@
 |---|---|---|---|
 | W0-01 | Baseline Audit | DONE | Empty clone of `yuanyexiaoma2/Amazon-AI-Image-Studio`. No existing app/tests. Capability map: none. |
 | W0-02 | Provider Capability / authorization | BLOCKED_EXTERNAL (ADR done) | ADR `docs/adr/0001-provider-capability.md`: Fake Provider default. Real keys/budget not provided. Never store real provider keys. |
-| W1-01 | Init monorepo | DONE | pnpm workspace; `apps/web` (Next.js + `@xyflow/react`); `apps/worker` (BullMQ); packages `domain`, `contracts`, `db`, `storage`, `providers`, `config`. |
-| W1-02 | Eng quality + CI | DONE | TS strict; Prettier; Vitest; CI with Postgres/Redis/MinIO services, migrate, integration + real `test:e2e`. **Node 22** in `actions/setup-node` + `engines.node >=22`. |
-| W1-03 | Local infra | DONE | `infra/docker-compose.yml` / `compose.yaml`: Postgres 16, Redis 7, MinIO, optional Mailpit. Health runbook present. GHA is source of truth for health. |
-| W1-04 | Env + logging | DONE | Downgraded from self-VERIFIED. `@studio/config` Zod env + fail-fast AUTH_SECRET in production. Independent VERIFIED pending. |
-| W1-05 | Auth.js + register/login | DONE | Credentials + Argon2id; JWT maxAge 24h; `User.sessionVersion`; `requireActiveSession`; change-password/disable; shared `PasswordSchema` (12–128); `normalizeEmail`; Redis login rate limit (IP+email, 5/15m). ADR-0002 + CR-0001. |
-| W1-06 | Prisma tenant schema | DONE | UUIDv7; workspace-scoped ProjectRepository; real-DB integration tests for cross-workspace deny + sessionVersion bumps. |
-| W1-07 | OpenAPI + errors + request ID | DONE | Downgraded from self-VERIFIED. `pnpm openapi:generate`; middleware `x-request-id`. Independent VERIFIED pending. |
-| W1-08 | Docs skeleton | DONE | Spec; progress; ADR 0000–0002; CR-0001; `docs/architecture.md`; runbooks; `AGENTS.md` branch policy. |
+| W1-01 | Init monorepo | VERIFIED | pnpm workspace; `apps/web` (Next.js + `@xyflow/react`); `apps/worker` (BullMQ); packages `domain`, `contracts`, `db`, `storage`, `providers`, `config`. Second independent review approved against HEAD `6a88972723e8907b4e66a09c7ce53659505cf66a`. |
+| W1-02 | Eng quality + CI | VERIFIED | TS strict; Prettier; Vitest; CI with Postgres/Redis/MinIO services, migrate, integration + real `test:e2e`. **Node 22** in `actions/setup-node` + `engines.node >=22`. Second independent review approved against HEAD `6a88972723e8907b4e66a09c7ce53659505cf66a`. |
+| W1-03 | Local infra | VERIFIED | `infra/docker-compose.yml` / `compose.yaml`: Postgres 16, Redis 7, MinIO, optional Mailpit. Health runbook present. GHA is source of truth for health. Second independent review approved against HEAD `6a88972723e8907b4e66a09c7ce53659505cf66a`. |
+| W1-04 | Env + logging | VERIFIED | `@studio/config` Zod env + fail-fast AUTH_SECRET in production. Second independent review approved against HEAD `6a88972723e8907b4e66a09c7ce53659505cf66a`. |
+| W1-05 | Auth.js + register/login | VERIFIED | Credentials + Argon2id; JWT maxAge 24h; `User.sessionVersion`; `requireActiveSession`; change-password/disable; shared `PasswordSchema` (12–128); `normalizeEmail`; Redis login rate limit (IP+email, 5/15m). ADR-0002 + CR-0001. Second independent review approved against HEAD `6a88972723e8907b4e66a09c7ce53659505cf66a`. |
+| W1-06 | Prisma tenant schema | VERIFIED | UUIDv7; workspace-scoped ProjectRepository; real-DB integration tests for cross-workspace deny + sessionVersion bumps. Second independent review approved against HEAD `6a88972723e8907b4e66a09c7ce53659505cf66a`. |
+| W1-07 | OpenAPI + errors + request ID | VERIFIED | `pnpm openapi:generate`; middleware `x-request-id`. Second independent review approved against HEAD `6a88972723e8907b4e66a09c7ce53659505cf66a`. |
+| W1-08 | Docs skeleton | VERIFIED | Spec; progress; ADR 0000–0002; CR-0001; `docs/architecture.md`; runbooks; `AGENTS.md` branch policy. Second independent review approved against HEAD `6a88972723e8907b4e66a09c7ce53659505cf66a`. |
 | W1-09 | Forgot-password reset | TODO | **Not in this PR.** One-time token, SHA-256 hashed in DB, 30 min expiry, Local Mail Capture. Distinct from authenticated `change-password`. Never mark DONE/VERIFIED until implemented. |
 
 ### Review follow-ups on `fix/w1-verification` (PR #2)
@@ -39,8 +39,9 @@
 
 ### W1 Verification (this PR)
 
-- Branch: `fix/w1-verification` — **pending independent review** (do not mark VERIFIED here).
-- Evidence expected in PR: CI run URL, migrate output, integration/E2E logs, per-item table above.
+- Branch: `fix/w1-verification` — **second independent review APPROVED**.
+- Second independent review approved against HEAD `6a88972723e8907b4e66a09c7ce53659505cf66a`.
+- W1-01–W1-08 marked VERIFIED from that approval. W1-09 remains TODO. W0-02 remains BLOCKED_EXTERNAL.
 
 ---
 
