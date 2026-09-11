@@ -38,12 +38,18 @@ importers:
       '@studio/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@studio/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@xyflow/react':
         specifier: ^12.3.6
         version: 12.11.6(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       argon2:
         specifier: ^0.41.1
         version: 0.41.1
+      ioredis:
+        specifier: ^5.4.2
+        version: 5.11.1
       next:
         specifier: ^15.1.2
         version: 15.5.25(@types/node@22.20.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -128,6 +134,9 @@ importers:
       '@asteasolutions/zod-to-openapi':
         specifier: ^7.3.0
         version: 7.3.4(zod@3.25.76)
+      '@studio/domain':
+        specifier: workspace:*
+        version: link:../domain
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -150,6 +159,9 @@ importers:
       '@prisma/client':
         specifier: ^6.1.0
         version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
+      '@studio/domain':
+        specifier: workspace:*
+        version: link:../domain
       uuidv7:
         specifier: ^1.0.2
         version: 1.2.1

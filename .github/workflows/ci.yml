@@ -58,7 +58,7 @@ jobs:
         with:
           version: 9.15.0
 
-      # Node 22 LTS — silences setup-node / engine warnings vs Node 20.
+      # Node 22 LTS (engines.node >=22). Prefer 22 over deprecated Node 20 actions warnings.
       - uses: actions/setup-node@v4
         with:
           node-version: 22

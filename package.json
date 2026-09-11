@@ -2,10 +2,10 @@
   "name": "amazon-ai-image-studio",
   "private": true,
   "version": "0.1.0",
-  "description": "Amazon AI Image Studio \u2014 MVP monorepo for Amazon product image production",
+  "description": "Amazon AI Image Studio — MVP monorepo for Amazon product image production",
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "dev": "pnpm --filter @studio/web dev",

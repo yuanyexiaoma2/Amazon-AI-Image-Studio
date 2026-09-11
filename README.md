@@ -27,7 +27,7 @@ Greenfield MVP scaffold for an Amazon product-image production studio (Web + Wor
 
 ## Prerequisites
 
-- Node.js **20+**
+- Node.js **22+** (CI uses Node 22 LTS)
 - [pnpm](https://pnpm.io/) 9 (`corepack enable` then `corepack prepare pnpm@9.15.0 --activate`, or `npm i -g pnpm`)
 - Docker (for Postgres, Redis, MinIO)
 

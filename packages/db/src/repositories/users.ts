@@ -1,4 +1,5 @@
 import type { PrismaClient, User, Workspace, WorkspaceMember } from '@prisma/client';
+import { normalizeEmail } from '@studio/domain';
 import { newId } from '../ids.js';
 
 export type CreateUserWithWorkspaceInput = {
@@ -12,7 +13,7 @@ export class UserRepository {
   constructor(private readonly db: PrismaClient) {}
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.db.user.findUnique({ where: { email: email.toLowerCase() } });
+    return this.db.user.findUnique({ where: { email: normalizeEmail(email) } });
   }
 
   async findById(id: string): Promise<User | null> {
@@ -26,7 +27,7 @@ export class UserRepository {
     const userId = newId();
     const workspaceId = newId();
     const memberId = newId();
-    const email = input.email.toLowerCase();
+    const email = normalizeEmail(input.email);
 
     return this.db.$transaction(async (tx) => {
       const user = await tx.user.create({

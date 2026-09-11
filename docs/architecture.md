@@ -22,6 +22,10 @@ v1.1 preferred **database sessions**. MVP uses:
 - JWT `maxAge` = 24 hours
 - `User.sessionVersion` for revocation
 - Protected APIs: `requireActiveSession()` validates ACTIVE + version match
+- Shared `PasswordSchema` (min 12 / max 128) for register **and** change-password
+- Shared `normalizeEmail()` (trim → NFKC → lower) for register / lookup / login
+- Login failure rate limit via Redis: IP + normalized email, max 5 failures / 15 minutes (HTTP 429). Failures for unknown email and bad password share the same counter path (no registration leak).
+- **Forgot-password reset** is a separate future task (W1-09) — not the same as authenticated change-password.
 
 See ADR-0002 and CR-0001. Prisma still retains `sessions` / `accounts` for future OAuth
 and potential rollback to DB sessions.

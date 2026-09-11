@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
-import { makeApiError } from '@studio/contracts';
+import { ChangePasswordRequestSchema, makeApiError } from '@studio/contracts';
 import { prisma, UserRepository } from '@studio/db';
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { getOrCreateRequestId } from '@/lib/request-id';
@@ -10,12 +9,7 @@ import {
   sessionGuardStatus,
 } from '@/lib/session-guard';
 
-const BodySchema = z.object({
-  currentPassword: z.string().min(1),
-  newPassword: z.string().min(8).max(128),
-});
-
-/** Stub endpoint: change password and bump sessionVersion (invalidates other JWTs). */
+/** Change password (authenticated) and bump sessionVersion (invalidates other JWTs). */
 export async function POST(request: Request) {
   const requestId = getOrCreateRequestId(request.headers.get('x-request-id'));
   try {
@@ -29,7 +23,7 @@ export async function POST(request: Request) {
         { status: 400, headers: { 'x-request-id': requestId } },
       );
     }
-    const parsed = BodySchema.safeParse(body);
+    const parsed = ChangePasswordRequestSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         makeApiError('VALIDATION_ERROR', 'Invalid payload', requestId, parsed.error.flatten()),

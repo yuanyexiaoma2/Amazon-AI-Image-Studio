@@ -17,13 +17,25 @@
 | W0-01 | Baseline Audit | DONE | Empty clone of `yuanyexiaoma2/Amazon-AI-Image-Studio`. No existing app/tests. Capability map: none. |
 | W0-02 | Provider Capability / authorization | BLOCKED_EXTERNAL (ADR done) | ADR `docs/adr/0001-provider-capability.md`: Fake Provider default. Real keys/budget not provided. Never store real provider keys. |
 | W1-01 | Init monorepo | DONE | pnpm workspace; `apps/web` (Next.js + `@xyflow/react`); `apps/worker` (BullMQ); packages `domain`, `contracts`, `db`, `storage`, `providers`, `config`. |
-| W1-02 | Eng quality + CI | DONE | TS strict; Prettier; Vitest; CI with Postgres/Redis/MinIO services, migrate, integration + real `test:e2e`. Node 22. Branch policy documented. |
+| W1-02 | Eng quality + CI | DONE | TS strict; Prettier; Vitest; CI with Postgres/Redis/MinIO services, migrate, integration + real `test:e2e`. **Node 22** in `actions/setup-node` + `engines.node >=22`. |
 | W1-03 | Local infra | DONE | `infra/docker-compose.yml` / `compose.yaml`: Postgres 16, Redis 7, MinIO, optional Mailpit. Health runbook present. GHA is source of truth for health. |
 | W1-04 | Env + logging | DONE | Downgraded from self-VERIFIED. `@studio/config` Zod env + fail-fast AUTH_SECRET in production. Independent VERIFIED pending. |
-| W1-05 | Auth.js + register/login | DONE | Credentials + Argon2id; JWT maxAge 24h; `User.sessionVersion`; `requireActiveSession`; change-password/disable stubs; ADR-0002 + CR-0001. |
+| W1-05 | Auth.js + register/login | DONE | Credentials + Argon2id; JWT maxAge 24h; `User.sessionVersion`; `requireActiveSession`; change-password/disable; shared `PasswordSchema` (12–128); `normalizeEmail`; Redis login rate limit (IP+email, 5/15m). ADR-0002 + CR-0001. |
 | W1-06 | Prisma tenant schema | DONE | UUIDv7; workspace-scoped ProjectRepository; real-DB integration tests for cross-workspace deny + sessionVersion bumps. |
 | W1-07 | OpenAPI + errors + request ID | DONE | Downgraded from self-VERIFIED. `pnpm openapi:generate`; middleware `x-request-id`. Independent VERIFIED pending. |
 | W1-08 | Docs skeleton | DONE | Spec; progress; ADR 0000–0002; CR-0001; `docs/architecture.md`; runbooks; `AGENTS.md` branch policy. |
+| W1-09 | Forgot-password reset | TODO | **Not in this PR.** One-time token, SHA-256 hashed in DB, 30 min expiry, Local Mail Capture. Distinct from authenticated `change-password`. Never mark DONE/VERIFIED until implemented. |
+
+### Review follow-ups on `fix/w1-verification` (PR #2)
+
+| Fix | Status | Evidence |
+|---|---|---|
+| Unify password rules (register + change-password, Zod shared, 12–128) | DONE | `PasswordSchema` / `ChangePasswordRequestSchema` in `@studio/contracts`; tests 11 reject / 12 accept |
+| Login failure rate limit (Redis, IP+email, 5/15m, no email-existence leak) | DONE | `apps/web/lib/login-rate-limit.ts` + auth wrapper 429; integration tests incl. key-delete = window expiry |
+| Real E2E for sessionVersion (old cookie 401 after pw change / disable) | DONE | Extended `scripts/e2e-api.mjs` |
+| Unified `normalizeEmail()` (trim + NFKC + lower) | DONE | `@studio/domain` + used by register schema, lookup, login |
+| CI Node 22 / no false “warning eliminated” claim | DONE | `setup-node` node-version 22; engines `>=22`; PR notes honest |
+| Forgot-password ledger task | DONE (task itself TODO) | W1-09 row above — explicit TODO |
 
 ### W1 Verification (this PR)
 
@@ -39,7 +51,7 @@
 | `pnpm install` | Expected PASS on verification branch |
 | `pnpm lint` / `typecheck` / `test` / `build` | Expected PASS in GHA with services |
 | `pnpm db:migrate:deploy` | Migration `20260911120000_add_user_session_version` |
-| `pnpm test:e2e` | Real API flow (no longer noop) |
+| `pnpm test:e2e` | Real API flow + sessionVersion revoke |
 | Local Docker health | Optional; box may lack Docker — GHA is SoT |
 
 ---

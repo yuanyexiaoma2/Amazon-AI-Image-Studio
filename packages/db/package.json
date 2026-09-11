@@ -23,7 +23,8 @@
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
-    "uuidv7": "^1.0.2"
+    "uuidv7": "^1.0.2",
+    "@studio/domain": "workspace:*"
   },
   "devDependencies": {
     "prisma": "^6.1.0",
