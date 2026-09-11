@@ -57,49 +57,106 @@ export class AssetRepository {
     assetId: string,
     status: AssetStatus,
   ): Promise<Asset> {
-    const existing = await this.findById(workspaceId, assetId);
-    if (!existing) throw new Error('Asset not found in workspace');
-    return this.db.asset.update({
-      where: { id: assetId },
+    const result = await this.db.asset.updateMany({
+      where: { id: assetId, workspaceId },
       data: { status },
     });
+    if (result.count === 0) {
+      throw new Error('Asset not found in workspace');
+    }
+    return this.findById(workspaceId, assetId) as Promise<Asset>;
   }
 
+  /**
+   * Idempotent version create: if id already exists for this workspace/asset, return it.
+   * Unique (workspaceId, assetId, versionNumber) also prevents duplicates.
+   */
   async createVersion(input: CreateVersionInput): Promise<AssetVersion> {
-    return this.db.assetVersion.create({
-      data: {
-        id: input.id ?? newId(),
+    const id = input.id ?? newId();
+    if (input.id) {
+      const existing = await this.db.assetVersion.findFirst({
+        where: { id: input.id, workspaceId: input.workspaceId, assetId: input.assetId },
+      });
+      if (existing) return existing;
+    }
+    const byNumber = await this.db.assetVersion.findFirst({
+      where: {
         workspaceId: input.workspaceId,
         assetId: input.assetId,
         versionNumber: input.versionNumber,
-        sha256: input.sha256,
-        mime: input.mime,
-        width: input.width,
-        height: input.height,
-        colorSpace: input.colorSpace,
-        byteSize: input.byteSize,
-        metadataJson: input.metadataJson ?? {},
       },
     });
+    if (byNumber) return byNumber;
+
+    try {
+      return await this.db.assetVersion.create({
+        data: {
+          id,
+          workspaceId: input.workspaceId,
+          assetId: input.assetId,
+          versionNumber: input.versionNumber,
+          sha256: input.sha256,
+          mime: input.mime,
+          width: input.width,
+          height: input.height,
+          colorSpace: input.colorSpace,
+          byteSize: input.byteSize,
+          metadataJson: input.metadataJson ?? {},
+        },
+      });
+    } catch (err) {
+      // Concurrent insert — re-read
+      const raced = await this.db.assetVersion.findFirst({
+        where: {
+          workspaceId: input.workspaceId,
+          assetId: input.assetId,
+          OR: [{ id }, { versionNumber: input.versionNumber }],
+        },
+      });
+      if (raced) return raced;
+      throw err;
+    }
   }
 
+  /** Idempotent: one representation per (workspace, version, kind). */
   async addRepresentation(
     input: CreateRepresentationInput,
   ): Promise<AssetRepresentation> {
-    return this.db.assetRepresentation.create({
-      data: {
-        id: newId(),
+    const existing = await this.db.assetRepresentation.findFirst({
+      where: {
         workspaceId: input.workspaceId,
         assetVersionId: input.assetVersionId,
         kind: input.kind,
-        storageKey: input.storageKey,
-        sha256: input.sha256,
-        bytes: input.bytes,
-        width: input.width ?? null,
-        height: input.height ?? null,
-        contentType: input.contentType,
       },
     });
+    if (existing) return existing;
+
+    try {
+      return await this.db.assetRepresentation.create({
+        data: {
+          id: newId(),
+          workspaceId: input.workspaceId,
+          assetVersionId: input.assetVersionId,
+          kind: input.kind,
+          storageKey: input.storageKey,
+          sha256: input.sha256,
+          bytes: input.bytes,
+          width: input.width ?? null,
+          height: input.height ?? null,
+          contentType: input.contentType,
+        },
+      });
+    } catch (err) {
+      const raced = await this.db.assetRepresentation.findFirst({
+        where: {
+          workspaceId: input.workspaceId,
+          assetVersionId: input.assetVersionId,
+          kind: input.kind,
+        },
+      });
+      if (raced) return raced;
+      throw err;
+    }
   }
 
   async setCurrentVersion(
@@ -111,10 +168,12 @@ export class AssetRepository {
       where: { id: versionId, workspaceId, assetId },
     });
     if (!version) throw new Error('Version not found in workspace/asset');
-    return this.db.asset.update({
-      where: { id: assetId },
+    const result = await this.db.asset.updateMany({
+      where: { id: assetId, workspaceId },
       data: { currentVersionId: versionId, status: 'READY' },
     });
+    if (result.count === 0) throw new Error('Asset not found in workspace');
+    return this.findById(workspaceId, assetId) as Promise<Asset>;
   }
 
   async getVersionWithRepresentations(workspaceId: string, versionId: string) {
@@ -140,12 +199,42 @@ export class AssetRepository {
     return (agg._max.versionNumber ?? 0) + 1;
   }
 
+  /** Prefer version 1 for first inspect; if already present return that number. */
+  async resolveInspectVersionNumber(workspaceId: string, assetId: string): Promise<number> {
+    const existing = await this.db.assetVersion.findFirst({
+      where: { workspaceId, assetId },
+      orderBy: { versionNumber: 'asc' },
+    });
+    if (existing) return existing.versionNumber;
+    return 1;
+  }
+
   async softDelete(workspaceId: string, assetId: string): Promise<Asset> {
-    const existing = await this.findById(workspaceId, assetId);
-    if (!existing) throw new Error('Asset not found in workspace');
-    return this.db.asset.update({
-      where: { id: assetId },
+    const result = await this.db.asset.updateMany({
+      where: { id: assetId, workspaceId, deletedAt: null },
       data: { deletedAt: new Date(), status: 'ARCHIVED' },
     });
+    if (result.count === 0) throw new Error('Asset not found in workspace');
+    return this.db.asset.findFirstOrThrow({ where: { id: assetId, workspaceId } });
+  }
+
+  async assertVersionsInProject(
+    workspaceId: string,
+    projectId: string,
+    versionIds: string[],
+  ): Promise<void> {
+    if (versionIds.length === 0) return;
+    const unique = [...new Set(versionIds)];
+    const rows = await this.db.assetVersion.findMany({
+      where: {
+        workspaceId,
+        id: { in: unique },
+        asset: { workspaceId, projectId, deletedAt: null },
+      },
+      select: { id: true },
+    });
+    if (rows.length !== unique.length) {
+      throw new Error('Evidence Asset Version not in current project/workspace');
+    }
   }
 }

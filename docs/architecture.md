@@ -44,15 +44,16 @@ and potential rollback to DB sessions.
 
 - Object storage port in `@studio/storage` with `MemoryObjectStorage` (unit) and
   `S3ObjectStorage` (MinIO / S3) for CI and local compose.
-- Presigned **PUT** upload → `complete` → BullMQ `asset-inspect` (or `INSPECT_INLINE=1`).
-- Inspect (`@studio/imaging`): magic-byte MIME, size/pixel limits, sRGB normalize PNG, 512 WebP thumbnail, checksum, immutable `AssetVersion` + representations.
+- Presigned **PUT** upload → `complete` pre-checks (size / Content-Type / animated WebP) → **transactional outbox** (`outbox_messages`) in the same DB tx as `INSPECTING` → BullMQ publish with stable `jobId` (`inspect-<uploadId>`). Publish failure leaves `PENDING` for worker/API recovery relay. `INSPECT_INLINE=1` is e2e-only.
+- Inspect (`@studio/imaging`): idempotent (one version + one representation/kind); magic-byte MIME, size/pixel limits, reject animated WebP; sRGB normalize PNG (EXIF stripped; original object never overwritten); 512 WebP thumbnail; checksum. Transient S3/DB errors throw for retry; only definitive validation marks `REJECTED`.
 - Object keys: `workspaces/{ws}/projects/{p}/assets/{a}/original|normalized|thumbnails/...`
+- `completionKey` unique per `(workspaceId, completionKey)`; composite FKs on current/approved/parent pointers.
 
 ## Product Truth Pack (W2)
 
 - `product_truth_documents` / `revisions` / `facts` / `constraints`
 - Extract via **Fake Vision Provider** only while W0-02 is `BLOCKED_EXTERNAL`
-- Confirm / lock / reject facts; approve gate requires no remaining `EXTRACTED` facts
+- Confirm / lock / reject facts; approve requires `PENDING_REVIEW` **current** revision of the project document; roles OWNER/ADMIN/REVIEWER only; evidence AssetVersions must be in the same workspace+project
 
 ## Providers
 

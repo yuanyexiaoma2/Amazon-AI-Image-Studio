@@ -86,10 +86,7 @@ export async function POST(request: Request, context: Ctx) {
   // Move draft to pending review when all extracteds are resolved
   const refreshed = await truth.getRevisionWithDetails(workspaceId, document.currentRevisionId);
   if (refreshed && refreshed.facts.every((f) => f.status !== 'EXTRACTED')) {
-    await prisma.productTruthRevision.update({
-      where: { id: refreshed.id },
-      data: { status: 'PENDING_REVIEW' },
-    });
+    await truth.setRevisionStatus(workspaceId, refreshed.id, 'PENDING_REVIEW');
   }
 
   const finalRev = await truth.getRevisionWithDetails(workspaceId, document.currentRevisionId);

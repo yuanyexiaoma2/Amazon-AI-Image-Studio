@@ -3,6 +3,10 @@ import {
   assertUploadLimits,
   buildAssetObjectKey,
   extensionForMime,
+  InspectTransientError,
+  InspectValidationError,
+  isAnimatedOrDynamicWebp,
+  isInspectValidationError,
   sniffImageMime,
   THUMBNAIL_MAX_EDGE,
   type AllowedUploadMime,
@@ -26,44 +30,97 @@ export type InspectResult =
   | { ok: true; versionId: string; width: number; height: number; sha256: string }
   | { ok: false; reason: string };
 
+/** Test hooks for failure-injection (CI). Not used in production. */
+export type InspectHooks = {
+  afterCreateVersion?: (versionId: string) => Promise<void> | void;
+  afterWriteObject?: (key: string) => Promise<void> | void;
+  afterWriteRepresentation?: (kind: string) => Promise<void> | void;
+};
+
 /**
  * W2-01/02 inspect pipeline: download → MIME/pixels/safety → sRGB normalize → thumbnail → version.
+ * Idempotent: safe to run twice on the same upload (one version, one representation per kind).
+ * Transient S3/DB failures throw (worker retries). Only definitive validation → REJECTED.
  */
 export async function inspectUploadedAsset(deps: {
   db: PrismaClient;
   storage: ObjectStorage;
   input: InspectInput;
+  hooks?: InspectHooks;
 }): Promise<InspectResult> {
-  const { db, storage, input } = deps;
+  const { db, storage, input, hooks } = deps;
   const assets = new AssetRepository(db);
 
-  await db.uploadSession.update({
-    where: { id: input.uploadId },
+  const session = await db.uploadSession.findFirst({
+    where: { id: input.uploadId, workspaceId: input.workspaceId },
+  });
+  if (!session) {
+    throw new InspectTransientError(`Upload session missing: ${input.uploadId}`);
+  }
+
+  // Already successfully inspected — idempotent short-circuit
+  if (session.status === 'READY') {
+    const asset = await assets.findById(input.workspaceId, input.assetId);
+    if (asset?.currentVersionId) {
+      const version = await assets.getVersionWithRepresentations(
+        input.workspaceId,
+        asset.currentVersionId,
+      );
+      if (version) {
+        return {
+          ok: true,
+          versionId: version.id,
+          width: version.width ?? 0,
+          height: version.height ?? 0,
+          sha256: version.sha256,
+        };
+      }
+    }
+  }
+
+  if (session.status === 'REJECTED') {
+    return { ok: false, reason: session.rejectionReason ?? 'Previously rejected' };
+  }
+
+  await db.uploadSession.updateMany({
+    where: { id: input.uploadId, workspaceId: input.workspaceId },
     data: { status: 'INSPECTING' },
   });
   await assets.setStatus(input.workspaceId, input.assetId, 'PROCESSING');
 
   try {
-    const head = await storage.headObject(input.expectedKey);
+    let head;
+    try {
+      head = await storage.headObject(input.expectedKey);
+    } catch (err) {
+      throw new InspectTransientError('headObject failed', { cause: err });
+    }
     if (!head) {
-      return reject(db, assets, input, 'Object missing in storage');
+      throw new InspectValidationError('Object missing in storage');
     }
     if (head.contentLength > input.expectedBytes * 1.05 + 1024) {
-      return reject(db, assets, input, 'Uploaded object larger than declared size');
+      throw new InspectValidationError('Uploaded object larger than declared size');
     }
 
-    const { body } = await storage.getObject(input.expectedKey);
+    let body: Buffer;
+    try {
+      const got = await storage.getObject(input.expectedKey);
+      body = got.body;
+    } catch (err) {
+      throw new InspectTransientError('getObject failed', { cause: err });
+    }
+
     const sniffed = sniffImageMime(body);
     if (!sniffed) {
-      return reject(db, assets, input, 'Unrecognized image magic bytes');
+      throw new InspectValidationError('Unrecognized image magic bytes');
     }
     if (sniffed !== input.expectedMime) {
-      return reject(
-        db,
-        assets,
-        input,
+      throw new InspectValidationError(
         `MIME mismatch: declared ${input.expectedMime}, sniffed ${sniffed}`,
       );
+    }
+    if (sniffed === 'image/webp' && isAnimatedOrDynamicWebp(body)) {
+      throw new InspectValidationError('Animated/dynamic WebP is not allowed');
     }
 
     const checksum = sha256Hex(body);
@@ -71,14 +128,23 @@ export async function inspectUploadedAsset(deps: {
       input.expectedChecksumSha256 &&
       input.expectedChecksumSha256.toLowerCase() !== checksum
     ) {
-      return reject(db, assets, input, 'Checksum mismatch');
+      throw new InspectValidationError('Checksum mismatch');
     }
 
-    // Decode + pixel guard + strip metadata + sRGB
     let pipeline = sharp(body, { failOn: 'error', limitInputPixels: 50_000_000 });
-    const meta = await pipeline.metadata();
+    let meta;
+    try {
+      meta = await pipeline.metadata();
+    } catch (err) {
+      throw new InspectValidationError(
+        err instanceof Error ? `Corrupt image: ${err.message}` : 'Corrupt image',
+      );
+    }
     const width = meta.width ?? 0;
     const height = meta.height ?? 0;
+    if ((meta.pages ?? 1) > 1) {
+      throw new InspectValidationError('Multi-frame / animated images are not allowed');
+    }
     try {
       assertUploadLimits({
         mime: sniffed,
@@ -87,13 +153,13 @@ export async function inspectUploadedAsset(deps: {
         height,
       });
     } catch (e) {
-      return reject(db, assets, input, e instanceof Error ? e.message : 'Limit failed');
+      throw new InspectValidationError(e instanceof Error ? e.message : 'Limit failed');
     }
 
-    // Re-create pipeline after metadata read
+    // Re-create pipeline after metadata read — rotate honors orientation then strips EXIF/GPS
     pipeline = sharp(body, { failOn: 'error', limitInputPixels: 50_000_000 });
     const normalized = await pipeline
-      .rotate() // honor orientation then strip EXIF/GPS
+      .rotate()
       .toColorspace('srgb')
       .png()
       .toBuffer({ resolveWithObject: true });
@@ -108,10 +174,12 @@ export async function inspectUploadedAsset(deps: {
       .webp({ quality: 80 })
       .toBuffer({ resolveWithObject: true });
 
-    const versionNumber = await assets.nextVersionNumber(input.workspaceId, input.assetId);
+    const versionNumber = await assets.resolveInspectVersionNumber(
+      input.workspaceId,
+      input.assetId,
+    );
     const ext = extensionForMime(sniffed as AllowedUploadMime);
     const originalKey = input.expectedKey;
-    // Presign embeds version id: .../original/{versionId}.{ext}
     const baseName = originalKey.split('/').pop() ?? '';
     const pendingVersionId = baseName.includes('.')
       ? baseName.slice(0, baseName.lastIndexOf('.'))
@@ -133,8 +201,10 @@ export async function inspectUploadedAsset(deps: {
         originalBytes: body.length,
         normalizedBytes: normalized.data.length,
         hasAlpha: Boolean(meta.hasAlpha),
+        exifStripped: true,
       },
     });
+    await hooks?.afterCreateVersion?.(version.id);
 
     const normalizedKey = buildAssetObjectKey({
       workspaceId: input.workspaceId,
@@ -153,17 +223,23 @@ export async function inspectUploadedAsset(deps: {
       ext: 'webp',
     });
 
-    await storage.putObject({
-      key: normalizedKey,
-      body: normalized.data,
-      contentType: 'image/png',
-    });
-    await storage.putObject({
-      key: thumbKey,
-      body: thumb.data,
-      contentType: 'image/webp',
-    });
+    try {
+      await storage.putObject({
+        key: normalizedKey,
+        body: normalized.data,
+        contentType: 'image/png',
+      });
+      await storage.putObject({
+        key: thumbKey,
+        body: thumb.data,
+        contentType: 'image/webp',
+      });
+    } catch (err) {
+      throw new InspectTransientError('putObject failed', { cause: err });
+    }
+    await hooks?.afterWriteObject?.(normalizedKey);
 
+    // Never overwrite the original upload object — originalKey stays as uploaded bytes.
     await assets.addRepresentation({
       workspaceId: input.workspaceId,
       assetVersionId: version.id,
@@ -175,6 +251,8 @@ export async function inspectUploadedAsset(deps: {
       height,
       contentType: sniffed,
     });
+    await hooks?.afterWriteRepresentation?.('ORIGINAL_UPLOAD');
+
     await assets.addRepresentation({
       workspaceId: input.workspaceId,
       assetVersionId: version.id,
@@ -186,6 +264,8 @@ export async function inspectUploadedAsset(deps: {
       height: normalized.info.height,
       contentType: 'image/png',
     });
+    await hooks?.afterWriteRepresentation?.('NORMALIZED_PNG');
+
     await assets.addRepresentation({
       workspaceId: input.workspaceId,
       assetVersionId: version.id,
@@ -197,11 +277,12 @@ export async function inspectUploadedAsset(deps: {
       height: thumb.info.height,
       contentType: 'image/webp',
     });
+    await hooks?.afterWriteRepresentation?.('THUMBNAIL_WEBP');
 
     await assets.setCurrentVersion(input.workspaceId, input.assetId, version.id);
-    await db.uploadSession.update({
-      where: { id: input.uploadId },
-      data: { status: 'READY' },
+    await db.uploadSession.updateMany({
+      where: { id: input.uploadId, workspaceId: input.workspaceId },
+      data: { status: 'READY', rejectionReason: null },
     });
 
     return {
@@ -212,8 +293,15 @@ export async function inspectUploadedAsset(deps: {
       sha256: checksum,
     };
   } catch (err) {
-    const reason = err instanceof Error ? err.message : 'Inspect failed';
-    return reject(db, assets, input, reason);
+    if (isInspectValidationError(err)) {
+      return reject(db, assets, input, err.message);
+    }
+    // Transient or unexpected — rethrow so BullMQ retries; do NOT mark REJECTED
+    if (err instanceof InspectTransientError) throw err;
+    throw new InspectTransientError(
+      err instanceof Error ? err.message : 'Inspect failed',
+      { cause: err },
+    );
   }
 }
 
@@ -223,8 +311,8 @@ async function reject(
   input: InspectInput,
   reason: string,
 ): Promise<InspectResult> {
-  await db.uploadSession.update({
-    where: { id: input.uploadId },
+  await db.uploadSession.updateMany({
+    where: { id: input.uploadId, workspaceId: input.workspaceId },
     data: { status: 'REJECTED', rejectionReason: reason },
   });
   await assets.setStatus(input.workspaceId, input.assetId, 'REJECTED');

@@ -1,10 +1,13 @@
 import type {
   Asset,
+  OutboxMessage,
+  Prisma,
   PrismaClient,
   UploadSession,
   UploadSessionStatus,
 } from '@prisma/client';
 import { newId } from '../ids.js';
+import { inspectJobId } from './outbox.js';
 
 export type CreatePresignInput = {
   workspaceId: string;
@@ -15,6 +18,18 @@ export type CreatePresignInput = {
   expectedBytes: number;
   originalFilename: string;
   expiresAt: Date;
+};
+
+export type MarkInspectingWithOutboxInput = {
+  workspaceId: string;
+  uploadId: string;
+  assetId: string;
+  projectId: string;
+  expectedKey: string;
+  expectedMime: string;
+  expectedBytes: number;
+  completionKey?: string;
+  expectedChecksumSha256?: string;
 };
 
 /**
@@ -70,8 +85,13 @@ export class UploadRepository {
     });
   }
 
-  async findByCompletionKey(completionKey: string): Promise<UploadSession | null> {
-    return this.db.uploadSession.findUnique({ where: { completionKey } });
+  async findByCompletionKey(
+    workspaceId: string,
+    completionKey: string,
+  ): Promise<UploadSession | null> {
+    return this.db.uploadSession.findFirst({
+      where: { workspaceId, completionKey },
+    });
   }
 
   async markStatus(
@@ -84,8 +104,8 @@ export class UploadRepository {
       rejectionReason?: string;
     } = {},
   ): Promise<UploadSession> {
-    return this.db.uploadSession.update({
-      where: { id: uploadId },
+    const result = await this.db.uploadSession.updateMany({
+      where: { id: uploadId, workspaceId },
       data: {
         status,
         ...(extra.completionKey != null ? { completionKey: extra.completionKey } : {}),
@@ -96,6 +116,82 @@ export class UploadRepository {
           ? { rejectionReason: extra.rejectionReason }
           : {}),
       },
+    });
+    if (result.count === 0) throw new Error('Upload session not found in workspace');
+    return this.findSession(workspaceId, uploadId) as Promise<UploadSession>;
+  }
+
+  /**
+   * Atomically: UPLOADED→INSPECTING + asset PROCESSING + outbox PENDING row.
+   * Caller must publish/relay the returned outbox message with stable jobId.
+   */
+  async markInspectingWithOutbox(
+    input: MarkInspectingWithOutboxInput,
+  ): Promise<{ session: UploadSession; outbox: OutboxMessage }> {
+    const jobId = inspectJobId(input.uploadId);
+    const payload: Prisma.InputJsonValue = {
+      workspaceId: input.workspaceId,
+      uploadId: input.uploadId,
+      assetId: input.assetId,
+      projectId: input.projectId,
+      expectedKey: input.expectedKey,
+      expectedMime: input.expectedMime,
+      expectedBytes: input.expectedBytes,
+      expectedChecksumSha256: input.expectedChecksumSha256 ?? null,
+    };
+
+    return this.db.$transaction(async (tx) => {
+      const updated = await tx.uploadSession.updateMany({
+        where: {
+          id: input.uploadId,
+          workspaceId: input.workspaceId,
+          status: { in: ['CREATED', 'UPLOADING', 'UPLOADED'] },
+        },
+        data: {
+          status: 'INSPECTING',
+          ...(input.completionKey != null ? { completionKey: input.completionKey } : {}),
+          ...(input.expectedChecksumSha256 != null
+            ? { expectedChecksumSha256: input.expectedChecksumSha256 }
+            : {}),
+        },
+      });
+      if (updated.count === 0) {
+        const existing = await tx.uploadSession.findFirst({
+          where: { id: input.uploadId, workspaceId: input.workspaceId },
+        });
+        if (!existing) throw new Error('Upload session not found in workspace');
+        // Already inspecting/ready — still ensure outbox exists for recovery
+        const existingOutbox = await tx.outboxMessage.findUnique({ where: { jobId } });
+        if (existingOutbox) {
+          return { session: existing, outbox: existingOutbox };
+        }
+      }
+
+      await tx.asset.updateMany({
+        where: { id: input.assetId, workspaceId: input.workspaceId },
+        data: { status: 'PROCESSING' },
+      });
+
+      const outbox =
+        (await tx.outboxMessage.findUnique({ where: { jobId } })) ??
+        (await tx.outboxMessage.create({
+          data: {
+            id: newId(),
+            workspaceId: input.workspaceId,
+            aggregateType: 'UploadSession',
+            aggregateId: input.uploadId,
+            jobName: 'inspect',
+            jobId,
+            payload,
+            status: 'PENDING',
+            attempts: 0,
+          },
+        }));
+
+      const session = await tx.uploadSession.findFirstOrThrow({
+        where: { id: input.uploadId, workspaceId: input.workspaceId },
+      });
+      return { session, outbox };
     });
   }
 }

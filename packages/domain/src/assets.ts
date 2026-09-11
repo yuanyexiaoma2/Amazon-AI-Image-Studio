@@ -93,3 +93,34 @@ export function buildAssetObjectKey(parts: {
   if (parts.kind === 'thumbnails') return `${base}/thumbnails/${parts.versionId}-512.webp`;
   return `${base}/masks/${parts.versionId}.png`;
 }
+
+/** Detect animated / multi-frame WebP (ANIM/ANMF chunks). Static WebP is allowed. */
+export function isAnimatedOrDynamicWebp(buf: Buffer): boolean {
+  if (sniffImageMime(buf) !== 'image/webp') return false;
+  // Search for ANIM or ANMF FourCCs inside the RIFF container (skip RIFF header).
+  for (let i = 12; i + 4 <= buf.length; i++) {
+    if (
+      buf[i] === 0x41 &&
+      buf[i + 1] === 0x4e &&
+      buf[i + 2] === 0x49 &&
+      buf[i + 3] === 0x4d
+    ) {
+      return true; // ANIM
+    }
+    if (
+      buf[i] === 0x41 &&
+      buf[i + 1] === 0x4e &&
+      buf[i + 2] === 0x4d &&
+      buf[i + 3] === 0x46
+    ) {
+      return true; // ANMF
+    }
+  }
+  return false;
+}
+
+/** Normalize Content-Type header for comparison (strip params, lowercase). */
+export function normalizeContentType(value: string | undefined | null): string | null {
+  if (!value) return null;
+  return value.split(';')[0]!.trim().toLowerCase();
+}

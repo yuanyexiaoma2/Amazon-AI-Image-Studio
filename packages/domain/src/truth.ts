@@ -46,3 +46,12 @@ export const DEFAULT_LOCK_PATHS = [
 ] as const;
 
 export const DEFAULT_ALLOW_PATHS = ['background', 'surface', 'ambient lighting'] as const;
+
+
+export type WorkspaceRoleName = 'OWNER' | 'ADMIN' | 'MEMBER' | 'REVIEWER';
+
+const APPROVE_ROLES: ReadonlySet<WorkspaceRoleName> = new Set(['OWNER', 'ADMIN', 'REVIEWER']);
+
+export function canRoleApproveTruth(role: string): boolean {
+  return APPROVE_ROLES.has(role as WorkspaceRoleName);
+}

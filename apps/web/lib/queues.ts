@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { prisma } from '@studio/db';
+import { prisma, OutboxRepository, inspectJobId, newId } from '@studio/db';
 import { inspectUploadedAsset, type InspectInput } from '@studio/imaging';
 import { ensureStorageReady } from './storage';
 
@@ -36,17 +36,101 @@ export function getInspectQueue(): Queue<InspectJobData> {
   return inspectQueue;
 }
 
-/** When INSPECT_INLINE=1 (CI/e2e), run inspect in-process; otherwise enqueue BullMQ job. */
-export async function enqueueInspect(data: InspectJobData): Promise<void> {
+/**
+ * Publish a single outbox inspect message to BullMQ with stable jobId.
+ * Duplicate jobId (already queued/completed) is treated as success.
+ */
+export async function publishInspectOutbox(outbox: {
+  id: string;
+  workspaceId: string;
+  jobId: string;
+  payload: unknown;
+}): Promise<void> {
+  const outboxRepo = new OutboxRepository(prisma);
+  const data = outbox.payload as InspectJobData;
+
   if (process.env.INSPECT_INLINE === '1' || process.env.INSPECT_INLINE === 'true') {
     const storage = await ensureStorageReady();
     await inspectUploadedAsset({ db: prisma, storage, input: data });
+    await outboxRepo.markPublished(outbox.workspaceId, outbox.id);
     return;
   }
-  await getInspectQueue().add('inspect', data, {
-    removeOnComplete: 100,
-    removeOnFail: 50,
-    attempts: 3,
-    backoff: { type: 'exponential', delay: 2000 },
+
+  try {
+    await getInspectQueue().add('inspect', data, {
+      jobId: outbox.jobId,
+      removeOnComplete: 100,
+      removeOnFail: 50,
+      attempts: 5,
+      backoff: { type: 'exponential', delay: 2000 },
+    });
+    await outboxRepo.markPublished(outbox.workspaceId, outbox.id);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // BullMQ rejects duplicate jobId — treat as already published
+    if (/job.+already exists|exists/i.test(msg)) {
+      await outboxRepo.markPublished(outbox.workspaceId, outbox.id);
+      return;
+    }
+    await outboxRepo.bumpAttempt(outbox.workspaceId, outbox.id, msg);
+    throw err;
+  }
+}
+
+/** Recovery path: publish any PENDING inspect outbox rows. */
+export async function relayPendingInspectOutbox(limit = 50): Promise<number> {
+  const outboxRepo = new OutboxRepository(prisma);
+  const pending = await outboxRepo.listPending(limit);
+  let published = 0;
+  for (const row of pending) {
+    if (!row.jobId.startsWith('inspect-')) continue;
+    try {
+      await publishInspectOutbox(row);
+      published += 1;
+    } catch {
+      // leave PENDING/FAILED for next recovery pass
+    }
+  }
+  return published;
+}
+
+/**
+ * After DB transaction wrote outbox: attempt publish; on failure leave PENDING for relay.
+ * Never leaves DB at INSPECTING without an outbox row.
+ */
+export async function enqueueInspectFromOutbox(outbox: {
+  id: string;
+  workspaceId: string;
+  jobId: string;
+  payload: unknown;
+}): Promise<{ published: boolean }> {
+  try {
+    await publishInspectOutbox(outbox);
+    return { published: true };
+  } catch {
+    return { published: false };
+  }
+}
+
+/** @deprecated Prefer markInspectingWithOutbox + enqueueInspectFromOutbox */
+export async function enqueueInspect(data: InspectJobData): Promise<void> {
+  const jobId = inspectJobId(data.uploadId);
+  const existing = await prisma.outboxMessage.findUnique({ where: { jobId } });
+  if (existing) {
+    await enqueueInspectFromOutbox(existing);
+    return;
+  }
+  const created = await prisma.outboxMessage.create({
+    data: {
+      id: newId(),
+      workspaceId: data.workspaceId,
+      aggregateType: 'UploadSession',
+      aggregateId: data.uploadId,
+      jobName: 'inspect',
+      jobId,
+      payload: data,
+      status: 'PENDING',
+    },
   });
+  await enqueueInspectFromOutbox(created);
 }

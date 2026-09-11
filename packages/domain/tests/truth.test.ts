@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canApproveTruthRevision, canTransitionFact } from '../src/truth.js';
+import { canApproveTruthRevision, canRoleApproveTruth, canTransitionFact } from '../src/truth.js';
 
 describe('truth pack gates', () => {
   it('allows EXTRACTED -> CONFIRMED', () => {
@@ -25,5 +25,12 @@ describe('truth pack gates', () => {
 
   it('rejects empty fact list', () => {
     expect(canApproveTruthRevision([]).ok).toBe(false);
+  });
+
+  it('only OWNER ADMIN REVIEWER may approve', () => {
+    expect(canRoleApproveTruth('MEMBER')).toBe(false);
+    expect(canRoleApproveTruth('OWNER')).toBe(true);
+    expect(canRoleApproveTruth('ADMIN')).toBe(true);
+    expect(canRoleApproveTruth('REVIEWER')).toBe(true);
   });
 });

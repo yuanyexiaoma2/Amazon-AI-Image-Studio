@@ -83,6 +83,12 @@ enum ConstraintKind {
   UNKNOWN
 }
 
+enum OutboxStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+}
+
 model User {
   id             String     @id @db.Uuid
   email          String     @unique
@@ -166,6 +172,7 @@ model Workspace {
   truthRevisions      ProductTruthRevision[]
   productFacts        ProductFact[]
   productConstraints  ProductConstraint[]
+  outboxMessages      OutboxMessage[]
 
   @@index([ownerUserId])
   @@unique([id]) // enables composite FK targets (workspace_id, id)
@@ -224,8 +231,8 @@ model UploadSession {
   expectedBytes          Int                 @map("expected_bytes")
   expectedChecksumSha256 String?             @map("expected_checksum_sha256")
   status                 UploadSessionStatus @default(CREATED)
-  /// Idempotency key for complete(); unique when set.
-  completionKey          String?             @unique @map("completion_key")
+  /// Idempotency key for complete(); unique per workspace when set.
+  completionKey          String?             @map("completion_key")
   expiresAt              DateTime            @map("expires_at") @db.Timestamptz
   rejectionReason        String?             @map("rejection_reason") @db.Text
   createdByUserId        String              @map("created_by_user_id") @db.Uuid
@@ -237,6 +244,7 @@ model UploadSession {
   asset     Asset     @relation(fields: [workspaceId, assetId], references: [workspaceId, id], onDelete: Restrict)
 
   @@unique([workspaceId, id])
+  @@unique([workspaceId, completionKey])
   @@index([workspaceId, projectId, status])
   @@index([expiresAt])
   @@map("upload_sessions")
@@ -257,7 +265,8 @@ model Asset {
 
   workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   project        Project         @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
-  versions       AssetVersion[]
+  currentVersion AssetVersion?   @relation("AssetCurrentVersion", fields: [workspaceId, currentVersionId], references: [workspaceId, id], onDelete: SetNull)
+  versions       AssetVersion[]  @relation("AssetVersions")
   uploadSessions UploadSession[]
 
   @@unique([workspaceId, id])
@@ -282,7 +291,10 @@ model AssetVersion {
   /// Content is immutable — no updatedAt; soft-delete only via asset.
 
   workspace       Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
-  asset           Asset                 @relation(fields: [workspaceId, assetId], references: [workspaceId, id], onDelete: Restrict)
+  asset           Asset                 @relation("AssetVersions", fields: [workspaceId, assetId], references: [workspaceId, id], onDelete: Restrict)
+  primaryParent   AssetVersion?         @relation("AssetVersionParent", fields: [workspaceId, primaryParentVersionId], references: [workspaceId, id], onDelete: SetNull)
+  children        AssetVersion[]        @relation("AssetVersionParent")
+  currentForAssets Asset[]              @relation("AssetCurrentVersion")
   representations AssetRepresentation[]
   masks           Mask[]
 
@@ -342,9 +354,11 @@ model ProductTruthDocument {
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  workspace Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
-  project   Project               @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
-  revisions ProductTruthRevision[]
+  workspace        Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  project          Project                @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
+  currentRevision  ProductTruthRevision?  @relation("TruthCurrentRevision", fields: [workspaceId, currentRevisionId], references: [workspaceId, id], onDelete: SetNull)
+  approvedRevision ProductTruthRevision?  @relation("TruthApprovedRevision", fields: [workspaceId, approvedRevisionId], references: [workspaceId, id], onDelete: SetNull)
+  revisions        ProductTruthRevision[] @relation("TruthDocumentRevisions")
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, projectId])
@@ -364,7 +378,9 @@ model ProductTruthRevision {
   createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz
 
   workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
-  document    ProductTruthDocument @relation(fields: [workspaceId, documentId], references: [workspaceId, id], onDelete: Restrict)
+  document    ProductTruthDocument @relation("TruthDocumentRevisions", fields: [workspaceId, documentId], references: [workspaceId, id], onDelete: Restrict)
+  currentFor  ProductTruthDocument[] @relation("TruthCurrentRevision")
+  approvedFor ProductTruthDocument[] @relation("TruthApprovedRevision")
   facts       ProductFact[]
   constraints ProductConstraint[]
 
@@ -410,4 +426,27 @@ model ProductConstraint {
   @@unique([workspaceId, id])
   @@index([workspaceId, truthRevisionId, kind])
   @@map("product_constraints")
+}
+
+model OutboxMessage {
+  id            String       @id @db.Uuid
+  workspaceId   String       @map("workspace_id") @db.Uuid
+  aggregateType String       @map("aggregate_type")
+  aggregateId   String       @map("aggregate_id") @db.Uuid
+  jobName       String       @map("job_name")
+  /// Stable BullMQ jobId used for publish + recovery (e.g. inspect-<uploadId>).
+  jobId         String       @unique @map("job_id")
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  lastError     String?      @map("last_error") @db.Text
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  publishedAt   DateTime?    @map("published_at") @db.Timestamptz
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@index([status, createdAt])
+  @@map("outbox_messages")
 }

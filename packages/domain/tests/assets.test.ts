@@ -3,6 +3,8 @@ import {
   assertUploadLimits,
   buildAssetObjectKey,
   isAllowedUploadMime,
+  isAnimatedOrDynamicWebp,
+  normalizeContentType,
   sniffImageMime,
   MAX_UPLOAD_BYTES,
 } from '../src/assets.js';
@@ -42,5 +44,27 @@ describe('asset upload rules', () => {
       ext: 'png',
     });
     expect(key).toBe('workspaces/w/projects/p/assets/a/original/v.png');
+  });
+
+  it('detects ANIM chunk', () => {
+    const buf = Buffer.alloc(40);
+    buf.write('RIFF', 0);
+    buf.writeUInt32LE(32, 4);
+    buf.write('WEBP', 8);
+    buf.write('ANIM', 12);
+    expect(isAnimatedOrDynamicWebp(buf)).toBe(true);
+  });
+
+  it('static webp without ANIM is not animated', () => {
+    const buf = Buffer.alloc(20);
+    buf.write('RIFF', 0);
+    buf.writeUInt32LE(12, 4);
+    buf.write('WEBP', 8);
+    buf.write('VP8 ', 12);
+    expect(isAnimatedOrDynamicWebp(buf)).toBe(false);
+  });
+
+  it('normalizes content-type', () => {
+    expect(normalizeContentType('image/png; charset=binary')).toBe('image/png');
   });
 });

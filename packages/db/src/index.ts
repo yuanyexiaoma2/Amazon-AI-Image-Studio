@@ -9,3 +9,8 @@ export {
   type CreateRepresentationInput,
 } from './repositories/assets.js';
 export { TruthPackRepository, type SaveTruthRevisionInput } from './repositories/truth.js';
+export {
+  OutboxRepository,
+  inspectJobId,
+  type EnqueueOutboxInput,
+} from './repositories/outbox.js';

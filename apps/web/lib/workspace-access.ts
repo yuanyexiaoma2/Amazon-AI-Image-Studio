@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { makeApiError } from '@studio/contracts';
 import { prisma, UserRepository } from '@studio/db';
+import type { WorkspaceRoleName } from '@studio/domain';
 import {
   requireActiveSession,
   SessionGuardError,
@@ -12,14 +13,14 @@ export async function requireWorkspaceMember(
   workspaceId: string,
   requestId: string,
 ): Promise<
-  | { ok: true; session: ActiveSession }
+  | { ok: true; session: ActiveSession; role: WorkspaceRoleName }
   | { ok: false; response: NextResponse }
 > {
   try {
     const session = await requireActiveSession();
     const users = new UserRepository(prisma);
-    const member = await users.isMemberOfWorkspace(session.userId, workspaceId);
-    if (!member) {
+    const membership = await users.getMembership(session.userId, workspaceId);
+    if (!membership) {
       return {
         ok: false,
         response: NextResponse.json(
@@ -28,7 +29,7 @@ export async function requireWorkspaceMember(
         ),
       };
     }
-    return { ok: true, session };
+    return { ok: true, session, role: membership.role as WorkspaceRoleName };
   } catch (err) {
     if (err instanceof SessionGuardError) {
       return {
@@ -41,4 +42,26 @@ export async function requireWorkspaceMember(
     }
     throw err;
   }
+}
+
+export async function requireWorkspaceRoles(
+  workspaceId: string,
+  requestId: string,
+  allowed: ReadonlyArray<WorkspaceRoleName>,
+): Promise<
+  | { ok: true; session: ActiveSession; role: WorkspaceRoleName }
+  | { ok: false; response: NextResponse }
+> {
+  const access = await requireWorkspaceMember(workspaceId, requestId);
+  if (!access.ok) return access;
+  if (!allowed.includes(access.role)) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        makeApiError('FORBIDDEN', `Role ${access.role} cannot perform this action`, requestId),
+        { status: 403, headers: { 'x-request-id': requestId } },
+      ),
+    };
+  }
+  return access;
 }

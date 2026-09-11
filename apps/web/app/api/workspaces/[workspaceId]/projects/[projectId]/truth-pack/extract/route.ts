@@ -51,14 +51,17 @@ export async function POST(request: Request, context: Ctx) {
   }
 
   const assets = new AssetRepository(prisma);
-  for (const versionId of parsed.data.assetVersionIds) {
-    const v = await assets.getVersionWithRepresentations(workspaceId, versionId);
-    if (!v) {
-      return NextResponse.json(
-        makeApiError('NOT_FOUND', `Asset version not in workspace: ${versionId}`, requestId),
-        { status: 404, headers: { 'x-request-id': requestId } },
-      );
-    }
+  try {
+    await assets.assertVersionsInProject(workspaceId, projectId, parsed.data.assetVersionIds);
+  } catch (err) {
+    return NextResponse.json(
+      makeApiError(
+        'FORBIDDEN',
+        err instanceof Error ? err.message : 'Evidence Asset Version not in project/workspace',
+        requestId,
+      ),
+      { status: 403, headers: { 'x-request-id': requestId } },
+    );
   }
 
   const vision = new FakeVisionProvider();

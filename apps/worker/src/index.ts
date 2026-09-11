@@ -1,21 +1,15 @@
 import { Queue, Worker } from 'bullmq';
 import { createLogger } from '@studio/config';
 import { handleHealthJob, type HealthJobData } from './jobs/health.js';
-import { handleInspectJob } from './jobs/inspect-asset.js';
+import {
+  handleInspectJob,
+  relayPendingInspectOutbox,
+  connectionFromUrl,
+} from './jobs/inspect-asset.js';
 import type { InspectInput } from '@studio/imaging';
 
 const log = createLogger({ name: 'worker' });
 const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
-
-function connectionFromUrl(url: string) {
-  const u = new URL(url);
-  return {
-    host: u.hostname,
-    port: Number(u.port || 6379),
-    maxRetriesPerRequest: null as null,
-  };
-}
-
 const connection = connectionFromUrl(redisUrl);
 export const HEALTH_QUEUE = 'health';
 export const INSPECT_QUEUE = 'asset-inspect';
@@ -24,6 +18,7 @@ async function main() {
   const healthQueue = new Queue<HealthJobData>(HEALTH_QUEUE, { connection });
   const healthWorker = new Worker<HealthJobData>(HEALTH_QUEUE, handleHealthJob, { connection });
 
+  const inspectQueue = new Queue<InspectInput>(INSPECT_QUEUE, { connection });
   const inspectWorker = new Worker<InspectInput>(
     INSPECT_QUEUE,
     async (job) => handleInspectJob(job.data),
@@ -44,6 +39,18 @@ async function main() {
   });
 
   await healthQueue.add('startup-health', { ping: 'startup' }, { removeOnComplete: 100 });
+
+  // Recovery path: publish any stuck PENDING outbox rows
+  const recovered = await relayPendingInspectOutbox(inspectQueue);
+  if (recovered > 0) {
+    log.info({ recovered }, 'relayed pending inspect outbox messages');
+  }
+  setInterval(() => {
+    void relayPendingInspectOutbox(inspectQueue).then((n) => {
+      if (n > 0) log.info({ recovered: n }, 'periodic outbox relay');
+    });
+  }, 15_000).unref();
+
   log.info(
     { redisUrl: `${connection.host}:${connection.port}`, queues: [HEALTH_QUEUE, INSPECT_QUEUE] },
     'worker started',

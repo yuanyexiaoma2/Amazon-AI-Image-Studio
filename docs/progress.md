@@ -38,13 +38,13 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W2-01 | Presigned Upload, complete, Worker inspect job | DONE | `POST .../uploads/presign`, `.../complete`; BullMQ `asset-inspect` + `INSPECT_INLINE`; migration `20260911180000_w2_assets_truth_pack`. |
+| W2-01 | Presigned Upload, complete, Worker inspect job | DONE | Presign/complete + transactional outbox (`outbox_messages`) + BullMQ stable `jobId`; recovery relay; `INSPECT_INLINE` for e2e only. Migrations `20260911180000_*` + `20260911190000_w2_outbox_tenant_hardening`. |
 | W2-02 | MIME/pixels/safety/sRGB/thumbnail/checksum | DONE | `@studio/imaging` + domain sniff/limits; ORIGINAL + NORMALIZED_PNG + THUMBNAIL_WEBP reps. |
 | W2-03 | Asset / Version / Mask models + asset library UI | DONE | Prisma models; `/projects` + project detail asset list; soft-delete asset API. Mask table present (strokes UI later weeks). |
 | W2-04 | Product Truth Pack form, fact status, evidence refs | DONE | Truth document/revision/facts/constraints; GET/PUT truth-pack; UI form actions. |
 | W2-05 | Vision Provider Adapter + structured extract | DONE | `VisionProvider` + **FakeVisionProvider** only (W0-02 still BLOCKED_EXTERNAL). `POST .../truth-pack/extract`. |
 | W2-06 | Fact confirm / lock-allow / approve gate | DONE | confirm + approve APIs; domain `canApproveTruthRevision`; UI buttons. |
-| W2-07 | Fixture baseline (10 real SKUs) | DONE (partial) | `fixtures/eval-products/` with **3 synthetic SKUs** + `pnpm fixtures:synth`. **Gap:** 10 real SKUs unavailable — documented in fixtures README. |
+| W2-07 | Fixture baseline (10 real SKUs) | BLOCKED_EXTERNAL | Only **3 synthetic SKUs** shipped (`fixtures/eval-products/` + `pnpm fixtures:synth`). Still need **10 real SKUs** (rights-cleared). Does **not** block merging W2 core code; must **not** be VERIFIED. |
 
 ### W2 commands / evidence (implementer)
 

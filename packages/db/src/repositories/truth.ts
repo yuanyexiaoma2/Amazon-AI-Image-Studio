@@ -75,8 +75,8 @@ export class TruthPackRepository {
       const nextRev = (last?.revision ?? 0) + 1;
 
       if (last && last.status === 'DRAFT') {
-        await tx.productTruthRevision.update({
-          where: { id: last.id },
+        await tx.productTruthRevision.updateMany({
+          where: { id: last.id, workspaceId: input.workspaceId },
           data: { status: 'SUPERSEDED' },
         });
       }
@@ -134,13 +134,16 @@ export class TruthPackRepository {
         });
       }
 
-      const updatedDoc = await tx.productTruthDocument.update({
-        where: { id: document.id },
+      await tx.productTruthDocument.updateMany({
+        where: { id: document.id, workspaceId: input.workspaceId },
         data: { currentRevisionId: revision.id },
+      });
+      const updatedDoc = await tx.productTruthDocument.findFirstOrThrow({
+        where: { id: document.id, workspaceId: input.workspaceId },
       });
 
       const full = await tx.productTruthRevision.findFirstOrThrow({
-        where: { id: revision.id },
+        where: { id: revision.id, workspaceId: input.workspaceId },
         include: { facts: true, constraints: true },
       });
 
@@ -158,43 +161,69 @@ export class TruthPackRepository {
         where: { id: u.factId, workspaceId },
       });
       if (!existing) throw new Error(`Fact not found: ${u.factId}`);
-      const updated = await this.db.productFact.update({
-        where: { id: u.factId },
+      await this.db.productFact.updateMany({
+        where: { id: u.factId, workspaceId },
         data: { status: u.status },
+      });
+      const updated = await this.db.productFact.findFirstOrThrow({
+        where: { id: u.factId, workspaceId },
       });
       results.push(updated);
     }
     return results;
   }
 
+  async setRevisionStatus(
+    workspaceId: string,
+    revisionId: string,
+    status: TruthRevisionStatus,
+  ): Promise<void> {
+    await this.db.productTruthRevision.updateMany({
+      where: { id: revisionId, workspaceId },
+      data: { status },
+    });
+  }
+
   async approveRevision(
     workspaceId: string,
+    projectId: string,
     revisionId: string,
     approvedByUserId: string,
   ): Promise<ProductTruthRevision> {
+    const document = await this.getDocument(workspaceId, projectId);
+    if (!document) throw new Error('Document not found');
+
     const revision = await this.db.productTruthRevision.findFirst({
-      where: { id: revisionId, workspaceId },
+      where: { id: revisionId, workspaceId, documentId: document.id },
       include: { facts: true },
     });
     if (!revision) throw new Error('Revision not found');
+    if (document.currentRevisionId !== revisionId) {
+      throw new Error('Only the current revision can be approved');
+    }
+    if (revision.status !== 'PENDING_REVIEW') {
+      throw new Error(`Revision status must be PENDING_REVIEW (got ${revision.status})`);
+    }
 
     return this.db.$transaction(async (tx) => {
-      const approved = await tx.productTruthRevision.update({
-        where: { id: revisionId },
+      await tx.productTruthRevision.updateMany({
+        where: { id: revisionId, workspaceId },
         data: {
           status: 'APPROVED' satisfies TruthRevisionStatus,
           approvedByUserId,
           approvedAt: new Date(),
         },
       });
-      await tx.productTruthDocument.update({
-        where: { id: revision.documentId },
+      await tx.productTruthDocument.updateMany({
+        where: { id: document.id, workspaceId, projectId },
         data: {
           approvedRevisionId: revisionId,
           currentRevisionId: revisionId,
         },
       });
-      return approved;
+      return tx.productTruthRevision.findFirstOrThrow({
+        where: { id: revisionId, workspaceId },
+      });
     });
   }
 }
