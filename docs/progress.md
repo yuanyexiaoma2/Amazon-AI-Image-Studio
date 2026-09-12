@@ -368,9 +368,9 @@ One branch / one PR / one review each; merge unlocks the next segment.
 `qa_gate` PASS is never human Approval. Phase 2 real-Provider / real-SKU eval remains 挂起 (ADR-0003).
 
 **DONE evidence package (W6-01…W6-08):**
-- Branch HEAD: `c307c5473014d03cf417977ae04f6ffeeac139fe`
+- Branch HEAD: `75d427c92be1474c3fb28083133874d02e04cfd7`
 - Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/16
-- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34693668812
+- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34693812702
 - Local e2e: new-project → QA PASS → no-approval 409 → APPROVE → ZIP; MAIN BLOCK 409; OVERRIDE then ZIP; Fake OCR/Vision; tenant 403 (`INSPECT_INLINE=1`)
 - Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #16 before merge
 - Do not merge; do not start W7.
