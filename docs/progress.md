@@ -93,7 +93,12 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | Provider | **FakeShotPlanProvider only** (W0-02 BLOCKED_EXTERNAL); no real keys |
 | Out of scope | W3-B canvas / xyflow / autosave / materialize / node registry |
 
-**DONE evidence package (W3-01…W3-02):** see milestone PR on `feature/w3a-shot-plan` (CI green; not merged; not self-VERIFIED).
+**DONE evidence package (W3-01…W3-02):**
+- Branch HEAD: `5ec70d53dd53575f1db03e8ded3a6bc90602db11`
+- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/8
+- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34662767687
+- Local e2e: W2 Truth approve → Fake generate 7 briefs → PUT edit → Shot Plan approve
+- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #8 before merge
 
 ### W3-B — Studio canvas + materialize (after W3-A)
 
