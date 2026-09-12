@@ -21,3 +21,13 @@ export {
   inspectJobId,
   type EnqueueOutboxInput,
 } from './repositories/outbox.js';
+
+export {
+  ShotPlanRepository,
+  ShotPlanConflictError,
+  ShotPlanValidationError,
+  ShotPlanForbiddenError,
+  ShotPlanNotFoundError,
+  type SaveShotPlanRevisionInput,
+  type ShotBriefInput,
+} from './repositories/shot-plan.js';
