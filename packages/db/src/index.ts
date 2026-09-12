@@ -55,3 +55,14 @@ export {
   type CreateRunInput,
   type GenerationRunDetail,
 } from './repositories/generation.js';
+
+export {
+  NodeResultRepository,
+  type UpsertNodeResultInput,
+} from './repositories/node-results.js';
+
+export {
+  ingestProviderOutputs,
+  reconcileOrphanProviderEvents,
+  type ProviderOutputBytes,
+} from './generation-runtime.js';

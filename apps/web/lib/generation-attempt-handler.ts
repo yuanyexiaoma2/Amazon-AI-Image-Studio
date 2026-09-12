@@ -4,7 +4,10 @@ import {
   CreditRepository,
   CreditInsufficientError,
   newId,
+  ingestProviderOutputs,
+  reconcileOrphanProviderEvents,
 } from '@studio/db';
+import { S3ObjectStorage } from '@studio/storage';
 import {
   attemptStatusForError,
   aggregateRunStatus,
@@ -201,6 +204,9 @@ export async function handleGenerationAttemptJob(data: GenerationAttemptJobData)
       },
     });
 
+    // W5-A: apply any webhook events that arrived before this submission existed.
+    await reconcileOrphanProviderEvents(prisma, attempt.provider, subResult.externalJobId);
+
     // Poll until terminal (Fake often already SUCCEEDED)
     let status = await a.getStatus(subResult.externalJobId);
     let polls = 0;
@@ -274,12 +280,64 @@ export async function handleGenerationAttemptJob(data: GenerationAttemptJobData)
         throw new ProviderAdapterError('VALIDATION', 'Corrupt provider output', 422);
       }
 
+      const snap = request as NormalizedImageRequest & {
+        nodeType?: string;
+        nodeId?: string;
+        referenceAssetVersionIds?: string[];
+        inputFingerprint?: string;
+        clientMetadata?: { workflowRevisionId?: string };
+      };
+      const nodeType = snap.nodeType ?? 'generate';
+      const nodeId = snap.nodeId ?? attempt.item.nodeId;
+      const workflowRevisionId =
+        snap.clientMetadata?.workflowRevisionId ??
+        (
+          await prisma.generationRun.findFirst({
+            where: { id: data.runId, workspaceId: data.workspaceId },
+          })
+        )?.workflowRevisionId;
+
+      let imageVersionIds: string[] = [];
+      let maskVersionId: string | null = null;
+      if (disposition === 'CURRENT' && workflowRevisionId) {
+        const storage = S3ObjectStorage.fromEnv(process.env);
+        await storage.ensureBucket().catch(() => undefined);
+        const run = await prisma.generationRun.findFirst({
+          where: { id: data.runId, workspaceId: data.workspaceId },
+        });
+        const outputs = (status.outputs ?? []).map((o) => ({
+          bytes: Buffer.from(o.bytesBase64 ?? '', 'base64'),
+          mimeType: o.mimeType,
+          width: o.width,
+          height: o.height,
+          role: o.role as 'image' | 'mask' | undefined,
+        }));
+        const ingested = await ingestProviderOutputs({
+          db: prisma,
+          storage,
+          workspaceId: data.workspaceId,
+          projectId: data.projectId,
+          createdByUserId: run?.requestedByUserId ?? data.workspaceId,
+          attemptId: attempt.id,
+          nodeType,
+          workflowRevisionId,
+          nodeId,
+          inputFingerprint: snap.inputFingerprint ?? attempt.inputFingerprint ?? null,
+          parentAssetVersionId: snap.referenceAssetVersionIds?.[0] ?? null,
+          outputs,
+        });
+        imageVersionIds = ingested.imageVersionIds;
+        maskVersionId = ingested.maskVersionId;
+      }
+
+      const primaryVersionId = imageVersionIds[0] ?? maskVersionId;
       await prisma.generationOutput.create({
         data: {
           id: newId(),
           workspaceId: data.workspaceId,
           attemptId: attempt.id,
           outputIndex: 0,
+          assetVersionId: primaryVersionId,
           disposition: disposition as never,
           mimeType: status.outputs?.[0]?.mimeType ?? 'image/png',
           byteSize: status.outputs?.[0]?.bytesBase64
@@ -287,6 +345,21 @@ export async function handleGenerationAttemptJob(data: GenerationAttemptJobData)
             : null,
         },
       });
+      // Extra mask output row when present
+      if (maskVersionId && imageVersionIds.length > 0) {
+        await prisma.generationOutput.create({
+          data: {
+            id: newId(),
+            workspaceId: data.workspaceId,
+            attemptId: attempt.id,
+            outputIndex: 1,
+            assetVersionId: maskVersionId,
+            disposition: disposition as never,
+            mimeType: 'image/png',
+            byteSize: null,
+          },
+        });
+      }
 
       const actual = status.actualCostMicrounits ?? 0;
       await credits.appendEvent(data.workspaceId, {

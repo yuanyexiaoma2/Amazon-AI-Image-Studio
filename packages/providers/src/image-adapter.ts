@@ -74,7 +74,7 @@ export type ProviderJobStatus = {
   externalJobId: string;
   status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELED';
   progress?: number;
-  outputs?: Array<{ url?: string; bytesBase64?: string; mimeType: string; width: number; height: number }>;
+  outputs?: Array<{ url?: string; bytesBase64?: string; mimeType: string; width: number; height: number; role?: 'image' | 'mask' }>;
   errorClass?: ProviderErrorClass;
   errorMessage?: string;
   actualCostMicrounits?: number;

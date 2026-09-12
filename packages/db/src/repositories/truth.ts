@@ -8,7 +8,12 @@ import type {
   ProductTruthRevision,
   TruthRevisionStatus,
 } from '@prisma/client';
-import { canApproveTruthRevision, type FactStatus as DomainFactStatus } from '@studio/domain';
+import {
+  canApproveTruthRevision,
+  propagateStaleFromTruthChange,
+  type FactStatus as DomainFactStatus,
+  type WorkflowGraph,
+} from '@studio/domain';
 import { newId } from '../ids.js';
 
 export type SaveTruthRevisionInput = {
@@ -364,6 +369,44 @@ export class TruthPackRepository {
         throw new TruthPackConflictError(
           'Approve conflict: document conditional update affected 0 rows (not current)',
         );
+      }
+
+      // W5-08: Truth revision change → STALE all truth-reading nodes + descendants on project revisions.
+      const revisions = await tx.workflowRevision.findMany({
+        where: {
+          workspaceId,
+          workflow: { workspaceId, projectId, deletedAt: null },
+        },
+        select: { id: true, graphJson: true },
+      });
+      for (const rev of revisions) {
+        const graph = rev.graphJson as WorkflowGraph;
+        if (!graph?.nodes) continue;
+        const ev = propagateStaleFromTruthChange(graph, {
+          previous: lockedDoc.approved_revision_id,
+          next: revisionId,
+        });
+        for (const nodeId of ev.staleNodeIds) {
+          const existing = await tx.nodeResult.findUnique({
+            where: {
+              workspaceId_workflowRevisionId_nodeId: {
+                workspaceId,
+                workflowRevisionId: rev.id,
+                nodeId,
+              },
+            },
+          });
+          if (existing && (existing.status === 'SUCCEEDED' || existing.status === 'STALE')) {
+            await tx.nodeResult.update({
+              where: { id: existing.id },
+              data: {
+                status: 'STALE',
+                staleReason: ev.reason,
+                staleCause: ev.cause,
+              },
+            });
+          }
+        }
       }
 
       return tx.productTruthRevision.findFirstOrThrow({

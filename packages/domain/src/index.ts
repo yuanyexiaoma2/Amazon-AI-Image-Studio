@@ -11,3 +11,8 @@ export * from './materialize-shot-plan.js';
 export * from './generation-run.js';
 export * from './model-registry.js';
 export * from './credit-ledger.js';
+export * from './jcs.js';
+export * from './input-fingerprint.js';
+export * from './stale-propagation.js';
+export * from './node-execution.js';
+export * from './sha256.js';

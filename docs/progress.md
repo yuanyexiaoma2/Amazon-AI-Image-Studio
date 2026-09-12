@@ -6,13 +6,13 @@
 
 **Repo type (W0-01):** GREENFIELD — empty public GitHub repo; no prior application code.
 
-**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 work 2026-09-12 Asia/Shanghai (UTC+8).
+**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 / W5-A work 2026-09-12 Asia/Shanghai (UTC+8).
 
 ---
 
 ## Review policy (documented W2)
 
-See `AGENTS.md` and `docs/architecture.md`: same-week related work → one milestone PR; continuous commits OK; DONE by implementer; VERIFIED at weekly/high-risk review; W2 acceptance = full upload→Truth Pack chain. W3 is split into W3-A (plan), W3-B1 (canvas foundation), and W3-B2 (nodes/materialize); each is one milestone PR + one independent review.
+See `AGENTS.md` and `docs/architecture.md`: same-week related work → one milestone PR; continuous commits OK; DONE by implementer; VERIFIED at weekly/high-risk review; W2 acceptance = full upload→Truth Pack chain. W3 is split into W3-A / W3-B1 / W3-B2; W5 into W5-A / W5-B / W5-C (Kimi MSG-016); each is one milestone PR + one independent review.
 
 ---
 
@@ -21,7 +21,7 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
 | W0-01 | Baseline Audit | DONE | Empty clone of `yuanyexiaoma2/Amazon-AI-Image-Studio`. No existing app/tests. Capability map: none. |
-| W0-02 | Provider Capability / authorization | BLOCKED_EXTERNAL (ADR done) | ADR `docs/adr/0001-provider-capability.md`: Fake Provider default. Real keys/budget not provided. Never store real provider keys. |
+| W0-02 | Provider Capability / authorization | BLOCKED_EXTERNAL (ADR-0001 + ADR-0003) | ADR `docs/adr/0001-provider-capability.md` + **ADR-0003**. Fake Provider default. **所有者裁决：推迟至开发全部完成后决定（密钥选型 + 素材收集）**. Never store real provider keys. |
 | W1-01 | Init monorepo | VERIFIED | pnpm workspace; apps + packages. Second independent review on prior HEAD. |
 | W1-02 | Eng quality + CI | VERIFIED | TS strict; Vitest; CI services; Node 22. |
 | W1-03 | Local infra | VERIFIED | Postgres/Redis/MinIO compose. |
@@ -44,7 +44,7 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | W2-04 | Product Truth Pack form, fact status, evidence refs | VERIFIED | Truth document/revision/facts/constraints; GET/PUT truth-pack; UI form actions. Independent review APPROVED on PR #3; merged to main as `79996ac9cd0f3e824bc1c0a608c4aa9d75fbcaa6`; main CI green https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34586631130. |
 | W2-05 | Vision Provider Adapter + structured extract | VERIFIED | `VisionProvider` + **FakeVisionProvider** only (W0-02 still BLOCKED_EXTERNAL). `POST .../truth-pack/extract`. Independent review APPROVED on PR #3; merged to main as `79996ac9cd0f3e824bc1c0a608c4aa9d75fbcaa6`; main CI green https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34586631130. |
 | W2-06 | Fact confirm / lock-allow / approve gate | VERIFIED | confirm + approve APIs; domain `canApproveTruthRevision`; UI buttons. Independent review APPROVED on PR #3; merged to main as `79996ac9cd0f3e824bc1c0a608c4aa9d75fbcaa6`; main CI green https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34586631130. |
-| W2-07 | Fixture baseline (10 real SKUs) | BLOCKED_EXTERNAL | Only **3 synthetic SKUs** in `fixtures/eval-products/`. Still need **~10 real SKUs** (rights-cleared). **素材由项目所有者按 fixtures 现有格式提供，QA 周前到位。** Does not block W2/W3-A/B core merge; must **not** be VERIFIED. |
+| W2-07 | Fixture baseline (10 real SKUs) | BLOCKED_EXTERNAL | Only **3 synthetic SKUs** in `fixtures/eval-products/`. **所有者裁决：推迟至开发全部完成后决定（密钥选型 + 素材收集）**（原「QA 周前到位」作废）。见 ADR-0003。Does not block core merge; must **not** be VERIFIED. |
 
 ### W2 commands / evidence (implementer)
 
@@ -186,13 +186,13 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W4-01 | Model Registry + Fake ImageProviderAdapter (§9) | DONE | `packages/domain` registry; `FakeImageProviderAdapter` in `@studio/providers` matching §9.1; `GET .../model-registry`; Fake only. |
-| W4-02 | Run/Attempt state machine, Outbox, BullMQ Worker | DONE | Prisma `generation_*` + `provider_submissions`; `OutboxRepository` + stable `gen-attempt-{id}` jobId; worker queue `generation-attempt` + recovery relay; reuse W2 outbox patterns. |
-| W4-03 | Cost estimate, budget gate, Credit reserve/settle | DONE | Append-only `credit_ledger_events` + controlled snapshot on `credit_accounts`; billing order estimate→budget→txn Run+Attempt+reserve+Outbox→dispatch→settle/refund; `BUDGET_EXCEEDED` / `INSUFFICIENT_CREDITS`. |
-| W4-04 | Webhook verify, poll, idempotent event id, late results | DONE | `POST /api/v1/providers/{providerKey}/webhook` raw-body HMAC; `provider_events` unique (provider, external_event_id); unknown job → 202 warning; late-after-cancel disposition. |
-| W4-05 | SSE progress + task drawer | DONE | `GET .../events?projectId=` SSE; Studio task drawer (run/cancel/retry + SSE); list runs API. |
-| W4-06 | Fake Provider full failure matrix | DONE | AUTH/VALIDATION/POLICY/QUOTA no auto-retry; RATE_LIMIT/TRANSIENT backoff; TIMEOUT max 2; UNKNOWN once; unit tests in `fake-adapter.test.ts` + domain retry policy tests. |
-| W4-07 | Staging real generate/edit smoke | BLOCKED_EXTERNAL | W0-02 still BLOCKED_EXTERNAL — no real provider keys. Fake only for this milestone. |
+| W4-01 | Model Registry + Fake ImageProviderAdapter (§9) | VERIFIED | `packages/domain` registry; `FakeImageProviderAdapter` in `@studio/providers` matching §9.1; `GET .../model-registry`; Fake only. |
+| W4-02 | Run/Attempt state machine, Outbox, BullMQ Worker | VERIFIED | Prisma `generation_*` + `provider_submissions`; `OutboxRepository` + stable `gen-attempt-{id}` jobId; worker queue `generation-attempt` + recovery relay; reuse W2 outbox patterns. |
+| W4-03 | Cost estimate, budget gate, Credit reserve/settle | VERIFIED | Append-only `credit_ledger_events` + controlled snapshot on `credit_accounts`; billing order estimate→budget→txn Run+Attempt+reserve+Outbox→dispatch→settle/refund; `BUDGET_EXCEEDED` / `INSUFFICIENT_CREDITS`. |
+| W4-04 | Webhook verify, poll, idempotent event id, late results | VERIFIED | `POST /api/v1/providers/{providerKey}/webhook` raw-body HMAC; `provider_events` unique (provider, external_event_id); unknown job → 202 warning; late-after-cancel disposition. |
+| W4-05 | SSE progress + task drawer | VERIFIED | `GET .../events?projectId=` SSE; Studio task drawer (run/cancel/retry + SSE); list runs API. |
+| W4-06 | Fake Provider full failure matrix | VERIFIED | AUTH/VALIDATION/POLICY/QUOTA no auto-retry; RATE_LIMIT/TRANSIENT backoff; TIMEOUT max 2; UNKNOWN once; unit tests in `fake-adapter.test.ts` + domain retry policy tests. |
+| W4-07 | Staging real generate/edit smoke | BLOCKED_EXTERNAL | **所有者裁决：推迟至开发全部完成后决定（密钥选型 + 素材收集）**。见 ADR-0003。Fake only until Phase 2. |
 
 ### W4 commands / evidence (implementer)
 
@@ -205,16 +205,63 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | Provider | **FakeImageProviderAdapter only**; no real keys |
 | Out of scope | W4-07 real Staging smoke; W5 node executors |
 
-**DONE evidence package (W4-01…W4-06):**
+**VERIFIED evidence package (W4-01…W4-06):**
 - Base merge: `f54ed4a1d80a7ec4d0927e1713d4c5dcc7a9f437` (W3-B2)
-- Branch HEAD: `1bbdaef7443aabe7903403f4ac3d1145b6e0ffa9`
-- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/11
-- Local e2e: registry → run settle SUCCEEDED → budget gate → AUTH FAILED_FINAL → webhook idempotency → SSE (Fake only, `GENERATION_INLINE=1`)
-- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #11 before merge
-- W4-07 remains **BLOCKED_EXTERNAL**
+- Final HEAD before merge: `61165fc8a60889cb67f0cf51f2a6957f512af910`
+- Milestone PR squash-merged: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/11 → main `16d67b3e664af05769b29b1149f6593c55e3197b`
+- CI (final): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34682366351
+- 审稿：REQUEST CHANGES → 快速复核 **APPROVED**；公开存档 https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/11#issuecomment-5644680296
+- W4-07 remains **BLOCKED_EXTERNAL** (ADR-0003)
 
 ---
 
-## Later weeks
+## Owner ruling — external deps deferred (2026-09-12)
 
-W5+ remain TODO per spec §24.
+See **ADR-0003** (`docs/adr/0003-fake-provider-acceptance.md`) and Kimi MSG-016 on issue #7:
+- W0-02 / W2-07 / W4-07 stay BLOCKED_EXTERNAL until after full development.
+- W5 accepts Fake success+failure matrix (W4-06) in place of §19.5 real Provider success cases (那些验收项挂起).
+- W6 acceptance is two-phase (synthetic+Fake now; real smoke later as new CRs).
+
+---
+
+## W5 split (Kimi MSG-016)
+
+- **W5-A**「执行器底座」= W5-01 + W5-08 + W5-02 (+ Webhook early-arrival reconcile)
+- **W5-B**「蒙版与局部编辑」= W5-03 + W5-04 + W5-05
+- **W5-C**「画幅与输出」= W5-06 + W5-07  
+One branch / one PR / one review each; merge unlocks the next segment.
+
+---
+
+## W5-A — Executors foundation (DONE — awaiting 审稿)
+
+**Branch:** `feature/w5a-executors` (from main `16d67b3`)  
+**Acceptance unit:** W5-01 + W5-08 + W5-02 (+ webhook early-arrival orphan reconcile per 审稿)
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| W5-01 | `generate` node executor | DONE | Request snapshot per node type/ports; Fake GENERATE through W4 Run/Attempt/Worker; ingest GENERATED AssetVersion on success; NodeResult SUCCEEDED + fingerprint. |
+| W5-08 | Input fingerprint + downstream STALE | DONE | Domain RFC 8785 JCS → SHA-256 (`input-fingerprint.ts`); STALE BFS §32.2; `node_results` + disposition STALE; graph snapshot + Truth approve propagate; no silent reuse of STALE (reuse requires SUCCEEDED+matching fingerprint). |
+| W5-02 | `remove_background` + full-res mask | DONE | Fake REMOVE_BACKGROUND returns image+mask roles; MASK AssetVersion + Mask row; full request WxH recorded on version. |
+| (ride) | Webhook early-arrival reconcile | DONE | Orphan events `processedAt=null`; replay stays 202; reconcile when submission appears; `processedAt` only after apply. |
+
+### W5-A commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm db:migrate:deploy` | Includes `20260912040000_w5a_node_results` |
+| `pnpm lint` / `typecheck` / `test` / `build` | Required green before PR |
+| `pnpm test:e2e` | Extends with remove_background+generate Fake success + orphan webhook semantics (`GENERATION_INLINE=1`) |
+| Provider | **FakeImageProviderAdapter only** (ADR-0003); no real keys |
+| Out of scope | W5-B/C; W4-07 / W0-02 / W2-07 |
+
+§19.5 real-Provider success cases: **挂起** (ADR-0003). Fake matrix required.
+
+**DONE evidence package (W5-A):**
+- Branch HEAD: `31370a4b3546739f2b366cdc469df37c93069e00`
+- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/12
+- CI (push): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34683667388
+- CI (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34683672732
+- Local: domain fingerprint/STALE unit tests; Fake REMOVE_BACKGROUND mask roles; webhook orphan 202; e2e generate+remove_background SUCCEEDED (`GENERATION_INLINE=1`)
+- Migration: `20260912040000_w5a_node_results`
+- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge.
