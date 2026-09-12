@@ -12,6 +12,7 @@
  * 6) W4: model-registry → run → settle → budget gate → AUTH final → webhook → SSE
  * 7) W5-A: generate fingerprint/assets; remove_background+MASK; webhook orphan reconcile; STALE
  * 8) W5-B: mask editor API (strokes+render) + replace_background + inpaint Fake
+ * 9) W5-C: outpaint (canvas/placement) + upscale (normalize) Fake
  */
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createHash } from 'node:crypto';
@@ -1292,8 +1293,164 @@ async function main() {
   if (!inpItem || inpItem.status !== 'SUCCEEDED') fail('W5-05 inpaint item', inpItem);
   ok('W5-04/05 Fake replace_background + inpaint succeeded');
 
+  // ─── W5-C: outpaint + upscale ───
+  const w5cGraph = {
+    schemaVersion: 1,
+    nodes: [
+      {
+        id: 'srcC',
+        type: 'source_image',
+        position: { x: 0, y: 0 },
+        config: { schemaVersion: 1, assetVersionId: asset.currentVersionId },
+      },
+      {
+        id: 'promptC',
+        type: 'prompt',
+        position: { x: 0, y: 120 },
+        config: { schemaVersion: 1, text: 'extend studio backdrop', negative: '' },
+      },
+      {
+        id: 'out1',
+        type: 'outpaint',
+        position: { x: 280, y: 0 },
+        config: {
+          schemaVersion: 1,
+          targetRatio: '16:9',
+          placement: 'center',
+          modelKey: 'primary-image-edit',
+        },
+      },
+      {
+        id: 'up1',
+        type: 'upscale',
+        position: { x: 280, y: 200 },
+        config: {
+          schemaVersion: 1,
+          engineKey: 'default-upscale',
+          targetResolution: '2K',
+        },
+      },
+    ],
+    edges: [
+      {
+        id: 'e-src-out',
+        source: 'srcC',
+        target: 'out1',
+        sourceHandle: 'image',
+        targetHandle: 'image',
+      },
+      {
+        id: 'e-prompt-out',
+        source: 'promptC',
+        target: 'out1',
+        sourceHandle: 'prompt',
+        targetHandle: 'prompt',
+      },
+      {
+        id: 'e-src-up',
+        source: 'srcC',
+        target: 'up1',
+        sourceHandle: 'image',
+        targetHandle: 'image',
+      },
+    ],
+  };
+
+  const w5cGet = await fetch(`${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}`, {
+    headers: { cookie: jarW2.header(), 'x-request-id': `e2e-w5c-get-${suffix}` },
+  });
+  const w5cGot = await w5cGet.json();
+  const w5cIfRev =
+    w5cGot.revisionNumber ??
+    w5cGot.draft?.revisionNumber ??
+    w5cGot.workflow?.draft?.revisionNumber;
+  const w5cPatch = await fetch(`${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}`, {
+    method: 'PATCH',
+    headers: {
+      cookie: jarW2.header(),
+      'content-type': 'application/json',
+      'x-request-id': `e2e-w5c-patch-${suffix}`,
+    },
+    body: JSON.stringify({ ifRevision: w5cIfRev, graph: w5cGraph }),
+  });
+  const w5cPatched = await w5cPatch.json();
+  if (w5cPatch.status !== 200) fail('W5-C graph patch', { status: w5cPatch.status, w5cPatched });
+  const w5cDraftRev =
+    w5cPatched.revisionNumber ??
+    w5cPatched.draft?.revisionNumber ??
+    w5cPatched.workflow?.draft?.revisionNumber;
+  const w5cSnap = await fetch(
+    `${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}/snapshot`,
+    {
+      method: 'POST',
+      headers: {
+        cookie: jarW2.header(),
+        'content-type': 'application/json',
+        'x-request-id': `e2e-w5c-snap-${suffix}`,
+      },
+      body: JSON.stringify({ ifRevision: w5cDraftRev }),
+    },
+  );
+  const w5cSnapJson = await w5cSnap.json();
+  if (w5cSnap.status !== 201) fail('W5-C snapshot', { status: w5cSnap.status, w5cSnapJson });
+  const w5cRevisionId = w5cSnapJson.revision?.id;
+  ok('W5-C snapshot outpaint+upscale graph');
+
+  const w5cRun = await fetch(
+    `${base}/api/workspaces/${wsW2}/workflow-revisions/${w5cRevisionId}/runs`,
+    {
+      method: 'POST',
+      headers: {
+        cookie: jarW2.header(),
+        'content-type': 'application/json',
+        'x-request-id': `e2e-w5c-run-${suffix}`,
+      },
+      body: JSON.stringify({
+        idempotencyKey: `e2e-w5c-run-${suffix}`,
+        scenario: 'SUCCESS',
+        reuseSucceededInputs: false,
+      }),
+    },
+  );
+  const w5cRunJson = await w5cRun.json();
+  if (w5cRun.status !== 201 && w5cRun.status !== 200) {
+    fail('W5-C create run', { status: w5cRun.status, w5cRunJson });
+  }
+  let w5cFinal = null;
+  for (let i = 0; i < 50; i++) {
+    const g = await fetch(`${base}/api/workspaces/${wsW2}/runs/${w5cRunJson.run.id}`, {
+      headers: { cookie: jarW2.header(), 'x-request-id': `e2e-w5c-poll-${suffix}-${i}` },
+    });
+    w5cFinal = await g.json();
+    const st = w5cFinal.status ?? w5cFinal.run?.status;
+    if (st === 'SUCCEEDED' || st === 'FAILED_FINAL' || st === 'FAILED_RETRYABLE') break;
+    await sleep(250);
+  }
+  const w5cStatus = w5cFinal?.status ?? w5cFinal?.run?.status;
+  if (w5cStatus !== 'SUCCEEDED') fail('W5-C run did not succeed', w5cFinal);
+  const w5cItems = w5cFinal.items || w5cFinal.run?.items || [];
+  const outItem = w5cItems.find((it) => it.nodeId === 'out1');
+  const upItem = w5cItems.find((it) => it.nodeId === 'up1');
+  if (!outItem || outItem.status !== 'SUCCEEDED') fail('W5-06 outpaint item', outItem);
+  if (!upItem || upItem.status !== 'SUCCEEDED') fail('W5-07 upscale item', upItem);
+
+  // Verify request snapshots encode canvas/placement + upscale target
+  const outAttempt = (outItem.attempts || []).slice(-1)[0];
+  const upAttempt = (upItem.attempts || []).slice(-1)[0];
+  const outSnap = outAttempt?.requestSnapshot;
+  const upSnap = upAttempt?.requestSnapshot;
+  if (!outSnap || outSnap.operation !== 'OUTPAINT') fail('W5-06 outpaint operation', outSnap);
+  if (!outSnap.placement || outSnap.placement !== 'center') fail('W5-06 placement', outSnap);
+  if (!outSnap.targetRatio || outSnap.targetRatio !== '16:9') fail('W5-06 targetRatio', outSnap);
+  if (!(outSnap.width > 0 && outSnap.height > 0)) fail('W5-06 canvas dims', outSnap);
+  if (!upSnap || upSnap.operation !== 'UPSCALE') fail('W5-07 upscale operation', upSnap);
+  if (upSnap.engineKey !== 'default-upscale') fail('W5-07 engineKey', upSnap);
+  if (upSnap.targetResolution !== '2K') fail('W5-07 targetResolution', upSnap);
+  if (!(upSnap.width >= 2048 || upSnap.height >= 2048)) fail('W5-07 upscale dims', upSnap);
+  ok('W5-06/07 Fake outpaint + upscale succeeded with canvas/normalize specs');
+
   console.log(
-    'E2E PASS: W2…W5-B mask editor + replace_background + inpaint (Fake only)',
+    'E2E PASS: W2…W5-C outpaint + upscale (Fake only)',
   );
 }
 

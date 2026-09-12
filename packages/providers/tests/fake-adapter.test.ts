@@ -173,3 +173,70 @@ describe('Fake EDIT / INPAINT (W5-04/05)', () => {
     expect(st.outputs?.[0]?.width).toBe(512);
   });
 });
+
+describe('Fake OUTPAINT / UPSCALE (W5-06/07)', () => {
+  it('OUTPAINT returns IMAGE at canvas WxH with placement metadata', async () => {
+    resetFakeProviderState();
+    const a = new FakeImageProviderAdapter();
+    const sub = await a.submit({
+      operation: 'OUTPAINT',
+      prompt: 'expand frame',
+      modelId: 'fake-v1',
+      idempotencyKey: 'out-1',
+      width: 1778,
+      height: 1000,
+      aspectRatio: '16:9',
+      scenario: 'SUCCESS',
+      clientMetadata: {
+        placement: 'left',
+        targetRatio: '16:9',
+        offsetX: 0,
+        offsetY: 0,
+        sourceWidth: 1000,
+        sourceHeight: 1000,
+      },
+    });
+    const st = await a.getStatus(sub.externalJobId);
+    expect(st.status).toBe('SUCCEEDED');
+    expect(st.outputs?.[0]?.role).toBe('image');
+    expect(st.outputs?.[0]?.width).toBe(1778);
+    expect(st.outputs?.[0]?.height).toBe(1000);
+    expect(st.outputs?.[0]?.mimeType).toBe('image/png');
+  });
+
+  it('UPSCALE returns PNG at target resolution dims', async () => {
+    resetFakeProviderState();
+    const a = new FakeImageProviderAdapter();
+    const sub = await a.submit({
+      operation: 'UPSCALE',
+      prompt: 'upscale',
+      modelId: 'fake-v1',
+      idempotencyKey: 'up-1',
+      width: 4096,
+      height: 2048,
+      resolutionTier: '4K',
+      scenario: 'SUCCESS',
+      clientMetadata: { engineKey: 'default-upscale', targetResolution: '4K' },
+    });
+    const st = await a.getStatus(sub.externalJobId);
+    expect(st.status).toBe('SUCCEEDED');
+    expect(st.outputs?.[0]?.role).toBe('image');
+    expect(st.outputs?.[0]?.width).toBe(4096);
+    expect(st.outputs?.[0]?.height).toBe(2048);
+    expect(st.outputs?.[0]?.mimeType).toBe('image/png');
+  });
+
+  it('OUTPAINT AUTH failure is permanent (no auto-retry class)', async () => {
+    resetFakeProviderState();
+    const a = new FakeImageProviderAdapter();
+    await expect(
+      a.submit({
+        operation: 'OUTPAINT',
+        prompt: 'x',
+        modelId: 'fake-v1',
+        idempotencyKey: 'out-auth',
+        scenario: 'AUTH',
+      }),
+    ).rejects.toMatchObject({ errorClass: 'AUTH' });
+  });
+});

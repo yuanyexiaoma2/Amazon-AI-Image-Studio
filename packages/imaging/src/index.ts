@@ -6,3 +6,9 @@ export {
   sampleMaskRaw,
   type RenderMaskInput,
 } from './mask-render.js';
+export {
+  normalizeProviderImageOutput,
+  shouldNormalizeNodeOutput,
+  type NormalizeImageSpec,
+  type NormalizedImageBytes,
+} from './normalize-output.js';

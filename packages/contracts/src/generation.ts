@@ -57,6 +57,23 @@ export const ModelRegistryResponseSchema = z.object({
     .optional(),
 });
 
+export const GenerationAttemptRequestSnapshotSchema = z
+  .object({
+    operation: z.string().optional(),
+    nodeType: z.string().optional(),
+    width: z.number().optional(),
+    height: z.number().optional(),
+    aspectRatio: z.string().optional(),
+    resolutionTier: z.string().optional(),
+    targetRatio: z.string().optional(),
+    placement: z.string().optional(),
+    engineKey: z.string().optional(),
+    targetResolution: z.string().optional(),
+    inputFingerprint: z.string().optional(),
+  })
+  .passthrough()
+  .optional();
+
 export const GenerationAttemptSchema = z.object({
   id: z.string().uuid(),
   attemptNo: z.number().int(),
@@ -67,6 +84,7 @@ export const GenerationAttemptSchema = z.object({
   errorClass: z.string().nullable().optional(),
   errorMessage: z.string().nullable().optional(),
   createdAt: z.string(),
+  requestSnapshot: GenerationAttemptRequestSnapshotSchema,
 });
 
 export const GenerationItemSchema = z.object({

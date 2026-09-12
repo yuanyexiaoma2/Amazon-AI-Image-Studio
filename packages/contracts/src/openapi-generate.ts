@@ -439,8 +439,8 @@ const document = generator.generateDocument({
   openapi: '3.0.3',
   info: {
     title: 'Amazon AI Image Studio API',
-    version: '0.3.3',
-    description: 'OpenAPI from Zod contracts (W1–W5-B masks / edit / inpaint).',
+    version: '0.3.4',
+    description: 'OpenAPI from Zod contracts (W1–W5-C outpaint / upscale).',
   },
   servers: [{ url: 'http://localhost:3000' }],
 });

@@ -171,3 +171,138 @@ export function extractEditParams(node: GraphNode): EditParams {
     strength: typeof cfg.strength === 'number' ? cfg.strength : undefined,
   };
 }
+
+
+export type OutpaintPlacement = 'center' | 'top' | 'bottom' | 'left' | 'right';
+
+export type OutpaintParams = {
+  targetRatio: string;
+  placement: OutpaintPlacement;
+  modelKey?: string;
+};
+
+export type UpscaleParams = {
+  engineKey: string;
+  targetResolution: '2K' | '4K';
+};
+
+export function parseAspectRatio(ratio: string): { w: number; h: number } {
+  const m = /^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/.exec(ratio.trim());
+  if (!m) return { w: 1, h: 1 };
+  const w = Number(m[1]);
+  const h = Number(m[2]);
+  if (!(w > 0) || !(h > 0)) return { w: 1, h: 1 };
+  return { w, h };
+}
+
+/**
+ * Expand source frame to target aspect ratio; placement anchors the original image.
+ * Canvas always contains the full source (no crop).
+ */
+export function computeOutpaintCanvas(input: {
+  sourceWidth: number;
+  sourceHeight: number;
+  targetRatio: string;
+  placement?: OutpaintPlacement;
+}): {
+  canvasWidth: number;
+  canvasHeight: number;
+  offsetX: number;
+  offsetY: number;
+  placement: OutpaintPlacement;
+  targetRatio: string;
+} {
+  const srcW = Math.max(1, Math.round(input.sourceWidth));
+  const srcH = Math.max(1, Math.round(input.sourceHeight));
+  const placement = input.placement ?? 'center';
+  const { w: rw, h: rh } = parseAspectRatio(input.targetRatio);
+  const targetAspect = rw / rh;
+  const sourceAspect = srcW / srcH;
+  let canvasWidth: number;
+  let canvasHeight: number;
+  if (targetAspect >= sourceAspect) {
+    canvasHeight = srcH;
+    canvasWidth = Math.max(srcW, Math.round(srcH * targetAspect));
+  } else {
+    canvasWidth = srcW;
+    canvasHeight = Math.max(srcH, Math.round(srcW / targetAspect));
+  }
+  const freeX = canvasWidth - srcW;
+  const freeY = canvasHeight - srcH;
+  let offsetX = Math.floor(freeX / 2);
+  let offsetY = Math.floor(freeY / 2);
+  switch (placement) {
+    case 'top':
+      offsetY = 0;
+      break;
+    case 'bottom':
+      offsetY = freeY;
+      break;
+    case 'left':
+      offsetX = 0;
+      break;
+    case 'right':
+      offsetX = freeX;
+      break;
+    case 'center':
+    default:
+      break;
+  }
+  return {
+    canvasWidth,
+    canvasHeight,
+    offsetX,
+    offsetY,
+    placement,
+    targetRatio: input.targetRatio,
+  };
+}
+
+export function extractOutpaintParams(node: GraphNode): OutpaintParams {
+  const cfg = (node.config ?? {}) as Record<string, unknown>;
+  const placementRaw = typeof cfg.placement === 'string' ? cfg.placement : 'center';
+  const placement: OutpaintPlacement =
+    placementRaw === 'top' ||
+    placementRaw === 'bottom' ||
+    placementRaw === 'left' ||
+    placementRaw === 'right' ||
+    placementRaw === 'center'
+      ? placementRaw
+      : 'center';
+  return {
+    targetRatio: typeof cfg.targetRatio === 'string' ? cfg.targetRatio : '1:1',
+    placement,
+    modelKey: typeof cfg.modelKey === 'string' ? cfg.modelKey : undefined,
+  };
+}
+
+export function extractUpscaleParams(node: GraphNode): UpscaleParams {
+  const cfg = (node.config ?? {}) as Record<string, unknown>;
+  const tier = cfg.targetResolution === '2K' || cfg.targetResolution === '4K' ? cfg.targetResolution : '4K';
+  return {
+    engineKey: typeof cfg.engineKey === 'string' ? cfg.engineKey : 'default-upscale',
+    targetResolution: tier,
+  };
+}
+
+/**
+ * Scale so the longer edge matches the resolution tier (2K=2048 / 4K=4096).
+ * Never downscales below source size.
+ */
+export function computeUpscaleTargetDims(input: {
+  sourceWidth: number;
+  sourceHeight: number;
+  targetResolution: '2K' | '4K' | string;
+}): { width: number; height: number; tierPixels: number; scale: number } {
+  const srcW = Math.max(1, Math.round(input.sourceWidth));
+  const srcH = Math.max(1, Math.round(input.sourceHeight));
+  const tierPixels = input.targetResolution === '2K' ? 2048 : 4096;
+  const longEdge = Math.max(srcW, srcH);
+  const scale = Math.max(1, tierPixels / longEdge);
+  return {
+    width: Math.max(1, Math.round(srcW * scale)),
+    height: Math.max(1, Math.round(srcH * scale)),
+    tierPixels,
+    scale,
+  };
+}

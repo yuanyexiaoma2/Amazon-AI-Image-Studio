@@ -418,6 +418,39 @@ export class FakeImageProviderAdapter implements ImageProviderAdapter {
           height: h,
           role: 'image',
         });
+      } else if (job.request.operation === 'OUTPAINT') {
+        // Canvas/frame = request WxH; placement encoded in stamp tone.
+        const placement = typeof meta.placement === 'string' ? meta.placement : 'center';
+        const placementTone: Record<string, number> = {
+          center: 120,
+          top: 90,
+          bottom: 150,
+          left: 70,
+          right: 180,
+        };
+        const gray = placementTone[placement] ?? 120;
+        outputs.push({
+          bytesBase64: makeSolidPngBase64(w, h, gray),
+          mimeType: 'image/png',
+          width: w,
+          height: h,
+          role: 'image',
+        });
+        void meta.targetRatio;
+        void meta.offsetX;
+        void meta.offsetY;
+      } else if (job.request.operation === 'UPSCALE') {
+        // Normalized output: PNG at requested target resolution WxH.
+        const engineKey = typeof meta.engineKey === 'string' ? meta.engineKey : 'default-upscale';
+        const gray = engineKey.includes('upscale') ? 200 : 160;
+        outputs.push({
+          bytesBase64: makeSolidPngBase64(w, h, gray),
+          mimeType: 'image/png',
+          width: w,
+          height: h,
+          role: 'image',
+        });
+        void meta.targetResolution;
       } else {
         outputs.push({
           bytesBase64: TINY_PNG.toString('base64'),
