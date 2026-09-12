@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@studio/config', '@studio/contracts', '@studio/db'],
+  transpilePackages: ['@studio/config', '@studio/contracts', '@studio/db', '@studio/domain'],
   serverExternalPackages: ['argon2', '@prisma/client', 'pino'],
 };
 

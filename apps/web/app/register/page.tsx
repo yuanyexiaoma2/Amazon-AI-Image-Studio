@@ -30,7 +30,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div>
+    <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
       <h1>Register</h1>
       <form onSubmit={onSubmit} style={{ display: 'grid', gap: 12, maxWidth: 360 }}>
         <label>

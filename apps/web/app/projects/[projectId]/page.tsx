@@ -264,7 +264,12 @@ function ProjectDetailInner() {
   }
 
   return (
-    <div>
+    <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
+      <div style={{ marginBottom: 12 }}>
+        <a href={`/projects/${projectId}/studio?workspaceId=${workspaceId}`} style={{ color: '#9db7ff' }}>
+          Open Studio canvas →
+        </a>
+      </div>
       <h1>Project assets + Truth Pack + Shot Plan</h1>
       <p style={{ opacity: 0.75 }}>
         Upload → Truth Pack approve → generate 7-shot plan (Fake) → approve. Canvas is W3-B.

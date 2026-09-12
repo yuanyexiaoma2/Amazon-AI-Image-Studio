@@ -49,7 +49,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div>
+    <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
       <h1>Projects</h1>
       <p style={{ opacity: 0.75 }}>W2 asset library + Truth Pack entry.</p>
       {error && <p style={{ color: '#f88' }}>{error}</p>}

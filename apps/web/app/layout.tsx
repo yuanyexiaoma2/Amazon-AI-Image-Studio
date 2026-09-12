@@ -39,12 +39,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <a href="/register" style={{ color: '#9db7ff' }}>
               Register
             </a>
-            <a href="/studio" style={{ color: '#9db7ff' }}>
-              Studio
+            <a href="/projects" style={{ color: '#9db7ff' }}>
+              Projects
             </a>
           </nav>
         </header>
-        <main style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>{children}</main>
+        <main style={{ minHeight: 'calc(100vh - 57px)' }}>{children}</main>
       </body>
     </html>
   );
