@@ -170,9 +170,11 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | Out of scope | Real Provider execution; W4-01…06 (next after merge + 审稿 APPROVED per MSG-011) |
 
 **DONE evidence package (W3-05 / W3-07 / W3-08):**
-- Branch: `feature/w3b2-nodes-materialize` (see PR)
-- Milestone PR (open, **not merged**) — hand to 审稿; squash merge only after public APPROVED
-- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge
+- Branch HEAD: `ccf5305487164b35e808199484ecc22ef9b8033c`
+- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/10
+- CI green (pull_request/push): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34666192785
+- Local + CI: schemas validate; materialize → 7 generate nodes; illegal edges still blocked; Fake only
+- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #10 before squash merge
 - B2 complete pending 审稿
 
 ---
