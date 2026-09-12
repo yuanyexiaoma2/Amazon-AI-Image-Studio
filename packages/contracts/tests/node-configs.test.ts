@@ -66,4 +66,20 @@ describe('W3-05 node config schemas', () => {
     });
     expect(ip.ok).toBe(true);
   });
+
+  it('defaults outpaint / upscale configs (W5-C)', () => {
+    const op = defaultNodeConfig('outpaint');
+    expect(op.targetRatio).toBe('1:1');
+    expect(op.placement).toBe('center');
+    expect(op.modelKey).toBe('primary-image-edit');
+    const up = validateNodeConfig('upscale', {
+      engineKey: 'default-upscale',
+      targetResolution: '2K',
+    });
+    expect(up.ok).toBe(true);
+    if (up.ok) {
+      expect(up.config.targetResolution).toBe('2K');
+      expect(up.config.engineKey).toBe('default-upscale');
+    }
+  });
 });

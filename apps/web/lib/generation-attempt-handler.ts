@@ -22,6 +22,10 @@ import {
   ProviderAdapterError,
   type NormalizedImageRequest,
 } from '@studio/providers';
+import {
+  normalizeProviderImageOutput,
+  shouldNormalizeNodeOutput,
+} from '@studio/imaging';
 import { createLogger } from '@studio/config';
 import { Queue } from 'bullmq';
 import { createHash, randomUUID } from 'node:crypto';
@@ -305,13 +309,37 @@ export async function handleGenerationAttemptJob(data: GenerationAttemptJobData)
         const run = await prisma.generationRun.findFirst({
           where: { id: data.runId, workspaceId: data.workspaceId },
         });
-        const outputs = (status.outputs ?? []).map((o) => ({
+        const rawOutputs = (status.outputs ?? []).map((o) => ({
           bytes: Buffer.from(o.bytesBase64 ?? '', 'base64'),
           mimeType: o.mimeType,
           width: o.width,
           height: o.height,
           role: o.role as 'image' | 'mask' | undefined,
         }));
+        const outputs = [];
+        for (const o of rawOutputs) {
+          if (
+            shouldNormalizeNodeOutput(nodeType) &&
+            o.role !== 'mask' &&
+            typeof request.width === 'number' &&
+            typeof request.height === 'number'
+          ) {
+            const norm = await normalizeProviderImageOutput(o.bytes, {
+              width: request.width,
+              height: request.height,
+              format: 'png',
+            });
+            outputs.push({
+              bytes: norm.bytes,
+              mimeType: norm.mimeType,
+              width: norm.width,
+              height: norm.height,
+              role: o.role,
+            });
+          } else {
+            outputs.push(o);
+          }
+        }
         const ingested = await ingestProviderOutputs({
           db: prisma,
           storage,

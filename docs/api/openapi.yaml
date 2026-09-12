@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: Amazon AI Image Studio API
-  version: 0.3.3
-  description: OpenAPI from Zod contracts (W1–W5-B masks / edit / inpaint).
+  version: 0.3.4
+  description: OpenAPI from Zod contracts (W1–W5-C outpaint / upscale).
 servers:
   - url: http://localhost:3000
 components:
@@ -1146,6 +1146,31 @@ components:
                           nullable: true
                         createdAt:
                           type: string
+                        requestSnapshot:
+                          type: object
+                          properties:
+                            operation:
+                              type: string
+                            nodeType:
+                              type: string
+                            width:
+                              type: number
+                            height:
+                              type: number
+                            aspectRatio:
+                              type: string
+                            resolutionTier:
+                              type: string
+                            targetRatio:
+                              type: string
+                            placement:
+                              type: string
+                            engineKey:
+                              type: string
+                            targetResolution:
+                              type: string
+                            inputFingerprint:
+                              type: string
                       required:
                         - id
                         - attemptNo
@@ -1328,6 +1353,31 @@ components:
                       nullable: true
                     createdAt:
                       type: string
+                    requestSnapshot:
+                      type: object
+                      properties:
+                        operation:
+                          type: string
+                        nodeType:
+                          type: string
+                        width:
+                          type: number
+                        height:
+                          type: number
+                        aspectRatio:
+                          type: string
+                        resolutionTier:
+                          type: string
+                        targetRatio:
+                          type: string
+                        placement:
+                          type: string
+                        engineKey:
+                          type: string
+                        targetResolution:
+                          type: string
+                        inputFingerprint:
+                          type: string
                   required:
                     - id
                     - attemptNo
@@ -3881,6 +3931,31 @@ paths:
                                     nullable: true
                                   createdAt:
                                     type: string
+                                  requestSnapshot:
+                                    type: object
+                                    properties:
+                                      operation:
+                                        type: string
+                                      nodeType:
+                                        type: string
+                                      width:
+                                        type: number
+                                      height:
+                                        type: number
+                                      aspectRatio:
+                                        type: string
+                                      resolutionTier:
+                                        type: string
+                                      targetRatio:
+                                        type: string
+                                      placement:
+                                        type: string
+                                      engineKey:
+                                        type: string
+                                      targetResolution:
+                                        type: string
+                                      inputFingerprint:
+                                        type: string
                                 required:
                                   - id
                                   - attemptNo
@@ -3984,6 +4059,31 @@ paths:
                                     nullable: true
                                   createdAt:
                                     type: string
+                                  requestSnapshot:
+                                    type: object
+                                    properties:
+                                      operation:
+                                        type: string
+                                      nodeType:
+                                        type: string
+                                      width:
+                                        type: number
+                                      height:
+                                        type: number
+                                      aspectRatio:
+                                        type: string
+                                      resolutionTier:
+                                        type: string
+                                      targetRatio:
+                                        type: string
+                                      placement:
+                                        type: string
+                                      engineKey:
+                                        type: string
+                                      targetResolution:
+                                        type: string
+                                      inputFingerprint:
+                                        type: string
                                 required:
                                   - id
                                   - attemptNo
@@ -4088,6 +4188,31 @@ paths:
                                 nullable: true
                               createdAt:
                                 type: string
+                              requestSnapshot:
+                                type: object
+                                properties:
+                                  operation:
+                                    type: string
+                                  nodeType:
+                                    type: string
+                                  width:
+                                    type: number
+                                  height:
+                                    type: number
+                                  aspectRatio:
+                                    type: string
+                                  resolutionTier:
+                                    type: string
+                                  targetRatio:
+                                    type: string
+                                  placement:
+                                    type: string
+                                  engineKey:
+                                    type: string
+                                  targetResolution:
+                                    type: string
+                                  inputFingerprint:
+                                    type: string
                             required:
                               - id
                               - attemptNo
@@ -4187,6 +4312,31 @@ paths:
                                 nullable: true
                               createdAt:
                                 type: string
+                              requestSnapshot:
+                                type: object
+                                properties:
+                                  operation:
+                                    type: string
+                                  nodeType:
+                                    type: string
+                                  width:
+                                    type: number
+                                  height:
+                                    type: number
+                                  aspectRatio:
+                                    type: string
+                                  resolutionTier:
+                                    type: string
+                                  targetRatio:
+                                    type: string
+                                  placement:
+                                    type: string
+                                  engineKey:
+                                    type: string
+                                  targetResolution:
+                                    type: string
+                                  inputFingerprint:
+                                    type: string
                             required:
                               - id
                               - attemptNo

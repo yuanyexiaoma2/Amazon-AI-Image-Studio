@@ -57,7 +57,19 @@ export const FAKE_EDIT_MODEL: ModelRegistryEntry = {
   displayName: 'Fake Primary Product Image (edit alias)',
 };
 
-export const DEFAULT_MODEL_REGISTRY: ModelRegistryEntry[] = [FAKE_PRIMARY_MODEL, FAKE_EDIT_MODEL];
+/** Alias for upscale node `engineKey` default (W5-07). */
+export const FAKE_UPSCALE_MODEL: ModelRegistryEntry = {
+  ...FAKE_PRIMARY_MODEL,
+  key: 'default-upscale',
+  displayName: 'Fake Default Upscale Engine',
+  operations: ['UPSCALE'],
+};
+
+export const DEFAULT_MODEL_REGISTRY: ModelRegistryEntry[] = [
+  FAKE_PRIMARY_MODEL,
+  FAKE_EDIT_MODEL,
+  FAKE_UPSCALE_MODEL,
+];
 
 export function listEnabledModels(
   registry: ReadonlyArray<ModelRegistryEntry> = DEFAULT_MODEL_REGISTRY,

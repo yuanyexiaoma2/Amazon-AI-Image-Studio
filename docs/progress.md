@@ -6,7 +6,7 @@
 
 **Repo type (W0-01):** GREENFIELD — empty public GitHub repo; no prior application code.
 
-**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 / W5-A / W5-B work 2026-09-12 Asia/Shanghai (UTC+8).
+**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 / W5-A / W5-B / W5-C work 2026-09-12 Asia/Shanghai (UTC+8).
 
 ---
 
@@ -267,16 +267,16 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 ---
 
-## W5-B — Mask editor + replace_background + inpaint (DONE — awaiting 审稿)
+## W5-B — Mask editor + replace_background + inpaint (VERIFIED)
 
 **Branch:** `feature/w5b-mask-edit` (from main `f00c1de` = W5-A)  
 **Acceptance unit:** W5-03 + W5-04 + W5-05
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W5-03 | Mask editor UI | DONE | Canvas brush/erase/size/zoom/undo/preview (`MaskEditor`); strokes as normalized `[0,1]×[0,1]` (§10.4); `POST .../masks/:id/render` → full-res grayscale PNG (white=edit, black=lock) matching source Asset Version WxH; persist via `masks` (`strokes_json`, `coordinate_space`, metadata). Domain golden + imaging raster tests (AC-07). |
-| W5-04 | `replace_background` executor | DONE | IMAGE+MASK+PROMPT+PRODUCT_TRUTH → IMAGE_LIST; `fidelity` / `lightBlend` (+ optional `maskId`); Fake `EDIT` product-lock stamp; fingerprint includes mask refs; ingest via W5-A path. |
-| W5-05 | `inpaint` executor | DONE | IMAGE+MASK+PROMPT (+ optional IMAGE_LIST) → IMAGE_LIST; `strength` + `modelKey`; Fake `INPAINT` path. |
+| W5-03 | Mask editor UI | VERIFIED | Canvas brush/erase/size/zoom/undo/preview (`MaskEditor`); strokes as normalized `[0,1]×[0,1]` (§10.4); `POST .../masks/:id/render` → full-res grayscale PNG (white=edit, black=lock) matching source Asset Version WxH; persist via `masks` (`strokes_json`, `coordinate_space`, metadata). Domain golden + imaging raster tests (AC-07). |
+| W5-04 | `replace_background` executor | VERIFIED | IMAGE+MASK+PROMPT+PRODUCT_TRUTH → IMAGE_LIST; `fidelity` / `lightBlend` (+ optional `maskId`); Fake `EDIT` product-lock stamp; fingerprint includes mask refs; ingest via W5-A path. |
+| W5-05 | `inpaint` executor | VERIFIED | IMAGE+MASK+PROMPT (+ optional IMAGE_LIST) → IMAGE_LIST; `strength` + `modelKey`; Fake `INPAINT` path. |
 
 ### W5-B commands / evidence (implementer)
 
@@ -290,11 +290,40 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 §19.5 real-Provider success cases: **挂起** (ADR-0003). Fake matrix required.
 
-**DONE evidence package (W5-B):**
-- Branch HEAD: `1bad210d70f757bb1b27ae763c6189fa2010cca3`
-- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/14
-- Base: `f00c1deb589a9bc2951902400ff22c8e1011c99a` (W5-A)
-- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34691889213
-- Local + CI: mask coordinate golden; Fake EDIT/INPAINT; e2e mask create/render + replace_background + inpaint SUCCEEDED (`GENERATION_INLINE=1`)
+**VERIFIED evidence package (W5-B):**
+- Merge SHA: `66944c384e4ec96cbbada1a66644576e214bb54a` (PR #14 squash into main)
+- Final HEAD before merge: `31a88884557f4e782dc2de0fd93c1c4d21ee1c2c`
+- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34692005885
+- 审稿 **APPROVED** + public comment: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/14#issuecomment-5645708346
+- Fake only (ADR-0003); §19.5 real-Provider success cases remain 挂起
+
+---
+
+## W5-C — Outpaint + upscale / output normalize (DONE — awaiting 审稿)
+
+**Branch:** `feature/w5c-outpaint-upscale` (from main `66944c3` = W5-B)  
+**Acceptance unit:** W5-06 + W5-07
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| W5-06 | `outpaint` executor | DONE | IMAGE + optional PROMPT → IMAGE_LIST; `targetRatio` / `placement` / `modelKey`; domain `computeOutpaintCanvas` (frame expand + original position); Fake `OUTPAINT`; request snapshot + fingerprint via W4/W5-A Run/Attempt/STALE path. |
+| W5-07 | `upscale` + output normalize | DONE | IMAGE → IMAGE; `engineKey` (`default-upscale`) / `targetResolution`; Fake `UPSCALE`; long-edge tier dims; ingest PNG normalize (`normalizeProviderImageOutput`) to request WxH. |
+
+### W5-C commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm lint` / `typecheck` / `test` / `build` | Required green before PR |
+| `pnpm openapi:generate` | Description bump W5-C |
+| `pnpm test:e2e` | Extends with outpaint + upscale Fake (`GENERATION_INLINE=1`) |
+| Provider | **FakeImageProviderAdapter only** (ADR-0003); no real keys |
+| Out of scope | W6; W4-07 / W0-02 / W2-07; real Provider keys |
+
+§19.5 real-Provider success cases: **挂起** (ADR-0003). Fake matrix required.
+
+**DONE evidence package (W5-C):**
+- Branch: `feature/w5c-outpaint-upscale` (base `66944c384e4ec96cbbada1a66644576e214bb54a`)
+- Milestone PR: _(filled after open)_
+- Local: domain canvas/placement + Fake OUTPAINT/UPSCALE + normalize unit tests; e2e outpaint+upscale SUCCEEDED
 - Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge.
 

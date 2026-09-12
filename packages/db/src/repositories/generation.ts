@@ -13,12 +13,16 @@ import {
   canCancelRun,
   canRetryAttempt,
   computeInputFingerprint,
+  computeOutpaintCanvas,
+  computeUpscaleTargetDims,
   extractEditParams,
   extractImageAssetVersionId,
   extractMaskId,
+  extractOutpaintParams,
   extractPromptFromInputs,
   extractReferenceAssetVersionIds,
   extractTruthRevisionId,
+  extractUpscaleParams,
   getModelByKey,
   isDeterministicNodeType,
   operationForNodeType,
@@ -256,9 +260,19 @@ export class GenerationRepository {
       } satisfies WorkflowGraph;
 
       for (const node of nodes) {
+        const upscaleParamsEarly =
+          node.type === 'upscale'
+            ? extractUpscaleParams({
+                id: node.id,
+                type: node.type,
+                position: { x: 0, y: 0 },
+                config: node.config,
+              })
+            : null;
         const nodeModel =
           getModelByKey(
             (typeof node.config?.modelKey === 'string' ? node.config.modelKey : undefined) ??
+              upscaleParamsEarly?.engineKey ??
               input.modelKey ??
               FAKE_PRIMARY_MODEL.key,
           ) ?? model;
@@ -278,17 +292,65 @@ export class GenerationRepository {
         let dims = resolutionToPixels(
           typeof node.config?.resolution === 'string' ? node.config.resolution : '2K',
         );
+        let sourceWidth: number | null = null;
+        let sourceHeight: number | null = null;
         if (imageVersionId) {
           const imgVer = await tx.assetVersion.findFirst({
             where: { id: imageVersionId, workspaceId: input.workspaceId },
           });
           if (imgVer?.width && imgVer?.height) {
+            sourceWidth = imgVer.width;
+            sourceHeight = imgVer.height;
             dims = { width: imgVer.width, height: imgVer.height };
           }
           if (!refIds.includes(imageVersionId)) {
             refIds.push(imageVersionId);
           }
         }
+
+        const outpaintParams =
+          node.type === 'outpaint'
+            ? extractOutpaintParams({
+                id: node.id,
+                type: node.type,
+                position: { x: 0, y: 0 },
+                config: node.config,
+              })
+            : null;
+        const upscaleParams =
+          upscaleParamsEarly ??
+          (node.type === 'upscale'
+            ? extractUpscaleParams({
+                id: node.id,
+                type: node.type,
+                position: { x: 0, y: 0 },
+                config: node.config,
+              })
+            : null);
+
+        let outpaintCanvas: ReturnType<typeof computeOutpaintCanvas> | null = null;
+        if (node.type === 'outpaint' && outpaintParams) {
+          const srcW = sourceWidth ?? dims.width;
+          const srcH = sourceHeight ?? dims.height;
+          outpaintCanvas = computeOutpaintCanvas({
+            sourceWidth: srcW,
+            sourceHeight: srcH,
+            targetRatio: outpaintParams.targetRatio,
+            placement: outpaintParams.placement,
+          });
+          dims = { width: outpaintCanvas.canvasWidth, height: outpaintCanvas.canvasHeight };
+        }
+        if (node.type === 'upscale' && upscaleParams) {
+          const srcW = sourceWidth ?? dims.width;
+          const srcH = sourceHeight ?? dims.height;
+          const target = computeUpscaleTargetDims({
+            sourceWidth: srcW,
+            sourceHeight: srcH,
+            targetResolution: upscaleParams.targetResolution,
+          });
+          dims = { width: target.width, height: target.height };
+        }
+
         const count =
           typeof node.config?.count === 'number' && node.type === 'generate'
             ? Math.min(8, Math.max(1, node.config.count as number))
@@ -428,8 +490,12 @@ export class GenerationRepository {
           modelId: nodeModel.modelId,
           width: dims.width,
           height: dims.height,
-          aspectRatio: typeof node.config?.ratio === 'string' ? node.config.ratio : '1:1',
-          resolutionTier: typeof node.config?.resolution === 'string' ? node.config.resolution : '2K',
+          aspectRatio:
+            outpaintParams?.targetRatio ??
+            (typeof node.config?.ratio === 'string' ? node.config.ratio : '1:1'),
+          resolutionTier:
+            upscaleParams?.targetResolution ??
+            (typeof node.config?.resolution === 'string' ? node.config.resolution : '2K'),
           count,
           seed: typeof node.config?.seed === 'number' ? node.config.seed : undefined,
           strength: editParams.strength,
@@ -443,6 +509,10 @@ export class GenerationRepository {
           maskId: maskId ?? undefined,
           fidelity: editParams.fidelity,
           lightBlend: editParams.lightBlend,
+          targetRatio: outpaintParams?.targetRatio,
+          placement: outpaintParams?.placement,
+          engineKey: upscaleParams?.engineKey,
+          targetResolution: upscaleParams?.targetResolution,
           inputFingerprint: fp.sha256,
           fingerprintReproducible: fp.reproducible,
           subjectHint:
@@ -456,6 +526,14 @@ export class GenerationRepository {
             strength: editParams.strength,
             maskId: maskId ?? undefined,
             productLock: node.type === 'replace_background',
+            targetRatio: outpaintParams?.targetRatio,
+            placement: outpaintParams?.placement,
+            offsetX: outpaintCanvas?.offsetX,
+            offsetY: outpaintCanvas?.offsetY,
+            sourceWidth: sourceWidth ?? undefined,
+            sourceHeight: sourceHeight ?? undefined,
+            engineKey: upscaleParams?.engineKey,
+            targetResolution: upscaleParams?.targetResolution,
           },
         };
 
