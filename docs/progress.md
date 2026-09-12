@@ -12,7 +12,7 @@
 
 ## Review policy (documented W2)
 
-See `AGENTS.md` and `docs/architecture.md`: same-week related work → one milestone PR; continuous commits OK; DONE by implementer; VERIFIED at weekly/high-risk review; W2 acceptance = full upload→Truth Pack chain.
+See `AGENTS.md` and `docs/architecture.md`: same-week related work → one milestone PR; continuous commits OK; DONE by implementer; VERIFIED at weekly/high-risk review; W2 acceptance = full upload→Truth Pack chain. W3 is split into W3-A (plan) and W3-B (canvas); each is one milestone PR + one independent review.
 
 ---
 
@@ -44,7 +44,7 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | W2-04 | Product Truth Pack form, fact status, evidence refs | VERIFIED | Truth document/revision/facts/constraints; GET/PUT truth-pack; UI form actions. Independent review APPROVED on PR #3; merged to main as `79996ac9cd0f3e824bc1c0a608c4aa9d75fbcaa6`; main CI green https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34586631130. |
 | W2-05 | Vision Provider Adapter + structured extract | VERIFIED | `VisionProvider` + **FakeVisionProvider** only (W0-02 still BLOCKED_EXTERNAL). `POST .../truth-pack/extract`. Independent review APPROVED on PR #3; merged to main as `79996ac9cd0f3e824bc1c0a608c4aa9d75fbcaa6`; main CI green https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34586631130. |
 | W2-06 | Fact confirm / lock-allow / approve gate | VERIFIED | confirm + approve APIs; domain `canApproveTruthRevision`; UI buttons. Independent review APPROVED on PR #3; merged to main as `79996ac9cd0f3e824bc1c0a608c4aa9d75fbcaa6`; main CI green https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34586631130. |
-| W2-07 | Fixture baseline (10 real SKUs) | BLOCKED_EXTERNAL | Only **3 synthetic SKUs** in `fixtures/eval-products/`. Still need **~10 real SKUs** (rights-cleared). **素材由项目所有者在 QA 周前提供.** Does not block W2/W3 core merge; must **not** be VERIFIED. |
+| W2-07 | Fixture baseline (10 real SKUs) | BLOCKED_EXTERNAL | Only **3 synthetic SKUs** in `fixtures/eval-products/`. Still need **~10 real SKUs** (rights-cleared). **素材由项目所有者按 fixtures 现有格式提供，QA 周前到位。** Does not block W2/W3-A/B core merge; must **not** be VERIFIED. |
 
 ### W2 commands / evidence (implementer)
 
@@ -55,38 +55,55 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | `pnpm test:e2e` | Extends to upload→inspect→extract→confirm→approve (with MinIO + `INSPECT_INLINE=1`) |
 | Secrets | No real provider keys in repo / `.env.example` / commits |
 
-**VERIFIED (W2-01…W2-06):** Independent review APPROVED on PR #3; merged to main as `79996ac9cd0f3e824bc1c0a608c4aa9d75fbcaa6`; main CI green https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34586631130.
+**VERIFIED evidence package (W2-01…W2-06) — for 审稿 ratification:**
+- Merge SHA: `79996ac9cd0f3e824bc1c0a608c4aa9d75fbcaa6` (PR #3 squash into main)
+- Main CI green: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34586631130
+- PR #3 review record: multi-round independent review ending APPROVED (Outbox/idempotency, Truth atomic approve, roles, failure-injection, concurrency); final HEAD before merge `322ba52de47a3c00be2c20422f26933ef7022ef8`
+- Process note: ledger rows were written in docs PR #4 before 审稿 bot ratification; **this PR asks 审稿 to APPROVE keeping W2-01…W2-06 as VERIFIED**. Implementer must not self-merge VERIFIED docs.
 
-**W2-07** remains BLOCKED_EXTERNAL until owner provides ~10 real SKUs before QA week.
+**W2-07** remains BLOCKED_EXTERNAL：素材由项目所有者按 fixtures 现有格式提供，QA 周前到位。
 
 ---
 
-## W3 — Shot Plan + Studio canvas (next milestone)
+## W3 milestones (split)
 
-**Branch:** `feature/w3-shot-plan` (from main after this docs PR).  
-**Acceptance unit (one milestone PR, one independent review):** W3-01…W3-08 per spec §19.3 —
+**Why split:** Spec §19.3 packs Shot Plan (domain/API) and full Studio canvas (xyflow + 11 nodes + autosave + materialize) into one week. For one-PR / one-review cadence, that is too large and mixes high-risk graph UX with plan CRUD. Split into two independently reviewable milestones.
 
-- Shot Plan / Brief + default 7-image template
-- AI plan draft + human approve
-- `@xyflow/react` Studio layout
+### W3-A — Shot Plan + plan approve (do first)
+
+**Branch:** `feature/w3a-shot-plan`  
+**Acceptance unit (one PR, one independent review):** W3-01 + W3-02
+
+- Shot Plan / Shot Brief + default 7-image template
+- AI plan draft (Fake planner while W0-02 blocked) + human approve gate
+- Gate: from approved Truth Pack → editable plan → approve; tenant-scoped; tests + CI green
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| W3-01 | Shot Plan/Brief + 7-image template | TODO | W3-A |
+| W3-02 | Plan generate + approve | TODO | W3-A; Fake planner until W0-02 unblocked |
+
+### W3-B — Studio canvas + materialize (after W3-A)
+
+**Branch:** `feature/w3b-studio-canvas` (from main after W3-A merges)  
+**Acceptance unit (one PR, one independent review):** W3-03…W3-08
+
+- `@xyflow/react` Studio three-pane layout
 - Node registry, typed ports, edge validation, cycle detection
 - 11 node UI shells + config schemas
 - Draft autosave, optimistic lock, revision snapshot
 - Undo/redo, copy/paste, delete impact, fit view
 - Shot Plan → workflow materialization
-
-Week gate: Truth Pack → 7-image workflow; refresh keeps graph; illegal edges blocked; concurrent edits conflict (no silent overwrite).
+- Week gate: Truth Pack → 7-image workflow on canvas; refresh keeps graph; illegal edges blocked; concurrent edits conflict
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W3-01 | Shot Plan/Brief + 7-image template | TODO | |
-| W3-02 | Plan generate + approve | TODO | Fake planner until W0-02 unblocked |
-| W3-03 | Studio / `@xyflow/react` layout | TODO | |
-| W3-04 | Nodes/ports/cycle detection | TODO | |
-| W3-05 | 11 node config schemas | TODO | |
-| W3-06 | Autosave / revision | TODO | |
-| W3-07 | Canvas interactions | TODO | |
-| W3-08 | Plan → canvas materialize | TODO | |
+| W3-03 | Studio / `@xyflow/react` layout | TODO | W3-B |
+| W3-04 | Nodes/ports/cycle detection | TODO | W3-B |
+| W3-05 | 11 node config schemas | TODO | W3-B |
+| W3-06 | Autosave / revision | TODO | W3-B |
+| W3-07 | Canvas interactions | TODO | W3-B |
+| W3-08 | Plan → canvas materialize | TODO | W3-B |
 
 ---
 
