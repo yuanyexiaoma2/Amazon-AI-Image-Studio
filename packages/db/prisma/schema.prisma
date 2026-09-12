@@ -1,4 +1,4 @@
-// Amazon AI Image Studio — W1+W2+W3-A+W3-B1 Prisma schema
+// Amazon AI Image Studio — W1+W2+W3-A+W3-B1+W4 Prisma schema
 // IDs: UUIDv7 generated in application code; DB type uuid.
 // Times: timestamptz via Prisma DateTime (@db.Timestamptz)
 // Tenancy: workspace_id on all tenant tables; composite FK (workspace_id, parent_id).
@@ -196,6 +196,15 @@ model Workspace {
   workflows           Workflow[]
   workflowDrafts      WorkflowDraft[]
   workflowRevisions   WorkflowRevision[]
+  generationRuns      GenerationRun[]
+  generationItems     GenerationItem[]
+  generationAttempts  GenerationAttempt[]
+  providerSubmissions ProviderSubmission[]
+  generationOutputs   GenerationOutput[]
+  creditAccounts      CreditAccount[]
+  creditLedgerEvents  CreditLedgerEvent[]
+  providerCostEvents  ProviderCostEvent[]
+  progressEvents      ProgressEvent[]
 
   @@index([ownerUserId])
   @@unique([id]) // enables composite FK targets (workspace_id, id)
@@ -239,6 +248,7 @@ model Project {
   truthDocument    ProductTruthDocument?
   shotPlanDocument ShotPlanDocument?
   workflows        Workflow[]
+  generationRuns   GenerationRun[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, sku])
@@ -617,8 +627,320 @@ model WorkflowRevision {
   workspace  Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   workflow   Workflow   @relation("WorkflowRevisions", fields: [workspaceId, workflowId], references: [workspaceId, id], onDelete: Restrict)
   currentFor Workflow[] @relation("WorkflowCurrentRevision")
+  generationRuns GenerationRun[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, workflowId, revision])
   @@map("workflow_revisions")
+}
+
+// ─── W4: Model registry snapshots, runs, credits, provider events ───────────
+
+enum GenerationRunStatus {
+  DRAFT
+  VALIDATING
+  BLOCKED
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED_RETRYABLE
+  FAILED_FINAL
+  CANCEL_REQUESTED
+  CANCELED
+}
+
+enum GenerationItemStatus {
+  DRAFT
+  VALIDATING
+  BLOCKED
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED_RETRYABLE
+  FAILED_FINAL
+  CANCEL_REQUESTED
+  CANCELED
+}
+
+enum GenerationAttemptStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED_RETRYABLE
+  FAILED_FINAL
+  CANCEL_REQUESTED
+  CANCELED
+}
+
+enum ProviderSubmissionStatus {
+  PENDING
+  ACCEPTED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum CreditEventType {
+  GRANT
+  RESERVE
+  SETTLE
+  REFUND
+  RELEASE
+  ADJUST
+}
+
+enum GenerationOutputDisposition {
+  CURRENT
+  SUPERSEDED
+  LATE_AFTER_CANCEL
+  CORRUPT
+  REJECTED
+}
+
+model ModelRegistryEntry {
+  id                   String   @id @db.Uuid
+  key                  String
+  provider             String
+  modelId              String   @map("model_id")
+  displayName          String   @map("display_name")
+  enabled              Boolean  @default(true)
+  operationsJson       Json     @map("operations_json")
+  ratiosJson           Json     @map("ratios_json")
+  resolutionTiersJson  Json     @map("resolution_tiers_json")
+  maxReferenceImages   Int      @map("max_reference_images")
+  maxOutputs           Int      @map("max_outputs")
+  supportsSeed         Boolean  @map("supports_seed")
+  supportsWebhook      Boolean  @map("supports_webhook")
+  pricingJson          Json     @map("pricing_json")
+  configVersion        Int      @map("config_version")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([key])
+  @@map("model_registry_entries")
+}
+
+model GenerationRun {
+  id                  String              @id @db.Uuid
+  workspaceId         String              @map("workspace_id") @db.Uuid
+  projectId           String              @map("project_id") @db.Uuid
+  workflowRevisionId  String              @map("workflow_revision_id") @db.Uuid
+  scopeJson           Json                @map("scope_json")
+  status              GenerationRunStatus @default(QUEUED)
+  requestedByUserId   String              @map("requested_by_user_id") @db.Uuid
+  budgetLimitJson     Json?               @map("budget_limit_json")
+  estimateMicrounits  Int                 @default(0) @map("estimate_microunits")
+  currency            String              @default("USD")
+  idempotencyKey      String              @map("idempotency_key")
+  confirmBudget       Boolean             @default(false) @map("confirm_budget")
+  errorJson           Json?               @map("error_json")
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace        Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  project          Project             @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
+  workflowRevision WorkflowRevision    @relation(fields: [workspaceId, workflowRevisionId], references: [workspaceId, id], onDelete: Restrict)
+  items            GenerationItem[]
+  creditEvents     CreditLedgerEvent[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, projectId, status])
+  @@index([workspaceId, workflowRevisionId])
+  @@map("generation_runs")
+}
+
+model GenerationItem {
+  id          String               @id @db.Uuid
+  workspaceId String               @map("workspace_id") @db.Uuid
+  runId       String               @map("run_id") @db.Uuid
+  nodeId      String               @map("node_id")
+  slot        String?
+  variantId   String?              @map("variant_id") @db.Uuid
+  outputIndex Int                  @default(0) @map("output_index")
+  itemKey     String               @map("item_key")
+  status      GenerationItemStatus @default(QUEUED)
+  modelKey    String               @map("model_key")
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  run       GenerationRun       @relation(fields: [workspaceId, runId], references: [workspaceId, id], onDelete: Restrict)
+  attempts  GenerationAttempt[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, itemKey])
+  @@index([workspaceId, runId])
+  @@map("generation_items")
+}
+
+model GenerationAttempt {
+  id                String                   @id @db.Uuid
+  workspaceId       String                   @map("workspace_id") @db.Uuid
+  itemId            String                   @map("item_id") @db.Uuid
+  attemptNo         Int                      @map("attempt_no")
+  idempotencyKey    String                   @map("idempotency_key")
+  provider          String
+  modelId           String                   @map("model_id")
+  modelSnapshotJson Json                     @map("model_snapshot_json")
+  requestSnapshot   Json                     @map("request_snapshot")
+  status            GenerationAttemptStatus  @default(QUEUED)
+  errorClass        String?                  @map("error_class")
+  errorMessage      String?                  @map("error_message") @db.Text
+  autoRetryCount    Int                      @default(0) @map("auto_retry_count")
+  progress          Int                      @default(0)
+  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  item        GenerationItem       @relation(fields: [workspaceId, itemId], references: [workspaceId, id], onDelete: Restrict)
+  submission  ProviderSubmission?
+  outputs     GenerationOutput[]
+  creditEvents CreditLedgerEvent[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, itemId, attemptNo])
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, itemId, status])
+  @@map("generation_attempts")
+}
+
+model ProviderSubmission {
+  id            String                   @id @db.Uuid
+  workspaceId   String                   @map("workspace_id") @db.Uuid
+  attemptId     String                   @map("attempt_id") @db.Uuid
+  externalJobId String?                  @map("external_job_id")
+  submissionKey String                   @map("submission_key")
+  leaseToken    String?                  @map("lease_token")
+  heartbeatAt   DateTime?                @map("heartbeat_at") @db.Timestamptz
+  status        ProviderSubmissionStatus @default(PENDING)
+  provider      String
+  createdAt     DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  attempt   GenerationAttempt @relation(fields: [workspaceId, attemptId], references: [workspaceId, id], onDelete: Restrict)
+  costEvents ProviderCostEvent[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, attemptId])
+  @@unique([provider, submissionKey])
+  @@unique([provider, externalJobId])
+  @@map("provider_submissions")
+}
+
+model GenerationOutput {
+  id             String                       @id @db.Uuid
+  workspaceId    String                       @map("workspace_id") @db.Uuid
+  attemptId      String                       @map("attempt_id") @db.Uuid
+  outputIndex    Int                          @map("output_index")
+  assetVersionId String?                      @map("asset_version_id") @db.Uuid
+  disposition    GenerationOutputDisposition  @default(CURRENT)
+  mimeType       String?                      @map("mime_type")
+  byteSize       Int?                         @map("byte_size")
+  createdAt      DateTime                     @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  attempt   GenerationAttempt @relation(fields: [workspaceId, attemptId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, attemptId, outputIndex])
+  @@map("generation_outputs")
+}
+
+model ProviderEvent {
+  id               String    @id @db.Uuid
+  workspaceId      String?   @map("workspace_id") @db.Uuid
+  provider         String
+  externalEventId  String    @map("external_event_id")
+  externalJobId    String?   @map("external_job_id")
+  payloadHash      String    @map("payload_hash")
+  payloadJson      Json      @map("payload_json")
+  processedAt      DateTime? @map("processed_at") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([provider, externalEventId])
+  @@index([provider, externalJobId])
+  @@map("provider_events")
+}
+
+/// Snapshot row for quick reads; authoritative balance = fold of ledger events.
+model CreditAccount {
+  id                   String   @id @db.Uuid
+  workspaceId          String   @map("workspace_id") @db.Uuid
+  currency             String   @default("USD")
+  /// Controlled snapshot — updated only inside ledger write tx after append.
+  availableMicrounits  BigInt   @default(0) @map("available_microunits")
+  heldMicrounits       BigInt   @default(0) @map("held_microunits")
+  consumedMicrounits   BigInt   @default(0) @map("consumed_microunits")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  events    CreditLedgerEvent[]
+
+  @@unique([workspaceId])
+  @@unique([workspaceId, id])
+  @@map("credit_accounts")
+}
+
+model CreditLedgerEvent {
+  id              String          @id @db.Uuid
+  workspaceId     String          @map("workspace_id") @db.Uuid
+  accountId       String          @map("account_id") @db.Uuid
+  type            CreditEventType
+  microunits      BigInt
+  idempotencyKey  String          @map("idempotency_key")
+  attemptId       String?         @map("attempt_id") @db.Uuid
+  runId           String?         @map("run_id") @db.Uuid
+  note            String?
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  account   CreditAccount      @relation(fields: [workspaceId, accountId], references: [workspaceId, id], onDelete: Restrict)
+  attempt   GenerationAttempt? @relation(fields: [workspaceId, attemptId], references: [workspaceId, id], onDelete: SetNull)
+  run       GenerationRun?     @relation(fields: [workspaceId, runId], references: [workspaceId, id], onDelete: SetNull)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, accountId, createdAt])
+  @@map("credit_ledger_events")
+}
+
+model ProviderCostEvent {
+  id                    String   @id @db.Uuid
+  workspaceId           String   @map("workspace_id") @db.Uuid
+  providerSubmissionId  String   @map("provider_submission_id") @db.Uuid
+  type                  String
+  amountNumeric         Decimal  @map("amount_numeric") @db.Decimal(18, 8)
+  currency              String
+  settlementKey         String   @map("settlement_key")
+  providerInvoiceLineId String?  @map("provider_invoice_line_id")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace  Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  submission ProviderSubmission @relation(fields: [workspaceId, providerSubmissionId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([settlementKey])
+  @@index([workspaceId, providerSubmissionId])
+  @@map("provider_cost_events")
+}
+
+/// Thin progress events for SSE fan-out (also published on Redis).
+model ProgressEvent {
+  id          String   @id @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  runId       String?  @map("run_id") @db.Uuid
+  attemptId   String?  @map("attempt_id") @db.Uuid
+  type        String
+  payloadJson Json     @map("payload_json")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, projectId, createdAt])
+  @@map("progress_events")
 }

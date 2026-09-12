@@ -860,18 +860,217 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
         </div>
       </aside>
 
-      <div
-        style={{
-          gridColumn: '1 / -1',
-          borderTop: '1px solid #1e2a44',
-          padding: 12,
-          fontSize: 13,
-          opacity: 0.8,
-        }}
-      >
-        Task drawer (stub): queued / running / success / failed — W4+. Snapshot creates immutable
-        revision for future runs. Fake Provider only.
+      <TaskDrawer workspaceId={workspaceId} projectId={projectId} draft={draft} />
+    </div>
+  );
+}
+
+
+function TaskDrawer(props: {
+  workspaceId: string;
+  projectId: string;
+  draft: DraftResponse | null;
+}) {
+  const { workspaceId, projectId, draft } = props;
+  const [runs, setRuns] = useState<
+    Array<{
+      id: string;
+      status: string;
+      estimateMicrounits: number;
+      items: Array<{
+        id: string;
+        nodeId: string;
+        status: string;
+        attempts: Array<{
+          id: string;
+          attemptNo: number;
+          status: string;
+          progress: number;
+          errorClass?: string | null;
+          errorMessage?: string | null;
+        }>;
+      }>;
+    }>
+  >([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [events, setEvents] = useState<string[]>([]);
+
+  const refresh = useCallback(async () => {
+    const res = await fetch(
+      `/api/workspaces/${workspaceId}/projects/${projectId}/runs`,
+      { credentials: 'include' },
+    );
+    if (res.ok) {
+      const data = await res.json();
+      setRuns(data.runs ?? []);
+    }
+  }, [workspaceId, projectId]);
+
+  useEffect(() => {
+    void refresh();
+    const es = new EventSource(
+      `/api/workspaces/${workspaceId}/events?projectId=${projectId}`,
+      // cookies included same-origin
+    );
+    const push = (type: string, ev: MessageEvent) => {
+      setEvents((prev) => [`${type}: ${ev.data}`.slice(0, 180), ...prev].slice(0, 8));
+      void refresh();
+    };
+    es.addEventListener('attempt.running', (e) => push('running', e as MessageEvent));
+    es.addEventListener('attempt.progress', (e) => push('progress', e as MessageEvent));
+    es.addEventListener('attempt.succeeded', (e) => push('ok', e as MessageEvent));
+    es.addEventListener('attempt.failed', (e) => push('fail', e as MessageEvent));
+    es.onerror = () => {
+      /* browser auto-reconnects */
+    };
+    const t = setInterval(() => void refresh(), 3000);
+    return () => {
+      es.close();
+      clearInterval(t);
+    };
+  }, [workspaceId, projectId, refresh]);
+
+  async function snapshotAndRun() {
+    if (!draft) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const snap = await fetch(`/api/workspaces/${workspaceId}/workflows/${draft.workflowId}/snapshot`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ifRevision: draft.revisionNumber }),
+      });
+      const snapJson = await snap.json();
+      if (!snap.ok) {
+        setMsg(snapJson.error?.message ?? 'snapshot failed');
+        return;
+      }
+      const revisionId = snapJson.revision?.id as string;
+      const runRes = await fetch(
+        `/api/workspaces/${workspaceId}/workflow-revisions/${revisionId}/runs`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            scope: { type: 'ALL' },
+            idempotencyKey: crypto.randomUUID(),
+            budgetLimit: { currency: 'USD', amount: 5 },
+            confirmBudget: true,
+          }),
+        },
+      );
+      const runJson = await runRes.json();
+      if (!runRes.ok) {
+        setMsg(runJson.error?.message ?? 'run failed');
+        return;
+      }
+      setMsg(`Run ${runJson.run?.status} (${runJson.run?.id?.slice(0, 8)}…)`);
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelRun(runId: string) {
+    await fetch(`/api/workspaces/${workspaceId}/runs/${runId}/cancel`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    await refresh();
+  }
+
+  async function retryAttempt(attemptId: string) {
+    await fetch(`/api/workspaces/${workspaceId}/attempts/${attemptId}/retry`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    await refresh();
+  }
+
+  return (
+    <div
+      style={{
+        gridColumn: '1 / -1',
+        borderTop: '1px solid #1e2a44',
+        padding: 12,
+        fontSize: 13,
+        display: 'grid',
+        gap: 8,
+        background: '#0d1424',
+      }}
+    >
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <strong>Task drawer</strong>
+        <button type="button" disabled={busy || !draft} onClick={() => void snapshotAndRun()}>
+          {busy ? 'Starting…' : 'Snapshot + Run (Fake)'}
+        </button>
+        <button type="button" onClick={() => void refresh()}>
+          Refresh
+        </button>
+        {msg && <span style={{ opacity: 0.85 }}>{msg}</span>}
       </div>
+      <div style={{ display: 'grid', gap: 6, maxHeight: 160, overflow: 'auto' }}>
+        {runs.length === 0 && (
+          <div style={{ opacity: 0.65 }}>No runs yet — queue / running / success / failed appear here.</div>
+        )}
+        {runs.map((r) => (
+          <div
+            key={r.id}
+            style={{
+              border: '1px solid #2a3a5a',
+              borderRadius: 6,
+              padding: 8,
+              display: 'grid',
+              gap: 4,
+            }}
+          >
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
+              <span>
+                <code>{r.id.slice(0, 8)}</code> · <strong>{r.status}</strong> · est{' '}
+                {(r.estimateMicrounits / 1_000_000).toFixed(3)} USD
+              </span>
+              {(r.status === 'QUEUED' || r.status === 'RUNNING') && (
+                <button type="button" onClick={() => void cancelRun(r.id)}>
+                  Cancel
+                </button>
+              )}
+            </div>
+            {r.items.map((it) => {
+              const latest = it.attempts[it.attempts.length - 1];
+              return (
+                <div key={it.id} style={{ fontSize: 12, opacity: 0.9, paddingLeft: 8 }}>
+                  node <code>{it.nodeId}</code> · {it.status}
+                  {latest && (
+                    <>
+                      {' '}
+                      · attempt #{latest.attemptNo} {latest.status} ({latest.progress}%)
+                      {latest.errorClass && (
+                        <span style={{ color: '#f88' }}>
+                          {' '}
+                          {latest.errorClass}: {latest.errorMessage}
+                        </span>
+                      )}
+                      {(latest.status === 'FAILED_FINAL' || latest.status === 'FAILED_RETRYABLE') && (
+                        <button type="button" style={{ marginLeft: 8 }} onClick={() => void retryAttempt(latest.id)}>
+                          Retry
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      {events.length > 0 && (
+        <div style={{ fontSize: 11, opacity: 0.55 }}>
+          SSE: {events[0]}
+        </div>
+      )}
     </div>
   );
 }

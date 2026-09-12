@@ -6,7 +6,7 @@
 
 **Repo type (W0-01):** GREENFIELD — empty public GitHub repo; no prior application code.
 
-**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 work 2026-09-12 Asia/Shanghai (UTC+8).
+**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 work 2026-09-12 Asia/Shanghai (UTC+8).
 
 ---
 
@@ -179,7 +179,41 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 
 ---
 
+## W4 — Runtime: Model Registry / Run / Credits / Webhook / SSE
+
+**Branch:** `feature/w4-runtime` (from main merge SHA `f54ed4a1d80a7ec4d0927e1713d4c5dcc7a9f437` — W3-B2)  
+**Acceptance unit (one PR, one independent review):** W4-01…W4-06 (W4-07 stays BLOCKED_EXTERNAL)
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| W4-01 | Model Registry + Fake ImageProviderAdapter (§9) | DONE | `packages/domain` registry; `FakeImageProviderAdapter` in `@studio/providers` matching §9.1; `GET .../model-registry`; Fake only. |
+| W4-02 | Run/Attempt state machine, Outbox, BullMQ Worker | DONE | Prisma `generation_*` + `provider_submissions`; `OutboxRepository` + stable `gen-attempt-{id}` jobId; worker queue `generation-attempt` + recovery relay; reuse W2 outbox patterns. |
+| W4-03 | Cost estimate, budget gate, Credit reserve/settle | DONE | Append-only `credit_ledger_events` + controlled snapshot on `credit_accounts`; billing order estimate→budget→txn Run+Attempt+reserve+Outbox→dispatch→settle/refund; `BUDGET_EXCEEDED` / `INSUFFICIENT_CREDITS`. |
+| W4-04 | Webhook verify, poll, idempotent event id, late results | DONE | `POST /api/v1/providers/{providerKey}/webhook` raw-body HMAC; `provider_events` unique (provider, external_event_id); unknown job → 202 warning; late-after-cancel disposition. |
+| W4-05 | SSE progress + task drawer | DONE | `GET .../events?projectId=` SSE; Studio task drawer (run/cancel/retry + SSE); list runs API. |
+| W4-06 | Fake Provider full failure matrix | DONE | AUTH/VALIDATION/POLICY/QUOTA no auto-retry; RATE_LIMIT/TRANSIENT backoff; TIMEOUT max 2; UNKNOWN once; unit tests in `fake-adapter.test.ts` + domain retry policy tests. |
+| W4-07 | Staging real generate/edit smoke | BLOCKED_EXTERNAL | W0-02 still BLOCKED_EXTERNAL — no real provider keys. Fake only for this milestone. |
+
+### W4 commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm db:migrate:deploy` | Includes `20260912030000_w4_runtime` |
+| `pnpm lint` / `typecheck` / `test` / `build` | Required green before PR |
+| `pnpm openapi:generate` | Includes model-registry / runs / cancel / retry / events / webhook |
+| `pnpm test:e2e` | Extends chain with registry→run→settle→budget gate→AUTH final→webhook idempotency→SSE (`GENERATION_INLINE=1`) |
+| Provider | **FakeImageProviderAdapter only**; no real keys |
+| Out of scope | W4-07 real Staging smoke; W5 node executors |
+
+**DONE evidence package (W4-01…W4-06):**
+- Base merge: `f54ed4a1d80a7ec4d0927e1713d4c5dcc7a9f437` (W3-B2)
+- Branch: `feature/w4-runtime`
+- Milestone PR: (filled after open)
+- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge
+- W4-07 remains **BLOCKED_EXTERNAL**
+
+---
+
 ## Later weeks
 
-
-W4+ remain TODO per spec §24.
+W5+ remain TODO per spec §24.

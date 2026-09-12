@@ -5,7 +5,7 @@
 ## Monorepo
 
 - `apps/web` — Next.js App Router + Auth.js
-- `apps/worker` — BullMQ worker (Redis): health + **asset inspect**
+- `apps/worker` — BullMQ worker (Redis): health + **asset inspect** + **generation-attempt**
 - `packages/*` — domain, contracts, db, storage, providers, config, **imaging**
 
 ## Branch & review policy (see also `AGENTS.md`)
@@ -72,3 +72,13 @@ Triggers on `main`, `feat/**`, `feature/**`, `fix/**`.
 - Graph rules (ports, self-loop, duplicates, cross-layer back-edges, cycles) live in `@studio/domain` as pure functions; UI and API both call domain validation.
 - Drafts: `workflow_drafts.revision_number` optimistic concurrency via `ifRevision`; conflicts return **409 WORKFLOW_REVISION_CONFLICT** (no silent overwrite). Immutable snapshots in `workflow_revisions`.
 - W3-B2: Zod node config schemas in `@studio/contracts` (11 palette + system `approval_selector`); canvas undo/redo, copy/paste, delete impact hint, fit view, `isValidConnection` preview; `POST .../shot-plans/materialize` consumes W3-A `canvasPayload` unchanged and app-validates `referencedAssetVersionIds` (no DB FK). Fake only — no real Provider execution.
+
+
+## W4 runtime (generation / credits / webhook / SSE)
+
+- `ImageProviderAdapter` (§9.1) with **FakeImageProviderAdapter** only while W0-02 blocked.
+- Model Registry server-owned (`GET .../model-registry`); capability snapshot stored on each `generation_attempts.model_snapshot_json`.
+- Billing order: estimate → budget confirm → txn (Run + Attempt + credit RESERVE + Outbox) → BullMQ → settle/refund. Ledger is append-only (`credit_ledger_events`); `credit_accounts` snapshot updated only inside that write path.
+- Webhook: raw body HMAC; idempotent `provider_events`; unknown external job does not guess-match.
+- SSE: `GET .../events?projectId=` streams `progress_events` (poll-backed).
+- Retry policy (§9.3): AUTH/VALIDATION/POLICY/QUOTA no auto-retry; RATE_LIMIT/TRANSIENT with backoff; TIMEOUT ≤2; UNKNOWN once.

@@ -1030,6 +1030,333 @@ components:
         - briefCount
         - planRevisionId
         - planDocumentId
+    CreateRunRequest:
+      type: object
+      properties:
+        scope:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: &a10
+                - ALL
+                - BRANCH_FROM
+                - NODES
+              default: ALL
+            nodeId:
+              type: string
+            nodeIds:
+              type: array
+              items:
+                type: string
+        reuseSucceededInputs:
+          type: boolean
+          default: true
+        budgetLimit:
+          type: object
+          nullable: true
+          properties:
+            currency:
+              type: string
+              minLength: 1
+              default: USD
+            amount:
+              type: number
+              minimum: 0
+          required:
+            - amount
+        confirmBudget:
+          type: boolean
+          default: false
+        idempotencyKey:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: string
+              minLength: 8
+              maxLength: 128
+        modelKey:
+          type: string
+        scenario:
+          type: string
+      required:
+        - idempotencyKey
+    CreateRunResponse:
+      type: object
+      properties:
+        run:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            projectId:
+              type: string
+              format: uuid
+            workflowRevisionId:
+              type: string
+              format: uuid
+            status:
+              type: string
+            estimateMicrounits:
+              type: integer
+            currency:
+              type: string
+            idempotencyKey:
+              type: string
+            scope:
+              nullable: true
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  nodeId:
+                    type: string
+                  status:
+                    type: string
+                  modelKey:
+                    type: string
+                  attempts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        attemptNo:
+                          type: integer
+                        status:
+                          type: string
+                        provider:
+                          type: string
+                        modelId:
+                          type: string
+                        progress:
+                          type: integer
+                        errorClass:
+                          type: string
+                          nullable: true
+                        errorMessage:
+                          type: string
+                          nullable: true
+                        createdAt:
+                          type: string
+                      required:
+                        - id
+                        - attemptNo
+                        - status
+                        - provider
+                        - modelId
+                        - progress
+                        - createdAt
+                required:
+                  - id
+                  - nodeId
+                  - status
+                  - modelKey
+                  - attempts
+            createdAt:
+              type: string
+            updatedAt:
+              type: string
+          required:
+            - id
+            - projectId
+            - workflowRevisionId
+            - status
+            - estimateMicrounits
+            - currency
+            - idempotencyKey
+            - items
+            - createdAt
+            - updatedAt
+        created:
+          type: boolean
+      required:
+        - run
+        - created
+    ModelRegistryResponse:
+      type: object
+      properties:
+        models:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              provider:
+                type: string
+              modelId:
+                type: string
+              displayName:
+                type: string
+              enabled:
+                type: boolean
+              operations:
+                type: array
+                items:
+                  type: string
+              ratios:
+                type: array
+                items:
+                  type: string
+              resolutionTiers:
+                type: array
+                items:
+                  type: string
+              maxReferenceImages:
+                type: integer
+              maxOutputs:
+                type: integer
+              supportsSeed:
+                type: boolean
+              supportsWebhook:
+                type: boolean
+              pricing:
+                type: object
+                properties:
+                  currency:
+                    type: string
+                  unit:
+                    type: string
+                  estimatedUnitCost:
+                    type: number
+                required:
+                  - currency
+                  - unit
+                  - estimatedUnitCost
+              configVersion:
+                type: integer
+            required:
+              - key
+              - provider
+              - modelId
+              - displayName
+              - enabled
+              - operations
+              - ratios
+              - resolutionTiers
+              - maxReferenceImages
+              - maxOutputs
+              - supportsSeed
+              - supportsWebhook
+              - pricing
+              - configVersion
+        credits:
+          type: object
+          properties:
+            currency:
+              type: string
+            availableMicrounits:
+              type: number
+            heldMicrounits:
+              type: number
+            consumedMicrounits:
+              type: number
+          required:
+            - currency
+            - availableMicrounits
+            - heldMicrounits
+            - consumedMicrounits
+      required:
+        - models
+    GenerationRun:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        workflowRevisionId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        estimateMicrounits:
+          type: integer
+        currency:
+          type: string
+        idempotencyKey:
+          type: string
+        scope:
+          nullable: true
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              nodeId:
+                type: string
+              status:
+                type: string
+              modelKey:
+                type: string
+              attempts:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    attemptNo:
+                      type: integer
+                    status:
+                      type: string
+                    provider:
+                      type: string
+                    modelId:
+                      type: string
+                    progress:
+                      type: integer
+                    errorClass:
+                      type: string
+                      nullable: true
+                    errorMessage:
+                      type: string
+                      nullable: true
+                    createdAt:
+                      type: string
+                  required:
+                    - id
+                    - attemptNo
+                    - status
+                    - provider
+                    - modelId
+                    - progress
+                    - createdAt
+            required:
+              - id
+              - nodeId
+              - status
+              - modelKey
+              - attempts
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - projectId
+        - workflowRevisionId
+        - status
+        - estimateMicrounits
+        - currency
+        - idempotencyKey
+        - items
+        - createdAt
+        - updatedAt
   parameters: {}
 paths:
   /api/register:
@@ -3113,3 +3440,574 @@ paths:
       responses:
         "201":
           description: Snapshot created
+  /api/workspaces/{workspaceId}/model-registry:
+    get:
+      summary: List enabled models + credit snapshot
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  models:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key:
+                          type: string
+                        provider:
+                          type: string
+                        modelId:
+                          type: string
+                        displayName:
+                          type: string
+                        enabled:
+                          type: boolean
+                        operations:
+                          type: array
+                          items:
+                            type: string
+                        ratios:
+                          type: array
+                          items:
+                            type: string
+                        resolutionTiers:
+                          type: array
+                          items:
+                            type: string
+                        maxReferenceImages:
+                          type: integer
+                        maxOutputs:
+                          type: integer
+                        supportsSeed:
+                          type: boolean
+                        supportsWebhook:
+                          type: boolean
+                        pricing:
+                          type: object
+                          properties:
+                            currency:
+                              type: string
+                            unit:
+                              type: string
+                            estimatedUnitCost:
+                              type: number
+                          required:
+                            - currency
+                            - unit
+                            - estimatedUnitCost
+                        configVersion:
+                          type: integer
+                      required:
+                        - key
+                        - provider
+                        - modelId
+                        - displayName
+                        - enabled
+                        - operations
+                        - ratios
+                        - resolutionTiers
+                        - maxReferenceImages
+                        - maxOutputs
+                        - supportsSeed
+                        - supportsWebhook
+                        - pricing
+                        - configVersion
+                  credits:
+                    type: object
+                    properties:
+                      currency:
+                        type: string
+                      availableMicrounits:
+                        type: number
+                      heldMicrounits:
+                        type: number
+                      consumedMicrounits:
+                        type: number
+                    required:
+                      - currency
+                      - availableMicrounits
+                      - heldMicrounits
+                      - consumedMicrounits
+                required:
+                  - models
+  /api/workspaces/{workspaceId}/workflow-revisions/{revisionId}/runs:
+    post:
+      summary: Create generation run (estimate → budget → reserve → outbox)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                      enum: *a10
+                      default: ALL
+                    nodeId:
+                      type: string
+                    nodeIds:
+                      type: array
+                      items:
+                        type: string
+                reuseSucceededInputs:
+                  type: boolean
+                  default: true
+                budgetLimit:
+                  type: object
+                  nullable: true
+                  properties:
+                    currency:
+                      type: string
+                      minLength: 1
+                      default: USD
+                    amount:
+                      type: number
+                      minimum: 0
+                  required:
+                    - amount
+                confirmBudget:
+                  type: boolean
+                  default: false
+                idempotencyKey:
+                  anyOf:
+                    - type: string
+                      format: uuid
+                    - type: string
+                      minLength: 8
+                      maxLength: 128
+                modelKey:
+                  type: string
+                scenario:
+                  type: string
+              required:
+                - idempotencyKey
+      responses:
+        "200":
+          description: Idempotent replay
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      projectId:
+                        type: string
+                        format: uuid
+                      workflowRevisionId:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                      estimateMicrounits:
+                        type: integer
+                      currency:
+                        type: string
+                      idempotencyKey:
+                        type: string
+                      scope:
+                        nullable: true
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            nodeId:
+                              type: string
+                            status:
+                              type: string
+                            modelKey:
+                              type: string
+                            attempts:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    format: uuid
+                                  attemptNo:
+                                    type: integer
+                                  status:
+                                    type: string
+                                  provider:
+                                    type: string
+                                  modelId:
+                                    type: string
+                                  progress:
+                                    type: integer
+                                  errorClass:
+                                    type: string
+                                    nullable: true
+                                  errorMessage:
+                                    type: string
+                                    nullable: true
+                                  createdAt:
+                                    type: string
+                                required:
+                                  - id
+                                  - attemptNo
+                                  - status
+                                  - provider
+                                  - modelId
+                                  - progress
+                                  - createdAt
+                          required:
+                            - id
+                            - nodeId
+                            - status
+                            - modelKey
+                            - attempts
+                      createdAt:
+                        type: string
+                      updatedAt:
+                        type: string
+                    required:
+                      - id
+                      - projectId
+                      - workflowRevisionId
+                      - status
+                      - estimateMicrounits
+                      - currency
+                      - idempotencyKey
+                      - items
+                      - createdAt
+                      - updatedAt
+                  created:
+                    type: boolean
+                required:
+                  - run
+                  - created
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      projectId:
+                        type: string
+                        format: uuid
+                      workflowRevisionId:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                      estimateMicrounits:
+                        type: integer
+                      currency:
+                        type: string
+                      idempotencyKey:
+                        type: string
+                      scope:
+                        nullable: true
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            nodeId:
+                              type: string
+                            status:
+                              type: string
+                            modelKey:
+                              type: string
+                            attempts:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    format: uuid
+                                  attemptNo:
+                                    type: integer
+                                  status:
+                                    type: string
+                                  provider:
+                                    type: string
+                                  modelId:
+                                    type: string
+                                  progress:
+                                    type: integer
+                                  errorClass:
+                                    type: string
+                                    nullable: true
+                                  errorMessage:
+                                    type: string
+                                    nullable: true
+                                  createdAt:
+                                    type: string
+                                required:
+                                  - id
+                                  - attemptNo
+                                  - status
+                                  - provider
+                                  - modelId
+                                  - progress
+                                  - createdAt
+                          required:
+                            - id
+                            - nodeId
+                            - status
+                            - modelKey
+                            - attempts
+                      createdAt:
+                        type: string
+                      updatedAt:
+                        type: string
+                    required:
+                      - id
+                      - projectId
+                      - workflowRevisionId
+                      - status
+                      - estimateMicrounits
+                      - currency
+                      - idempotencyKey
+                      - items
+                      - createdAt
+                      - updatedAt
+                  created:
+                    type: boolean
+                required:
+                  - run
+                  - created
+  /api/workspaces/{workspaceId}/runs/{runId}:
+    get:
+      summary: Get generation run
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  workflowRevisionId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                  estimateMicrounits:
+                    type: integer
+                  currency:
+                    type: string
+                  idempotencyKey:
+                    type: string
+                  scope:
+                    nullable: true
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        nodeId:
+                          type: string
+                        status:
+                          type: string
+                        modelKey:
+                          type: string
+                        attempts:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                format: uuid
+                              attemptNo:
+                                type: integer
+                              status:
+                                type: string
+                              provider:
+                                type: string
+                              modelId:
+                                type: string
+                              progress:
+                                type: integer
+                              errorClass:
+                                type: string
+                                nullable: true
+                              errorMessage:
+                                type: string
+                                nullable: true
+                              createdAt:
+                                type: string
+                            required:
+                              - id
+                              - attemptNo
+                              - status
+                              - provider
+                              - modelId
+                              - progress
+                              - createdAt
+                      required:
+                        - id
+                        - nodeId
+                        - status
+                        - modelKey
+                        - attempts
+                  createdAt:
+                    type: string
+                  updatedAt:
+                    type: string
+                required:
+                  - id
+                  - projectId
+                  - workflowRevisionId
+                  - status
+                  - estimateMicrounits
+                  - currency
+                  - idempotencyKey
+                  - items
+                  - createdAt
+                  - updatedAt
+  /api/workspaces/{workspaceId}/runs/{runId}/cancel:
+    post:
+      summary: Cancel run
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  workflowRevisionId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                  estimateMicrounits:
+                    type: integer
+                  currency:
+                    type: string
+                  idempotencyKey:
+                    type: string
+                  scope:
+                    nullable: true
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        nodeId:
+                          type: string
+                        status:
+                          type: string
+                        modelKey:
+                          type: string
+                        attempts:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                format: uuid
+                              attemptNo:
+                                type: integer
+                              status:
+                                type: string
+                              provider:
+                                type: string
+                              modelId:
+                                type: string
+                              progress:
+                                type: integer
+                              errorClass:
+                                type: string
+                                nullable: true
+                              errorMessage:
+                                type: string
+                                nullable: true
+                              createdAt:
+                                type: string
+                            required:
+                              - id
+                              - attemptNo
+                              - status
+                              - provider
+                              - modelId
+                              - progress
+                              - createdAt
+                      required:
+                        - id
+                        - nodeId
+                        - status
+                        - modelKey
+                        - attempts
+                  createdAt:
+                    type: string
+                  updatedAt:
+                    type: string
+                required:
+                  - id
+                  - projectId
+                  - workflowRevisionId
+                  - status
+                  - estimateMicrounits
+                  - currency
+                  - idempotencyKey
+                  - items
+                  - createdAt
+                  - updatedAt
+  /api/workspaces/{workspaceId}/attempts/{attemptId}/retry:
+    post:
+      summary: Retry failed attempt (new attempt row)
+      responses:
+        "201":
+          description: Created
+  /api/workspaces/{workspaceId}/events:
+    get:
+      summary: SSE progress stream (?projectId=)
+      responses:
+        "200":
+          description: text/event-stream
+  /api/v1/providers/{providerKey}/webhook:
+    post:
+      summary: Provider webhook (raw body signature verify)
+      responses:
+        "200":
+          description: Accepted / duplicate

@@ -19,6 +19,7 @@ export {
 export {
   OutboxRepository,
   inspectJobId,
+  generationAttemptJobId,
   type EnqueueOutboxInput,
 } from './repositories/outbox.js';
 
@@ -39,3 +40,18 @@ export {
   WorkflowNotFoundError,
   type WorkflowWithDraft,
 } from './repositories/workflow.js';
+
+export {
+  CreditRepository,
+  CreditInsufficientError,
+} from './repositories/credits.js';
+
+export {
+  GenerationRepository,
+  GenerationValidationError,
+  GenerationNotFoundError,
+  GenerationConflictError,
+  BudgetGateError,
+  type CreateRunInput,
+  type GenerationRunDetail,
+} from './repositories/generation.js';

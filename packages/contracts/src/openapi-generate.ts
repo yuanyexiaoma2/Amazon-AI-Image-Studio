@@ -31,6 +31,12 @@ import {
   MaterializeShotPlanRequestSchema,
   MaterializeShotPlanResponseSchema,
 } from './workflow.js';
+import {
+  CreateRunRequestSchema,
+  CreateRunResponseSchema,
+  ModelRegistryResponseSchema,
+  GenerationRunSchema,
+} from './generation.js';
 import YAML from 'yaml';
 
 extendZodWithOpenApi(z);
@@ -58,6 +64,10 @@ registry.register('SnapshotWorkflowRequest', SnapshotWorkflowRequestSchema);
 registry.register('WorkflowDraft', WorkflowDraftSchema);
 registry.register('MaterializeShotPlanRequest', MaterializeShotPlanRequestSchema);
 registry.register('MaterializeShotPlanResponse', MaterializeShotPlanResponseSchema);
+registry.register('CreateRunRequest', CreateRunRequestSchema);
+registry.register('CreateRunResponse', CreateRunResponseSchema);
+registry.register('ModelRegistryResponse', ModelRegistryResponseSchema);
+registry.register('GenerationRun', GenerationRunSchema);
 
 registry.registerPath({
   method: 'post',
@@ -269,6 +279,85 @@ registry.registerPath({
   },
 });
 
+
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/workspaces/{workspaceId}/model-registry',
+  summary: 'List enabled models + credit snapshot',
+  responses: {
+    200: {
+      description: 'OK',
+      content: { 'application/json': { schema: ModelRegistryResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/workflow-revisions/{revisionId}/runs',
+  summary: 'Create generation run (estimate → budget → reserve → outbox)',
+  request: {
+    body: { content: { 'application/json': { schema: CreateRunRequestSchema } } },
+  },
+  responses: {
+    201: {
+      description: 'Created',
+      content: { 'application/json': { schema: CreateRunResponseSchema } },
+    },
+    200: {
+      description: 'Idempotent replay',
+      content: { 'application/json': { schema: CreateRunResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/workspaces/{workspaceId}/runs/{runId}',
+  summary: 'Get generation run',
+  responses: {
+    200: {
+      description: 'OK',
+      content: { 'application/json': { schema: GenerationRunSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/runs/{runId}/cancel',
+  summary: 'Cancel run',
+  responses: {
+    200: {
+      description: 'OK',
+      content: { 'application/json': { schema: GenerationRunSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/attempts/{attemptId}/retry',
+  summary: 'Retry failed attempt (new attempt row)',
+  responses: {
+    201: { description: 'Created' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/workspaces/{workspaceId}/events',
+  summary: 'SSE progress stream (?projectId=)',
+  responses: { 200: { description: 'text/event-stream' } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/v1/providers/{providerKey}/webhook',
+  summary: 'Provider webhook (raw body signature verify)',
+  responses: { 200: { description: 'Accepted / duplicate' } },
+});
 
 const generator = new OpenApiGeneratorV3(registry.definitions);
 const document = generator.generateDocument({
