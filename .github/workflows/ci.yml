@@ -68,12 +68,13 @@ jobs:
 
       - name: Start MinIO (object storage)
         run: |
+          # Prefer quay.io — Docker Hub pulls for minio/minio are intermittently denied on GHA.
           docker run -d --name studio-minio \
             -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/minio:RELEASE.2024-12-18T13-15-44Z server /data
-          for i in $(seq 1 30); do
+            quay.io/minio/minio:RELEASE.2024-12-18T13-15-44Z server /data
+          for i in $(seq 1 45); do
             if curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null; then
               echo "minio ready"
               exit 0
