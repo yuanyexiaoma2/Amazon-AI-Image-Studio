@@ -23,3 +23,4 @@ export * from './qa-evaluators.js';
 export * from './qa-approval.js';
 export * from './qa-export.js';
 export { AMAZON_MAIN_US_V1 } from './qa-rules/amazon-main-us-v1.js';
+export * from './variants.js';

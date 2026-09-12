@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Amazon AI Image Studio API
-  version: 0.4.0
+  version: 0.5.0
   description: OpenAPI from Zod contracts (W1–W6 QA / Review / Export).
 servers:
   - url: http://localhost:3000
@@ -1890,6 +1890,322 @@ components:
         - rulePackVersion
         - createdAt
         - items
+    CreateVariantRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 32
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 128
+        masterVariantId:
+          type: string
+          nullable: true
+          format: uuid
+        components:
+          type: array
+          items:
+            type: object
+            properties:
+              componentKey:
+                type: string
+                minLength: 1
+                maxLength: 64
+              colorHex:
+                type: string
+                nullable: true
+                pattern: ^#[0-9A-Fa-f]{6}$
+              colorDescription:
+                type: string
+                nullable: true
+                maxLength: 256
+              material:
+                type: string
+                nullable: true
+                maxLength: 128
+              locks:
+                type: array
+                items:
+                  type: string
+              allowedChanges:
+                type: array
+                items:
+                  type: string
+            required:
+              - componentKey
+        status:
+          type: string
+          enum:
+            - DRAFT
+            - READY
+            - ARCHIVED
+      required:
+        - code
+        - displayName
+    PatchVariantRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 128
+        status:
+          type: string
+          enum:
+            - DRAFT
+            - READY
+            - ARCHIVED
+        components:
+          type: array
+          items:
+            type: object
+            properties:
+              componentKey:
+                type: string
+                minLength: 1
+                maxLength: 64
+              colorHex:
+                type: string
+                nullable: true
+                pattern: ^#[0-9A-Fa-f]{6}$
+              colorDescription:
+                type: string
+                nullable: true
+                maxLength: 256
+              material:
+                type: string
+                nullable: true
+                maxLength: 128
+              locks:
+                type: array
+                items:
+                  type: string
+              allowedChanges:
+                type: array
+                items:
+                  type: string
+            required:
+              - componentKey
+        workflowId:
+          type: string
+          nullable: true
+          format: uuid
+    CreateVariantRunRequest:
+      type: object
+      properties:
+        masterVariantId:
+          type: string
+          format: uuid
+        variantIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 32
+        budgetLimit:
+          type: object
+          nullable: true
+          properties:
+            currency:
+              type: string
+              minLength: 1
+              default: USD
+            amount:
+              type: number
+              minimum: 0
+          required:
+            - amount
+        confirmBudget:
+          type: boolean
+          default: false
+        idempotencyKey:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: string
+              minLength: 8
+              maxLength: 128
+        itemScenarios:
+          type: object
+          additionalProperties:
+            type: string
+        scenario:
+          type: string
+        visionScenario:
+          type: string
+      required:
+        - masterVariantId
+        - variantIds
+        - idempotencyKey
+    Variant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        displayName:
+          type: string
+        masterVariantId:
+          type: string
+          nullable: true
+          format: uuid
+        status:
+          type: string
+        workflowId:
+          type: string
+          nullable: true
+          format: uuid
+        components:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              componentKey:
+                type: string
+              colorHex:
+                type: string
+                nullable: true
+              colorDescription:
+                type: string
+                nullable: true
+              material:
+                type: string
+                nullable: true
+              locks:
+                type: array
+                items:
+                  type: string
+              allowedChanges:
+                type: array
+                items:
+                  type: string
+            required:
+              - id
+              - componentKey
+              - locks
+              - allowedChanges
+        createdAt:
+          type: string
+      required:
+        - id
+        - projectId
+        - code
+        - displayName
+        - masterVariantId
+        - status
+        - components
+        - createdAt
+    VariantRun:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        masterVariantId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        estimateMicrounits:
+          type: integer
+        currency:
+          type: string
+        confirmBudget:
+          type: boolean
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              variantId:
+                type: string
+                format: uuid
+              variantRunId:
+                type: string
+                nullable: true
+                format: uuid
+              slot:
+                type: string
+              outputIndex:
+                type: integer
+              status:
+                type: string
+              generationItemId:
+                type: string
+                nullable: true
+                format: uuid
+              selectedAssetVersionId:
+                type: string
+                nullable: true
+                format: uuid
+              qaReportId:
+                type: string
+                nullable: true
+                format: uuid
+              errorClass:
+                type: string
+                nullable: true
+              errorMessage:
+                type: string
+                nullable: true
+            required:
+              - id
+              - variantId
+              - slot
+              - outputIndex
+              - status
+        createdAt:
+          type: string
+        completedAt:
+          type: string
+          nullable: true
+      required:
+        - id
+        - projectId
+        - masterVariantId
+        - status
+        - estimateMicrounits
+        - currency
+        - confirmBudget
+        - items
+        - createdAt
+    CreditAdjustRequest:
+      type: object
+      properties:
+        microunits:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+        note:
+          type: string
+          minLength: 1
+          maxLength: 512
+        idempotencyKey:
+          type: string
+          minLength: 8
+          maxLength: 128
+      required:
+        - microunits
+        - note
+        - idempotencyKey
   parameters: {}
 paths:
   /api/register:

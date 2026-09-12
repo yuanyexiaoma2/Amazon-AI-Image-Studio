@@ -337,7 +337,7 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 ---
 
-## W6 — Amazon QA, Review, Export (Phase 1 / ADR-0003) (DONE)
+## W6 — Amazon QA, Review, Export (Phase 1 / ADR-0003) (VERIFIED)
 
 **Branch:** `feature/w6-qa-export` (from main `7025b87` = W5-C)  
 **Acceptance unit (one PR, one independent review):** W6-01…W6-08  
@@ -345,14 +345,14 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W6-01 | Market Rule Pack + `amazon-main-us-v1` | DONE | Versioned JSON `docs/qa-rules/amazon-main-us-v1.json` + `docs/qa-rules/amazon-main-us-v1.md`; runtime pack in `@studio/domain`; merge algorithm (specificity/priority, CR required to lower severity / clear nonWaivable); `global_market_rule_definitions` + activations. |
-| W6-02 | Size/format/background/ratio/border/blur | DONE | Deterministic evaluators + `@studio/imaging` `analyzeQaPixels` (white complement minus 5px@2k halo, subject extent, edge margin, Laplacian blur, border band). |
-| W6-03 | OCR vs confirmed facts | DONE | `FakeOcrProvider` scenarios SUCCESS/OVERLAY_TEXT/FACT_MISMATCH/LOW_CONFIDENCE; `MAIN.NO_OVERLAY_TEXT` + `PRODUCT.FACT_TEXT_MATCH`. |
-| W6-04 | Vision identity / defects | DONE | `FakeVisionQaProvider` SUCCESS/IDENTITY_MISMATCH/UNSOLD_*; `PRODUCT.IDENTITY` + `MAIN.ONLY_SOLD_ITEMS`. |
-| W6-05 | Findings + tri-state aggregation | DONE | Finding schema + evidence regions `[0,1]`; overall PASS/REVIEW/BLOCK per §31.14; `FILE.DECODABLE` nonWaivable. |
-| W6-06 | Review / approve / override | DONE | `/projects/[id]/review` compare + evidence boxes; append-only APPROVE/REJECT/OVERRIDE_BLOCK/REVOKE; roles OWNER/ADMIN/REVIEWER approve, OWNER/ADMIN override; `qa_gate` PASS ≠ Approval. |
-| W6-07 | Export Worker / manifest / CSV / ZIP | DONE | Outbox `export-bundle-{id}`; fixed `manifest.json` + UTF-8 BOM `qa-report.csv`; STORE ZIP with bundle `createdAt`; MAIN BLOCK blocks default export; checksums. |
-| W6-08 | New-project → ZIP E2E | DONE | API-level full chain in `scripts/e2e-api.mjs` (Playwright not in repo — documented). PASS export ZIP; BLOCK blocks; OVERRIDE then ZIP; Fake OCR/Vision scenarios; tenant 403. |
+| W6-01 | Market Rule Pack + `amazon-main-us-v1` | VERIFIED | Versioned JSON `docs/qa-rules/amazon-main-us-v1.json` + `docs/qa-rules/amazon-main-us-v1.md`; runtime pack in `@studio/domain`; merge algorithm (specificity/priority, CR required to lower severity / clear nonWaivable); `global_market_rule_definitions` + activations. |
+| W6-02 | Size/format/background/ratio/border/blur | VERIFIED | Deterministic evaluators + `@studio/imaging` `analyzeQaPixels` (white complement minus 5px@2k halo, subject extent, edge margin, Laplacian blur, border band). |
+| W6-03 | OCR vs confirmed facts | VERIFIED | `FakeOcrProvider` scenarios SUCCESS/OVERLAY_TEXT/FACT_MISMATCH/LOW_CONFIDENCE; `MAIN.NO_OVERLAY_TEXT` + `PRODUCT.FACT_TEXT_MATCH`. |
+| W6-04 | Vision identity / defects | VERIFIED | `FakeVisionQaProvider` SUCCESS/IDENTITY_MISMATCH/UNSOLD_*; `PRODUCT.IDENTITY` + `MAIN.ONLY_SOLD_ITEMS`. |
+| W6-05 | Findings + tri-state aggregation | VERIFIED | Finding schema + evidence regions `[0,1]`; overall PASS/REVIEW/BLOCK per §31.14; `FILE.DECODABLE` nonWaivable. |
+| W6-06 | Review / approve / override | VERIFIED | `/projects/[id]/review` compare + evidence boxes; append-only APPROVE/REJECT/OVERRIDE_BLOCK/REVOKE; roles OWNER/ADMIN/REVIEWER approve, OWNER/ADMIN override; `qa_gate` PASS ≠ Approval. |
+| W6-07 | Export Worker / manifest / CSV / ZIP | VERIFIED | Outbox `export-bundle-{id}`; fixed `manifest.json` + UTF-8 BOM `qa-report.csv`; STORE ZIP with bundle `createdAt`; MAIN BLOCK blocks default export; checksums. |
+| W6-08 | New-project → ZIP E2E | VERIFIED | API-level full chain in `scripts/e2e-api.mjs` (Playwright not in repo — documented). PASS export ZIP; BLOCK blocks; OVERRIDE then ZIP; Fake OCR/Vision scenarios; tenant 403. |
 
 ### W6 commands / evidence (implementer)
 
@@ -363,15 +363,50 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | `pnpm openapi:generate` | QA / approval / export paths (v0.4.0) |
 | `pnpm test:e2e` | Extends with QA→approve→ZIP and MAIN BLOCK export gate (`INSPECT_INLINE` also inlines QA/export) |
 | Provider | **Fake OCR + Fake Vision QA + Fake Image only** (ADR-0003); no real keys |
-| Out of scope | W7; W4-07 / W0-02 / W2-07; Phase 2 real smoke |
+| Out of scope | W4-07 / W0-02 / W2-07; Phase 2 real smoke |
 
 `qa_gate` PASS is never human Approval. Phase 2 real-Provider / real-SKU eval remains 挂起 (ADR-0003).
 
-**DONE evidence package (W6-01…W6-08):**
-- Branch HEAD: `75d427c92be1474c3fb28083133874d02e04cfd7`
-- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/16
-- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34693812702
-- Local e2e: new-project → QA PASS → no-approval 409 → APPROVE → ZIP; MAIN BLOCK 409; OVERRIDE then ZIP; Fake OCR/Vision; tenant 403 (`INSPECT_INLINE=1`)
-- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #16 before merge
-- Do not merge; do not start W7.
+**VERIFIED evidence package (W6-01…W6-08):**
+- Merge SHA: `15f49796939b4cef2a42df3e6bd1dab788ce308b` (PR #16 squash into main)
+- Final HEAD before merge: `3f87414445e1b4c8a9562f2d6086e234aeb0361b`
+- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34694106828
+- 审稿 **APPROVED** + public comment: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/16#issuecomment-5646158791
+- Fake only (ADR-0003); Phase 2 real-Provider / real-SKU eval remains 挂起
+- W7 unlocked after this VERIFIED ratification
 
+---
+
+## W7 — Variants / batch / QA / export / admin (DONE)
+
+**Branch:** `feature/w7-variants` (from main `15f49796939b4cef2a42df3e6bd1dab788ce308b` = W6)  
+**Acceptance unit (one PR, one independent review):** W7-01…W7-07  
+**Fake only** (ADR-0003). No real keys. Do not start W8. Do not merge without 审稿.
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| W7-01 | Variant entities, master selection, component color config | DONE | Prisma `variants` / `variant_components` / `variant_items` (+ `variant_runs`); migration `20260912060000_w7_variants`; domain validate + APIs POST/GET/PATCH. |
+| W7-02 | Batch-derive variant workflows from approved master | DONE | `POST .../variants/{id}/materialize` clones master graph with color overrides (no Approval inherit); `POST .../variant-runs` Fake 3×7 batch. |
+| W7-03 | Per-item status, partial retry, batch budget cap | DONE | Item RESERVE/SETTLE/REFUND; `BUDGET_EXCEEDED` unless confirmBudget; single AUTH fail → PARTIAL; `POST .../variant-items/{id}/retry`. |
+| W7-04 | Variant QA structure/logo/text/composition/attachment | DONE | Fake Vision scenarios STRUCTURE_CHANGE/LOGO_CHANGE/COMPOSITION_DRIFT/ATTACHMENT_COUNT; maps to QA_BLOCK/REVIEW via W6 Fake QA path. |
+| W7-05 | Filter failed; export only passing; variant manifest | DONE | `POST .../variant-runs/{id}/export` filters non-PASS; manifest + filteredOut; requires per-item Approval (master Approval not inherited). |
+| W7-06 | Admin Jobs + credit adjust + cost reconciliation | DONE | `/admin` + APIs under `.../admin/{jobs,credits,reconciliation}`; OWNER/ADMIN only; ADJUST audited. |
+| W7-07 | Ops notes + failure runbook | DONE | `docs/runbooks/variant-batch.md`, `credit-reconciliation.md`, `provider-outage-stuck-jobs.md`. |
+
+### W7 commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm db:migrate:deploy` | Includes `20260912060000_w7_variants` |
+| `pnpm lint` / `typecheck` / `test` / `build` | Required green before PR |
+| `pnpm openapi:generate` | Variant / admin paths |
+| `pnpm test:e2e` | Extends with 3×7 Fake batch, partial fail, ledger, structure/logo BLOCK, filtered export (`INSPECT_INLINE=1`) |
+| Provider | **Fake only** (ADR-0003); no real keys |
+| Out of scope | W8; W4-07 / W0-02 / W2-07; real Provider keys |
+
+**DONE evidence package (W7-01…W7-07):**
+- Branch: `feature/w7-variants`
+- Milestone PR (open, **not merged**): (filled after open)
+- CI: (filled after CI)
+- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge
+- Do not merge; do not start W8.

@@ -49,6 +49,14 @@ import {
   QaReportSchema,
 } from './qa.js';
 import { CreateExportRequestSchema, ExportBundleSchema } from './export.js';
+import {
+  CreateVariantRequestSchema,
+  PatchVariantRequestSchema,
+  CreateVariantRunRequestSchema,
+  VariantSchema,
+  VariantRunSchema,
+  CreditAdjustRequestSchema,
+} from './variants.js';
 import YAML from 'yaml';
 
 extendZodWithOpenApi(z);
@@ -447,6 +455,13 @@ registry.register('QaReport', QaReportSchema);
 registry.register('CreateExportRequest', CreateExportRequestSchema);
 registry.register('ExportBundle', ExportBundleSchema);
 
+registry.register('CreateVariantRequest', CreateVariantRequestSchema);
+registry.register('PatchVariantRequest', PatchVariantRequestSchema);
+registry.register('CreateVariantRunRequest', CreateVariantRunRequestSchema);
+registry.register('Variant', VariantSchema);
+registry.register('VariantRun', VariantRunSchema);
+registry.register('CreditAdjustRequest', CreditAdjustRequestSchema);
+
 registry.registerPath({
   method: 'post',
   path: '/api/workspaces/{workspaceId}/asset-versions/{versionId}/qa',
@@ -511,7 +526,7 @@ const document = generator.generateDocument({
   openapi: '3.0.3',
   info: {
     title: 'Amazon AI Image Studio API',
-    version: '0.4.0',
+    version: '0.5.0',
     description: 'OpenAPI from Zod contracts (W1–W6 QA / Review / Export).',
   },
   servers: [{ url: 'http://localhost:3000' }],
