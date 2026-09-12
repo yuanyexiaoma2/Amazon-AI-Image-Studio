@@ -144,9 +144,9 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | Out of scope | W3-B2 node schemas UI / rich interactions / materialize |
 
 **DONE evidence package (W3-03 / W3-04 / W3-06):**
-- Branch HEAD: `23019c6bfec1c9d50be30b779035a08e7209a2ce`
+- Branch HEAD: `5bbf0543f6b6da40840b6faf6285132119be0be6`
 - Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/9
-- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34664833213
+- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34664994013
 - Local e2e: create empty workflow → save positions → 409 conflict → cycle reject → refresh keeps graph → snapshot (Fake only)
 - Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #9 before merge
 
