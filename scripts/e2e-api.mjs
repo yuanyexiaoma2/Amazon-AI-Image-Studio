@@ -5,6 +5,7 @@
  * 2) sessionVersion: old cookie 401 after password change / disable; password swap
  * 3) W2: upload → inspect → extract → confirm → approve Truth Pack
  * 4) W3-A: generate 7-shot Shot Plan (Fake) → human edit → approve
+ * 5) W3-B2: materialize approved plan → 7-image workflow graph; B1 save/conflict/cycle still covered
  * Expects a running Next.js server at APP_URL (default http://127.0.0.1:3000).
  * Prefer INSPECT_INLINE=1 so complete() finishes inspect without a separate worker.
  */
@@ -581,6 +582,55 @@ async function main() {
   if (!spApproved.approvedRevisionId) fail('missing approvedRevisionId', spApproved);
   ok('W3-A Shot Plan APPROVED');
 
+  // W3-B2: materialize approved Shot Plan → workflow graph
+  const matDenied = await fetch(
+    `${base}/api/workspaces/${wsW2}/projects/${projectId}/shot-plans/materialize`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarB.header(),
+        'x-request-id': `e2e-mat-x-${suffix}`,
+      },
+      body: JSON.stringify({}),
+    },
+  );
+  if (matDenied.status !== 403) {
+    fail('expected cross-workspace materialize 403', { status: matDenied.status });
+  }
+  ok('W3-B2 cross-workspace materialize denied');
+
+  const matRes = await fetch(
+    `${base}/api/workspaces/${wsW2}/projects/${projectId}/shot-plans/materialize`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-mat-${suffix}`,
+      },
+      body: JSON.stringify({}),
+    },
+  );
+  const matJson = await matRes.json();
+  if (matRes.status !== 201) fail('materialize', { status: matRes.status, matJson });
+  if (matJson.briefCount !== 7) fail('expected briefCount 7', matJson);
+  if (!matJson.workflow?.graph?.nodes) fail('missing materialized graph', matJson);
+  const genNodes = matJson.workflow.graph.nodes.filter((n) => n.type === 'generate');
+  if (genNodes.length !== 7) fail('expected 7 generate nodes', genNodes.length);
+  if (!matJson.workflow.graph.nodes.some((n) => n.type === 'approval_selector')) {
+    fail('missing approval_selector', matJson.workflow.graph.nodes.map((n) => n.type));
+  }
+  if (matJson.planRevisionId !== spApproved.approvedRevisionId) {
+    fail('materialize planRevision mismatch', {
+      got: matJson.planRevisionId,
+      expected: spApproved.approvedRevisionId,
+    });
+  }
+  ok(
+    `W3-B2 materialize nodes=${matJson.workflow.graph.nodes.length} edges=${matJson.workflow.graph.edges.length}`,
+  );
+
   // W3-B1: create empty workflow → save → conflict → reject cycle
   const wfCreate = await fetch(
     `${base}/api/workspaces/${wsW2}/projects/${projectId}/workflows`,
@@ -689,7 +739,7 @@ async function main() {
   ok('W3-B1 revision snapshot');
 
   console.log(
-    'E2E PASS: W2 Truth + W3-A Shot Plan + W3-B1 workflow create/save/conflict/cycle/snapshot (Fake only)',
+    'E2E PASS: W2 Truth + W3-A Shot Plan + W3-B2 materialize + W3-B1 workflow create/save/conflict/cycle/snapshot (Fake only)',
   );
 }
 

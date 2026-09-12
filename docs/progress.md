@@ -6,7 +6,7 @@
 
 **Repo type (W0-01):** GREENFIELD — empty public GitHub repo; no prior application code.
 
-**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 work 2026-09-12 Asia/Shanghai (UTC+8).
+**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 work 2026-09-12 Asia/Shanghai (UTC+8).
 
 ---
 
@@ -128,10 +128,10 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 |---|---|---|---|
 | W3-03 | Studio / `@xyflow/react` layout | DONE | Three-pane Studio at `/projects/[projectId]/studio`; palette stubs (no Eximia); narrow &lt;1280 warning; Fake only. |
 | W3-04 | Nodes/ports/cycle detection | DONE | `packages/domain/src/workflow-graph.ts` registry + `validateEdge` / `validateWorkflowGraph` / `detectCycles`; unit tests cover self-loop, cross-layer back-edge, port mismatch, duplicate edges, cycles. UI calls domain only. |
-| W3-05 | 11 node config schemas | TODO | **W3-B2** — Zod schemas in contracts; UI shells beyond registry stubs. |
+| W3-05 | 11 node config schemas | DONE | **W3-B2** — Zod in `@studio/contracts` `node-configs.ts` for 11 palette + system `approval_selector`; properties panel shells; PATCH normalizes configs. Fake only. |
 | W3-06 | Autosave / revision | DONE | Prisma `workflows` / `workflow_drafts` / `workflow_revisions` + migration `20260912020000_w3b1_workflows`; PATCH `ifRevision` → 409 `WORKFLOW_REVISION_CONFLICT`; snapshot API; integration + e2e conflict tests. |
-| W3-07 | Canvas interactions | TODO | **W3-B2** — undo/redo, copy/paste, delete impact, rich fit-view UX. |
-| W3-08 | Plan → canvas materialize | TODO | **W3-B2** — consume W3-A `canvasPayload` unchanged; validate `referencedAssetVersionIds`. |
+| W3-07 | Canvas interactions | DONE | **W3-B2** — undo/redo, copy/paste, delete-with-impact hint, Fit view; `isValidConnection` drag preview; domain `validateEdge` remains source of truth. |
+| W3-08 | Plan → canvas materialize | DONE | **W3-B2** — `POST .../shot-plans/materialize`; domain `materializeShotPlanToGraph` from W3-A `canvasPayload` (shape unchanged); app-layer `assertVersionsInProject` for `referencedAssetVersionIds` (MSG-005); WRITE roles; Fake only. |
 
 ### W3-B1 commands / evidence (implementer)
 
@@ -150,8 +150,34 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 - Local e2e: create empty workflow → save positions → 409 conflict → cycle reject → refresh keeps graph → snapshot (Fake only)
 - Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #9 before merge
 
+### W3-B2 — Nodes + materialize (MSG-007 / MSG-011)
+
+**Branch:** `feature/w3b2-nodes-materialize` (from main `b22b966880c4948420e1f3b5b67ac5e4cbfa6546`)  
+**Acceptance unit (one PR, one independent review):** W3-05 + W3-07 + W3-08
+
+- Zod node config schemas for 11 MVP palette types (+ system `approval_selector`)
+- Canvas interactions: undo/redo, copy/paste, delete impact hint, fit view, `isValidConnection`
+- One-click materialize approved Shot Plan → 7-image workflow graph; validate `referencedAssetVersionIds`
+
+### W3-B2 commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm lint` / `typecheck` / `test` / `build` | Required green before PR |
+| `pnpm openapi:generate` | Includes materialize path |
+| `pnpm test:e2e` | Extends chain with materialize (7 generate nodes) + prior B1 checks |
+| Provider | **Fake only** (W0-02 BLOCKED_EXTERNAL); no real keys / no W4-07 |
+| Out of scope | Real Provider execution; W4-01…06 (next after merge + 审稿 APPROVED per MSG-011) |
+
+**DONE evidence package (W3-05 / W3-07 / W3-08):**
+- Branch: `feature/w3b2-nodes-materialize` (see PR)
+- Milestone PR (open, **not merged**) — hand to 审稿; squash merge only after public APPROVED
+- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge
+- B2 complete pending 审稿
+
 ---
 
 ## Later weeks
+
 
 W4+ remain TODO per spec §24.

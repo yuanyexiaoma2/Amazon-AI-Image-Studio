@@ -114,6 +114,68 @@ export class WorkflowRepository {
     });
   }
 
+  /** Create workflow whose draft already contains a materialized graph (W3-08). */
+  async createWithGraph(args: {
+    workspaceId: string;
+    projectId: string;
+    name: string;
+    createdByUserId: string;
+    graph: WorkflowGraph;
+  }): Promise<WorkflowWithDraft> {
+    const validation = validateWorkflowGraph(args.graph);
+    if (!validation.ok) {
+      throw new WorkflowValidationError('Illegal workflow graph', validation.issues);
+    }
+
+    const project = await this.db.project.findFirst({
+      where: { id: args.projectId, workspaceId: args.workspaceId, deletedAt: null },
+    });
+    if (!project) {
+      throw new WorkflowNotFoundError('Project not found');
+    }
+
+    const workflowId = newId();
+    const draftId = newId();
+
+    return this.db.$transaction(async (tx) => {
+      const workflow = await tx.workflow.create({
+        data: {
+          id: workflowId,
+          workspaceId: args.workspaceId,
+          projectId: args.projectId,
+          name: args.name,
+        },
+      });
+      const draft = await tx.workflowDraft.create({
+        data: {
+          id: draftId,
+          workspaceId: args.workspaceId,
+          workflowId,
+          graphJson: args.graph as object,
+          revisionNumber: 1,
+          updatedByUserId: args.createdByUserId,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          id: newId(),
+          workspaceId: args.workspaceId,
+          actorUserId: args.createdByUserId,
+          action: 'workflow.materialized',
+          subjectType: 'workflow',
+          subjectId: workflowId,
+          metadataJson: {
+            projectId: args.projectId,
+            name: args.name,
+            nodeCount: args.graph.nodes.length,
+            edgeCount: args.graph.edges.length,
+          },
+        },
+      });
+      return { ...workflow, draft };
+    });
+  }
+
   /**
    * Optimistic draft save: UPDATE ... WHERE revision_number = ifRevision;
    * affected row count must be 1, else 409 WORKFLOW_REVISION_CONFLICT.

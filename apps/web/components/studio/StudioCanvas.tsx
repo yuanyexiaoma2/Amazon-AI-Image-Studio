@@ -10,6 +10,8 @@ import {
   addEdge,
   useEdgesState,
   useNodesState,
+  useReactFlow,
+  ReactFlowProvider,
   type Connection,
   type Edge,
   type Node,
@@ -27,6 +29,11 @@ import {
   type GraphEdge,
   type GraphNode,
 } from '@studio/domain';
+import {
+  defaultNodeConfig,
+  isWorkflowNodeConfigType,
+  validateNodeConfig,
+} from '@studio/contracts';
 
 type DraftResponse = {
   workflowId: string;
@@ -39,12 +46,18 @@ type DraftResponse = {
   updatedByUserId: string | null;
 };
 
+type HistoryEntry = { nodes: Node[]; edges: Edge[] };
+
 function toFlowNodes(graph: WorkflowGraph): Node[] {
   return graph.nodes.map((n) => ({
     id: n.id,
     type: 'studio',
     position: n.position,
-    data: { label: getNodeDefinition(n.type)?.label ?? n.type, nodeType: n.type, config: n.config ?? { schemaVersion: 1 } },
+    data: {
+      label: getNodeDefinition(n.type)?.label ?? n.type,
+      nodeType: n.type,
+      config: n.config ?? { schemaVersion: 1 },
+    },
   }));
 }
 
@@ -80,6 +93,13 @@ function fromFlow(nodes: Node[], edges: Edge[]): WorkflowGraph {
         targetHandle: e.targetHandle ?? null,
       }),
     ),
+  };
+}
+
+function cloneGraph(nodes: Node[], edges: Edge[]): HistoryEntry {
+  return {
+    nodes: nodes.map((n) => ({ ...n, position: { ...n.position }, data: { ...(n.data as object) } })),
+    edges: edges.map((e) => ({ ...e })),
   };
 }
 
@@ -127,36 +147,113 @@ function StudioNodeView(props: NodeProps) {
 
 const nodeTypes: NodeTypes = { studio: StudioNodeView };
 
-export function StudioCanvas(props: {
-  workspaceId: string;
-  projectId: string;
-}) {
+const CONFIG_FIELD_META: Record<
+  string,
+  Array<{ key: string; label: string; kind: 'text' | 'number' | 'select'; options?: string[] }>
+> = {
+  source_image: [{ key: 'assetVersionId', label: 'Asset version ID', kind: 'text' }],
+  product_truth: [{ key: 'truthRevisionId', label: 'Truth revision ID', kind: 'text' }],
+  prompt: [
+    { key: 'text', label: 'Prompt text', kind: 'text' },
+    { key: 'negative', label: 'Negative', kind: 'text' },
+    { key: 'locale', label: 'Locale', kind: 'text' },
+    { key: 'shotBriefId', label: 'Shot brief ID', kind: 'text' },
+    { key: 'slot', label: 'Slot', kind: 'text' },
+  ],
+  remove_background: [
+    { key: 'subjectHint', label: 'Subject hint', kind: 'text' },
+    { key: 'edgeMode', label: 'Edge mode', kind: 'select', options: ['auto', 'precise', 'soft'] },
+  ],
+  generate: [
+    { key: 'modelKey', label: 'Model key', kind: 'text' },
+    { key: 'ratio', label: 'Ratio', kind: 'text' },
+    { key: 'resolution', label: 'Resolution', kind: 'select', options: ['1K', '2K', '4K'] },
+    { key: 'count', label: 'Count', kind: 'number' },
+    { key: 'seed', label: 'Seed', kind: 'number' },
+  ],
+  replace_background: [
+    { key: 'fidelity', label: 'Fidelity', kind: 'number' },
+    { key: 'lightBlend', label: 'Light blend', kind: 'number' },
+  ],
+  inpaint: [
+    { key: 'strength', label: 'Strength', kind: 'number' },
+    { key: 'modelKey', label: 'Model key', kind: 'text' },
+  ],
+  outpaint: [
+    { key: 'targetRatio', label: 'Target ratio', kind: 'text' },
+    {
+      key: 'placement',
+      label: 'Placement',
+      kind: 'select',
+      options: ['center', 'top', 'bottom', 'left', 'right'],
+    },
+    { key: 'modelKey', label: 'Model key', kind: 'text' },
+  ],
+  upscale: [
+    { key: 'engineKey', label: 'Engine key', kind: 'text' },
+    { key: 'targetResolution', label: 'Target resolution', kind: 'select', options: ['2K', '4K'] },
+  ],
+  qa_gate: [{ key: 'policyKey', label: 'Policy key', kind: 'text' }],
+  approval_selector: [
+    {
+      key: 'requiredRole',
+      label: 'Required role',
+      kind: 'select',
+      options: ['OWNER', 'ADMIN', 'MEMBER', 'REVIEWER'],
+    },
+  ],
+  export: [
+    { key: 'namingPreset', label: 'Naming preset', kind: 'text' },
+    { key: 'format', label: 'Format', kind: 'select', options: ['png', 'jpeg', 'webp'] },
+  ],
+};
+
+function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
   const { workspaceId, projectId } = props;
+  const { fitView } = useReactFlow();
   const [draft, setDraft] = useState<DraftResponse | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [status, setStatus] = useState<string>('Loading…');
   const [conflict, setConflict] = useState<string | null>(null);
   const [edgeError, setEdgeError] = useState<string | null>(null);
+  const [deleteHint, setDeleteHint] = useState<string | null>(null);
   const [narrow, setNarrow] = useState(false);
   const revisionRef = useRef(0);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
+  const historyRef = useRef<HistoryEntry[]>([]);
+  const futureRef = useRef<HistoryEntry[]>([]);
+  const applyingHistory = useRef(false);
+  const clipboardRef = useRef<HistoryEntry | null>(null);
   nodesRef.current = nodes;
   edgesRef.current = edges;
 
   const palette = useMemo(() => listPaletteNodeTypes(), []);
 
+  const pushHistory = useCallback(() => {
+    if (applyingHistory.current) return;
+    historyRef.current.push(cloneGraph(nodesRef.current, edgesRef.current));
+    if (historyRef.current.length > 100) historyRef.current.shift();
+    futureRef.current = [];
+  }, []);
+
   const applyDraft = useCallback(
     (d: DraftResponse) => {
       setDraft(d);
       revisionRef.current = d.revisionNumber;
-      setNodes(toFlowNodes(d.graph));
-      setEdges(toFlowEdges(d.graph));
+      const n = toFlowNodes(d.graph);
+      const e = toFlowEdges(d.graph);
+      setNodes(n);
+      setEdges(e);
+      nodesRef.current = n;
+      edgesRef.current = e;
       dirtyRef.current = false;
+      historyRef.current = [cloneGraph(n, e)];
+      futureRef.current = [];
     },
     [setNodes, setEdges],
   );
@@ -242,12 +339,28 @@ export function StudioCanvas(props: {
   );
 
   const scheduleSave = useCallback(() => {
-      dirtyRef.current = true;
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => {
-        void saveNow(fromFlow(nodesRef.current, edgesRef.current));
-      }, 500);
-    }, [saveNow]);
+    dirtyRef.current = true;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      void saveNow(fromFlow(nodesRef.current, edgesRef.current));
+    }, 500);
+  }, [saveNow]);
+
+  const isValidConnection = useCallback(
+    (connection: Connection | Edge) => {
+      if (!connection.source || !connection.target) return false;
+      const graph = fromFlow(nodesRef.current, edgesRef.current);
+      const candidate: GraphEdge = {
+        id: `preview-${connection.source}-${connection.target}`,
+        source: connection.source,
+        target: connection.target,
+        sourceHandle: connection.sourceHandle ?? null,
+        targetHandle: connection.targetHandle ?? null,
+      };
+      return validateEdge(graph, candidate).ok;
+    },
+    [],
+  );
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -266,16 +379,33 @@ export function StudioCanvas(props: {
         return;
       }
       setEdgeError(null);
+      pushHistory();
       const nextEdges = addEdge({ ...connection, id: candidate.id }, edges);
       setEdges(nextEdges);
       edgesRef.current = nextEdges;
       scheduleSave();
     },
-    [nodes, edges, setEdges, scheduleSave],
+    [nodes, edges, setEdges, scheduleSave, pushHistory],
   );
 
   const onNodesChangeWrapped = useCallback(
     (changes: Parameters<typeof onNodesChange>[0]) => {
+      const removes = changes.filter((c) => c.type === 'remove');
+      if (removes.length > 0) {
+        const ids = new Set(removes.map((c) => ('id' in c ? c.id : '')).filter(Boolean));
+        const impacted = edgesRef.current.filter((e) => ids.has(e.source) || ids.has(e.target));
+        setDeleteHint(
+          `Deleting ${ids.size} node(s) also removes ${impacted.length} connected edge(s).`,
+        );
+        pushHistory();
+      } else {
+        const meaningful = changes.some(
+          (c) => c.type === 'position' || c.type === 'add' || c.type === 'replace',
+        );
+        if (meaningful && changes.some((c) => c.type === 'position' && 'dragging' in c && c.dragging === false)) {
+          pushHistory();
+        }
+      }
       onNodesChange(changes);
       const meaningful = changes.some(
         (c) =>
@@ -286,36 +416,177 @@ export function StudioCanvas(props: {
       );
       if (meaningful) scheduleSave();
     },
-    [onNodesChange, scheduleSave],
+    [onNodesChange, scheduleSave, pushHistory],
   );
 
   const onEdgesChangeWrapped = useCallback(
     (changes: Parameters<typeof onEdgesChange>[0]) => {
+      if (changes.some((c) => c.type === 'remove')) pushHistory();
       onEdgesChange(changes);
       const meaningful = changes.some(
         (c) => c.type === 'remove' || c.type === 'add' || c.type === 'replace',
       );
       if (meaningful) scheduleSave();
     },
-    [onEdgesChange, scheduleSave],
+    [onEdgesChange, scheduleSave, pushHistory],
   );
 
   function addNode(type: string) {
     const id = `n-${type}-${Date.now()}`;
     const def = getNodeDefinition(type);
+    const config = isWorkflowNodeConfigType(type)
+      ? defaultNodeConfig(type)
+      : { schemaVersion: 1 };
     const next: Node = {
       id,
       type: 'studio',
       position: { x: 80 + nodes.length * 24, y: 80 + nodes.length * 16 },
-      data: { label: def?.label ?? type, nodeType: type, config: { schemaVersion: 1 } },
+      data: { label: def?.label ?? type, nodeType: type, config },
     };
+    pushHistory();
     const nextNodes = [...nodes, next];
     setNodes(nextNodes);
     nodesRef.current = nextNodes;
     scheduleSave();
   }
 
-  const selected = nodes.find((n) => n.id === selectedId);
+  function updateSelectedConfig(key: string, raw: string) {
+    const id = selectedIds[0];
+    if (!id) return;
+    pushHistory();
+    const nextNodes = nodes.map((n) => {
+      if (n.id !== id) return n;
+      const nodeType = String((n.data as { nodeType?: string }).nodeType ?? '');
+      const prev = {
+        ...((n.data as { config?: Record<string, unknown> }).config ?? { schemaVersion: 1 }),
+      };
+      let value: unknown = raw;
+      if (raw === '') value = null;
+      else if (key === 'count' || key === 'seed' || key === 'fidelity' || key === 'lightBlend' || key === 'strength') {
+        value = Number(raw);
+      }
+      prev[key] = value;
+      const validated = validateNodeConfig(nodeType, prev);
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          config: validated.ok ? validated.config : prev,
+        },
+      };
+    });
+    setNodes(nextNodes);
+    nodesRef.current = nextNodes;
+    scheduleSave();
+  }
+
+  const undo = useCallback(() => {
+    if (historyRef.current.length <= 1) return;
+    const current = historyRef.current.pop()!;
+    futureRef.current.push(current);
+    const prev = historyRef.current[historyRef.current.length - 1]!;
+    applyingHistory.current = true;
+    setNodes(prev.nodes);
+    setEdges(prev.edges);
+    nodesRef.current = prev.nodes;
+    edgesRef.current = prev.edges;
+    applyingHistory.current = false;
+    scheduleSave();
+    setStatus('Undo');
+  }, [setNodes, setEdges, scheduleSave]);
+
+  const redo = useCallback(() => {
+    const next = futureRef.current.pop();
+    if (!next) return;
+    historyRef.current.push(next);
+    applyingHistory.current = true;
+    setNodes(next.nodes);
+    setEdges(next.edges);
+    nodesRef.current = next.nodes;
+    edgesRef.current = next.edges;
+    applyingHistory.current = false;
+    scheduleSave();
+    setStatus('Redo');
+  }, [setNodes, setEdges, scheduleSave]);
+
+  const copySelected = useCallback(() => {
+    const ids = new Set(selectedIds);
+    if (ids.size === 0) return;
+    const ns = nodesRef.current.filter((n) => ids.has(n.id));
+    const es = edgesRef.current.filter((e) => ids.has(e.source) && ids.has(e.target));
+    clipboardRef.current = cloneGraph(ns, es);
+    setStatus(`Copied ${ns.length} node(s)`);
+  }, [selectedIds]);
+
+  const pasteClipboard = useCallback(() => {
+    const clip = clipboardRef.current;
+    if (!clip || clip.nodes.length === 0) return;
+    pushHistory();
+    const idMap = new Map<string, string>();
+    const stamp = Date.now();
+    const pastedNodes = clip.nodes.map((n, i) => {
+      const newId = `${n.id}-copy-${stamp}-${i}`;
+      idMap.set(n.id, newId);
+      return {
+        ...n,
+        id: newId,
+        position: { x: n.position.x + 40, y: n.position.y + 40 },
+        selected: true,
+      };
+    });
+    const pastedEdges = clip.edges.map((e, i) => ({
+      ...e,
+      id: `${e.id}-copy-${stamp}-${i}`,
+      source: idMap.get(e.source) ?? e.source,
+      target: idMap.get(e.target) ?? e.target,
+    }));
+    const nextNodes = [
+      ...nodesRef.current.map((n) => ({ ...n, selected: false })),
+      ...pastedNodes,
+    ];
+    const nextEdges = [...edgesRef.current, ...pastedEdges];
+    setNodes(nextNodes);
+    setEdges(nextEdges);
+    nodesRef.current = nextNodes;
+    edgesRef.current = nextEdges;
+    setSelectedIds(pastedNodes.map((n) => n.id));
+    scheduleSave();
+    setStatus(`Pasted ${pastedNodes.length} node(s)`);
+  }, [pushHistory, setNodes, setEdges, scheduleSave]);
+
+  useEffect(() => {
+    function onKey(ev: KeyboardEvent) {
+      const meta = ev.metaKey || ev.ctrlKey;
+      if (meta && ev.key.toLowerCase() === 'z' && !ev.shiftKey) {
+        ev.preventDefault();
+        undo();
+      } else if (meta && (ev.key.toLowerCase() === 'y' || (ev.key.toLowerCase() === 'z' && ev.shiftKey))) {
+        ev.preventDefault();
+        redo();
+      } else if (meta && ev.key.toLowerCase() === 'c') {
+        // allow native copy in inputs
+        const t = ev.target as HTMLElement | null;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+        ev.preventDefault();
+        copySelected();
+      } else if (meta && ev.key.toLowerCase() === 'v') {
+        const t = ev.target as HTMLElement | null;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+        ev.preventDefault();
+        pasteClipboard();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo, copySelected, pasteClipboard]);
+
+  const selected = nodes.find((n) => n.id === selectedIds[0]);
+  const selectedType = selected
+    ? String((selected.data as { nodeType?: string }).nodeType ?? '')
+    : '';
+  const selectedConfig = (selected?.data as { config?: Record<string, unknown> } | undefined)
+    ?.config ?? { schemaVersion: 1 };
+  const fields = CONFIG_FIELD_META[selectedType] ?? [];
 
   async function reload() {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -343,7 +614,10 @@ export function StudioCanvas(props: {
     return (
       <div style={{ padding: 24 }}>
         <h1>Studio</h1>
-        <p>Desktop-only canvas editor. Minimum width 1280px — full canvas editing is not supported on this viewport.</p>
+        <p>
+          Desktop-only canvas editor. Minimum width 1280px — full canvas editing is not supported on
+          this viewport.
+        </p>
       </div>
     );
   }
@@ -352,7 +626,7 @@ export function StudioCanvas(props: {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '220px 1fr 280px',
+        gridTemplateColumns: '220px 1fr 300px',
         gridTemplateRows: '1fr 120px',
         height: 'calc(100vh - 57px)',
         width: '100%',
@@ -360,11 +634,10 @@ export function StudioCanvas(props: {
         color: '#e8eefc',
       }}
     >
-      {/* Left: node library */}
       <aside style={{ borderRight: '1px solid #1e2a44', padding: 12, overflow: 'auto' }}>
         <div style={{ fontWeight: 700, marginBottom: 8 }}>Node library</div>
         <div style={{ fontSize: 11, opacity: 0.65, marginBottom: 8 }}>
-          Stubs for registry (W3-05 schemas later)
+          11 MVP types · Zod configs (W3-05)
         </div>
         {palette.map((n) => (
           <button
@@ -388,12 +661,8 @@ export function StudioCanvas(props: {
             {n.label}
           </button>
         ))}
-        <div style={{ marginTop: 16, fontSize: 11, opacity: 0.7 }}>
-          Project assets / templates — W3-B2
-        </div>
       </aside>
 
-      {/* Center: canvas */}
       <div style={{ position: 'relative', minWidth: 0 }}>
         <ReactFlow
           nodes={nodes}
@@ -401,9 +670,12 @@ export function StudioCanvas(props: {
           onNodesChange={onNodesChangeWrapped}
           onEdgesChange={onEdgesChangeWrapped}
           onConnect={onConnect}
+          isValidConnection={isValidConnection}
           nodeTypes={nodeTypes}
-          onSelectionChange={({ nodes: sel }) => setSelectedId(sel[0]?.id ?? null)}
+          onSelectionChange={({ nodes: sel }) => setSelectedIds(sel.map((n) => n.id))}
           fitView
+          deleteKeyCode={['Backspace', 'Delete']}
+          multiSelectionKeyCode="Shift"
           proOptions={{ hideAttribution: true }}
         >
           <Background gap={18} color="#1e2a44" />
@@ -420,6 +692,7 @@ export function StudioCanvas(props: {
                 display: 'flex',
                 gap: 8,
                 alignItems: 'center',
+                flexWrap: 'wrap',
               }}
             >
               <span>{status}</span>
@@ -428,6 +701,27 @@ export function StudioCanvas(props: {
               </button>
               <button type="button" onClick={() => void snapshot()}>
                 Snapshot
+              </button>
+              <button type="button" onClick={() => undo()} title="Ctrl/Cmd+Z">
+                Undo
+              </button>
+              <button type="button" onClick={() => redo()} title="Ctrl/Cmd+Y">
+                Redo
+              </button>
+              <button type="button" onClick={() => copySelected()} title="Ctrl/Cmd+C">
+                Copy
+              </button>
+              <button type="button" onClick={() => pasteClipboard()} title="Ctrl/Cmd+V">
+                Paste
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void fitView({ padding: 0.2, duration: 200 });
+                  setStatus('Fit view');
+                }}
+              >
+                Fit view
               </button>
             </div>
           </Panel>
@@ -447,6 +741,29 @@ export function StudioCanvas(props: {
             }}
           >
             Illegal edge blocked: {edgeError}
+          </div>
+        )}
+        {deleteHint && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: edgeError ? 56 : 12,
+              left: 12,
+              right: 12,
+              background: '#1a2438',
+              border: '1px solid #3a4a6a',
+              padding: 8,
+              borderRadius: 6,
+              fontSize: 12,
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 8,
+            }}
+          >
+            <span>{deleteHint}</span>
+            <button type="button" onClick={() => setDeleteHint(null)}>
+              Dismiss
+            </button>
           </div>
         )}
         {conflict && (
@@ -473,33 +790,76 @@ export function StudioCanvas(props: {
         )}
       </div>
 
-      {/* Right: properties */}
       <aside style={{ borderLeft: '1px solid #1e2a44', padding: 12, overflow: 'auto' }}>
         <div style={{ fontWeight: 700, marginBottom: 8 }}>Node properties</div>
         {!selected ? (
-          <p style={{ opacity: 0.65, fontSize: 13 }}>Select a node. Full config schemas arrive in W3-05.</p>
+          <p style={{ opacity: 0.65, fontSize: 13 }}>
+            Select a node to edit its Zod-backed config shell (Fake only — no Provider execution).
+          </p>
         ) : (
           <div style={{ fontSize: 13 }}>
             <div>
               <strong>{String((selected.data as { label?: string }).label)}</strong>
             </div>
-            <div style={{ opacity: 0.7 }}>type: {String((selected.data as { nodeType?: string }).nodeType)}</div>
+            <div style={{ opacity: 0.7 }}>type: {selectedType}</div>
             <div style={{ opacity: 0.7 }}>
               pos: {Math.round(selected.position.x)}, {Math.round(selected.position.y)}
             </div>
-            <pre style={{ fontSize: 11, opacity: 0.8, whiteSpace: 'pre-wrap' }}>
-              {JSON.stringify((selected.data as { config?: unknown }).config ?? {}, null, 2)}
+            <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+              {fields.map((f) => (
+                <label key={f.key} style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+                  <span style={{ opacity: 0.8 }}>{f.label}</span>
+                  {f.kind === 'select' ? (
+                    <select
+                      value={String(selectedConfig[f.key] ?? '')}
+                      onChange={(e) => updateSelectedConfig(f.key, e.target.value)}
+                      style={{
+                        background: '#0b1020',
+                        color: '#e8eefc',
+                        border: '1px solid #2a3a5a',
+                        borderRadius: 4,
+                        padding: 4,
+                      }}
+                    >
+                      {(f.options ?? []).map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type={f.kind === 'number' ? 'number' : 'text'}
+                      value={
+                        selectedConfig[f.key] === null || selectedConfig[f.key] === undefined
+                          ? ''
+                          : String(selectedConfig[f.key])
+                      }
+                      onChange={(e) => updateSelectedConfig(f.key, e.target.value)}
+                      style={{
+                        background: '#0b1020',
+                        color: '#e8eefc',
+                        border: '1px solid #2a3a5a',
+                        borderRadius: 4,
+                        padding: 4,
+                      }}
+                    />
+                  )}
+                </label>
+              ))}
+            </div>
+            <pre style={{ fontSize: 11, opacity: 0.8, whiteSpace: 'pre-wrap', marginTop: 12 }}>
+              {JSON.stringify(selectedConfig, null, 2)}
             </pre>
           </div>
         )}
         <div style={{ marginTop: 24, fontSize: 11, opacity: 0.65 }}>
           Draft rev: {draft?.revisionNumber ?? '—'}
           <br />
-          Autosave: 500ms debounce · optimistic lock
+          Autosave: 500ms · undo/redo session-local · isValidConnection preview
         </div>
       </aside>
 
-      {/* Bottom: task drawer stub */}
       <div
         style={{
           gridColumn: '1 / -1',
@@ -509,9 +869,17 @@ export function StudioCanvas(props: {
           opacity: 0.8,
         }}
       >
-        Task drawer (stub): queued / running / success / failed — W4+. Snapshot creates immutable revision for
-        future runs.
+        Task drawer (stub): queued / running / success / failed — W4+. Snapshot creates immutable
+        revision for future runs. Fake Provider only.
       </div>
     </div>
+  );
+}
+
+export function StudioCanvas(props: { workspaceId: string; projectId: string }) {
+  return (
+    <ReactFlowProvider>
+      <StudioCanvasInner {...props} />
+    </ReactFlowProvider>
   );
 }
