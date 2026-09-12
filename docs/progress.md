@@ -6,7 +6,7 @@
 
 **Repo type (W0-01):** GREENFIELD — empty public GitHub repo; no prior application code.
 
-**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 / W5-A work 2026-09-12 Asia/Shanghai (UTC+8).
+**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 / W5-A / W5-B work 2026-09-12 Asia/Shanghai (UTC+8).
 
 ---
 
@@ -233,17 +233,17 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 ---
 
-## W5-A — Executors foundation (DONE — awaiting 审稿)
+## W5-A — Executors foundation (VERIFIED)
 
 **Branch:** `feature/w5a-executors` (from main `16d67b3`)  
 **Acceptance unit:** W5-01 + W5-08 + W5-02 (+ webhook early-arrival orphan reconcile per 审稿)
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W5-01 | `generate` node executor | DONE | Request snapshot per node type/ports; Fake GENERATE through W4 Run/Attempt/Worker; ingest GENERATED AssetVersion on success; NodeResult SUCCEEDED + fingerprint. |
-| W5-08 | Input fingerprint + downstream STALE | DONE | Domain RFC 8785 JCS → SHA-256 (`input-fingerprint.ts`); STALE BFS §32.2; `node_results` + disposition STALE; graph snapshot + Truth approve propagate; no silent reuse of STALE (reuse requires SUCCEEDED+matching fingerprint). |
-| W5-02 | `remove_background` + full-res mask | DONE | Fake REMOVE_BACKGROUND returns image+mask roles; MASK AssetVersion + Mask row; full request WxH recorded on version. |
-| (ride) | Webhook early-arrival reconcile | DONE | Orphan events `processedAt=null`; replay stays 202; reconcile when submission appears; `processedAt` only after apply. |
+| W5-01 | `generate` node executor | VERIFIED | Request snapshot per node type/ports; Fake GENERATE through W4 Run/Attempt/Worker; ingest GENERATED AssetVersion on success; NodeResult SUCCEEDED + fingerprint. |
+| W5-08 | Input fingerprint + downstream STALE | VERIFIED | Domain RFC 8785 JCS → SHA-256 (`input-fingerprint.ts`); STALE BFS §32.2; `node_results` + disposition STALE; graph snapshot + Truth approve propagate; no silent reuse of STALE (reuse requires SUCCEEDED+matching fingerprint). |
+| W5-02 | `remove_background` + full-res mask | VERIFIED | Fake REMOVE_BACKGROUND returns image+mask roles; MASK AssetVersion + Mask row; full request WxH recorded on version. |
+| (ride) | Webhook early-arrival reconcile | VERIFIED | Orphan events `processedAt=null`; replay stays 202; reconcile when submission appears; `processedAt` only after apply. |
 
 ### W5-A commands / evidence (implementer)
 
@@ -257,11 +257,41 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 §19.5 real-Provider success cases: **挂起** (ADR-0003). Fake matrix required.
 
-**DONE evidence package (W5-A):**
-- Branch HEAD: `31370a4b3546739f2b366cdc469df37c93069e00`
-- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/12
-- CI (push): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34683667388
-- CI (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34683672732
-- Local: domain fingerprint/STALE unit tests; Fake REMOVE_BACKGROUND mask roles; webhook orphan 202; e2e generate+remove_background SUCCEEDED (`GENERATION_INLINE=1`)
+**VERIFIED evidence package (W5-A):**
+- Merge SHA: `f00c1deb589a9bc2951902400ff22c8e1011c99a` (PR #12 squash into main)
+- Final HEAD before merge: `6342b1e7d31ace638c8069887d5744797ef58435`
+- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34683690044
+- 审稿 **APPROVED** + public comment: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/12#issuecomment-5645637350
 - Migration: `20260912040000_w5a_node_results`
+- Fake only (ADR-0003); §19.5 real-Provider success cases remain 挂起
+
+---
+
+## W5-B — Mask editor + replace_background + inpaint (DONE — awaiting 审稿)
+
+**Branch:** `feature/w5b-mask-edit` (from main `f00c1de` = W5-A)  
+**Acceptance unit:** W5-03 + W5-04 + W5-05
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| W5-03 | Mask editor UI | DONE | Canvas brush/erase/size/zoom/undo/preview (`MaskEditor`); strokes as normalized `[0,1]×[0,1]` (§10.4); `POST .../masks/:id/render` → full-res grayscale PNG (white=edit, black=lock) matching source Asset Version WxH; persist via `masks` (`strokes_json`, `coordinate_space`, metadata). Domain golden + imaging raster tests (AC-07). |
+| W5-04 | `replace_background` executor | DONE | IMAGE+MASK+PROMPT+PRODUCT_TRUTH → IMAGE_LIST; `fidelity` / `lightBlend` (+ optional `maskId`); Fake `EDIT` product-lock stamp; fingerprint includes mask refs; ingest via W5-A path. |
+| W5-05 | `inpaint` executor | DONE | IMAGE+MASK+PROMPT (+ optional IMAGE_LIST) → IMAGE_LIST; `strength` + `modelKey`; Fake `INPAINT` path. |
+
+### W5-B commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm lint` / `typecheck` / `test` / `build` | Required green before PR |
+| `pnpm openapi:generate` | Mask CRUD + render paths |
+| `pnpm test:e2e` | Extends with mask create/render + replace_background + inpaint Fake (`GENERATION_INLINE=1`) |
+| Provider | **FakeImageProviderAdapter only** (ADR-0003); no real keys |
+| Out of scope | W5-C (06/07); W4-07 / W0-02 / W2-07 |
+
+§19.5 real-Provider success cases: **挂起** (ADR-0003). Fake matrix required.
+
+**DONE evidence package (W5-B):**
+- Branch: `feature/w5b-mask-edit` (base `f00c1de`)
+- Milestone PR: (filled after open)
 - Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge.
+

@@ -13,6 +13,9 @@ import {
   canCancelRun,
   canRetryAttempt,
   computeInputFingerprint,
+  extractEditParams,
+  extractImageAssetVersionId,
+  extractMaskId,
   extractPromptFromInputs,
   extractReferenceAssetVersionIds,
   extractTruthRevisionId,
@@ -269,14 +272,38 @@ export class GenerationRepository {
           { id: node.id, type: node.type, position: { x: 0, y: 0 }, config: node.config },
           inputs,
         );
-        const refIds = extractReferenceAssetVersionIds(inputs);
-        const dims = resolutionToPixels(
+        const refIds = [...extractReferenceAssetVersionIds(inputs)];
+        const imageVersionId = extractImageAssetVersionId(inputs);
+        // Prefer source image WxH for edit/inpaint/cutout; fall back to resolution tier.
+        let dims = resolutionToPixels(
           typeof node.config?.resolution === 'string' ? node.config.resolution : '2K',
         );
+        if (imageVersionId) {
+          const imgVer = await tx.assetVersion.findFirst({
+            where: { id: imageVersionId, workspaceId: input.workspaceId },
+          });
+          if (imgVer?.width && imgVer?.height) {
+            dims = { width: imgVer.width, height: imgVer.height };
+          }
+          if (!refIds.includes(imageVersionId)) {
+            refIds.push(imageVersionId);
+          }
+        }
         const count =
           typeof node.config?.count === 'number' && node.type === 'generate'
             ? Math.min(8, Math.max(1, node.config.count as number))
             : 1;
+
+        const editParams = extractEditParams({
+          id: node.id,
+          type: node.type,
+          position: { x: 0, y: 0 },
+          config: node.config,
+        });
+        const maskId = extractMaskId(
+          { id: node.id, type: node.type, position: { x: 0, y: 0 }, config: node.config },
+          inputs,
+        );
 
         // Resolve sha256 for upstream assets when present (unknown → still fingerprint, mark unreproducible)
         const upstreamAssets: Array<{
@@ -309,11 +336,39 @@ export class GenerationRepository {
           }
         }
 
+        const masks: Array<{ maskId: string; representationSha256: string }> = [];
+        if (maskId) {
+          const maskRow = await tx.mask.findFirst({
+            where: { id: maskId, workspaceId: input.workspaceId, deletedAt: null },
+          });
+          if (!maskRow) {
+            unknownFields.push('masks[0].representationSha256');
+            masks.push({ maskId, representationSha256: 'unknown' });
+          } else {
+            const meta = (maskRow.metadataJson ?? {}) as Record<string, unknown>;
+            const sha =
+              typeof meta.renderedSha256 === 'string'
+                ? meta.renderedSha256
+                : typeof meta.maskAssetVersionId === 'string'
+                  ? 'pending-render'
+                  : 'strokes-only';
+            if (sha === 'pending-render' || sha === 'strokes-only') {
+              // Still fingerprintable via mask id + strokes hash proxy
+              masks.push({
+                maskId,
+                representationSha256: `strokes:${JSON.stringify(maskRow.strokesJson).slice(0, 64)}`,
+              });
+            } else {
+              masks.push({ maskId, representationSha256: sha });
+            }
+          }
+        }
+
         const fp = computeInputFingerprint({
           nodeType: node.type,
           nodeConfig: (node.config ?? {}) as Record<string, unknown>,
           upstreamAssets,
-          masks: [],
+          masks,
           truthRevisionId,
           shotBriefRevisionId: shotBriefId,
           prompt,
@@ -377,6 +432,7 @@ export class GenerationRepository {
           resolutionTier: typeof node.config?.resolution === 'string' ? node.config.resolution : '2K',
           count,
           seed: typeof node.config?.seed === 'number' ? node.config.seed : undefined,
+          strength: editParams.strength,
           idempotencyKey: attemptIdem,
           scenario,
           nodeId: node.id,
@@ -384,6 +440,9 @@ export class GenerationRepository {
           truthRevisionId,
           shotBriefId,
           referenceAssetVersionIds: refIds,
+          maskId: maskId ?? undefined,
+          fidelity: editParams.fidelity,
+          lightBlend: editParams.lightBlend,
           inputFingerprint: fp.sha256,
           fingerprintReproducible: fp.reproducible,
           subjectHint:
@@ -392,6 +451,11 @@ export class GenerationRepository {
           clientMetadata: {
             workflowRevisionId: revision.id,
             projectId: revision.workflow.projectId,
+            fidelity: editParams.fidelity,
+            lightBlend: editParams.lightBlend,
+            strength: editParams.strength,
+            maskId: maskId ?? undefined,
+            productLock: node.type === 'replace_background',
           },
         };
 

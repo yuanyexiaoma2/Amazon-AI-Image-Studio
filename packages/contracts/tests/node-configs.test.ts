@@ -52,4 +52,18 @@ describe('W3-05 node config schemas', () => {
     expect(result.ok).toBe(true);
     expect(result.normalized?.[1]?.config.count).toBe(2);
   });
+
+  it('accepts maskId on replace_background / inpaint (W5-B)', () => {
+    const rb = validateNodeConfig('replace_background', {
+      fidelity: 0.9,
+      lightBlend: 0.3,
+      maskId: '11111111-1111-7111-8111-111111111111',
+    });
+    expect(rb.ok).toBe(true);
+    const ip = validateNodeConfig('inpaint', {
+      strength: 0.5,
+      maskId: '11111111-1111-7111-8111-111111111111',
+    });
+    expect(ip.ok).toBe(true);
+  });
 });

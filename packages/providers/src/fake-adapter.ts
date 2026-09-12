@@ -385,15 +385,48 @@ export class FakeImageProviderAdapter implements ImageProviderAdapter {
           actualCostMicrounits: job.actualCostMicrounits,
         };
       }
-      const outputs: NonNullable<ProviderJobStatus['outputs']> = [
-        {
+      const meta = job.request.clientMetadata ?? {};
+      const outputs: NonNullable<ProviderJobStatus['outputs']> = [];
+      if (job.request.operation === 'EDIT') {
+        // Product-lock semantics (Fake): gray stamp encodes locked product fidelity;
+        // lightBlend shifts tone. Mask input is required by the node; Fake keeps IMAGE_LIST only.
+        const fidelity = typeof meta.fidelity === 'number' ? meta.fidelity : 0.85;
+        const lightBlend = typeof meta.lightBlend === 'number' ? meta.lightBlend : 0.5;
+        const gray = Math.round(40 + fidelity * 80 + lightBlend * 40);
+        outputs.push({
+          bytesBase64: makeSolidPngBase64(w, h, Math.min(255, gray)),
+          mimeType: 'image/png',
+          width: w,
+          height: h,
+          role: 'image',
+        });
+        void meta.productLock;
+        void meta.maskId;
+        void job.request.maskAsset;
+      } else if (job.request.operation === 'INPAINT') {
+        const strength =
+          typeof job.request.strength === 'number'
+            ? job.request.strength
+            : typeof meta.strength === 'number'
+              ? meta.strength
+              : 0.6;
+        const gray = Math.round(100 + strength * 100);
+        outputs.push({
+          bytesBase64: makeSolidPngBase64(w, h, gray),
+          mimeType: 'image/png',
+          width: w,
+          height: h,
+          role: 'image',
+        });
+      } else {
+        outputs.push({
           bytesBase64: TINY_PNG.toString('base64'),
           mimeType: 'image/png',
           width: w,
           height: h,
           role: 'image',
-        },
-      ];
+        });
+      }
       if (job.request.operation === 'REMOVE_BACKGROUND') {
         // Full-resolution MASK: solid white PNG at requested WxH (generated below).
         outputs.push({

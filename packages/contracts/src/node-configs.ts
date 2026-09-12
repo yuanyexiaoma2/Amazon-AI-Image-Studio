@@ -45,11 +45,15 @@ export const GenerateConfigSchema = NodeConfigBaseSchema.extend({
 export const ReplaceBackgroundConfigSchema = NodeConfigBaseSchema.extend({
   fidelity: z.number().min(0).max(1).optional().default(0.85),
   lightBlend: z.number().min(0).max(1).optional().default(0.5),
+  /** Optional direct bind to Mask row (W5-B editor); MASK port also accepted. */
+  maskId: z.string().uuid().optional().nullable(),
 });
 
 export const InpaintConfigSchema = NodeConfigBaseSchema.extend({
   strength: z.number().min(0).max(1).optional().default(0.6),
   modelKey: z.string().min(1).max(128).optional().default('primary-image-edit'),
+  /** Optional direct bind to Mask row (W5-B editor); MASK port also accepted. */
+  maskId: z.string().uuid().optional().nullable(),
 });
 
 export const OutpaintConfigSchema = NodeConfigBaseSchema.extend({

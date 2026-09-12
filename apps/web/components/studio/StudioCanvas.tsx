@@ -1,5 +1,6 @@
 'use client';
 
+import { MaskEditor } from './MaskEditor';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
@@ -174,10 +175,12 @@ const CONFIG_FIELD_META: Record<
   replace_background: [
     { key: 'fidelity', label: 'Fidelity', kind: 'number' },
     { key: 'lightBlend', label: 'Light blend', kind: 'number' },
+    { key: 'maskId', label: 'Mask ID', kind: 'text' },
   ],
   inpaint: [
     { key: 'strength', label: 'Strength', kind: 'number' },
     { key: 'modelKey', label: 'Model key', kind: 'text' },
+    { key: 'maskId', label: 'Mask ID', kind: 'text' },
   ],
   outpaint: [
     { key: 'targetRatio', label: 'Target ratio', kind: 'text' },
@@ -216,6 +219,10 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [status, setStatus] = useState<string>('Loading…');
+
+  const [maskEditorOpen, setMaskEditorOpen] = useState(false);
+  const [maskImageUrl, setMaskImageUrl] = useState<string | null>(null);
+  const [maskSourceDims, setMaskSourceDims] = useState<{ w: number; h: number; versionId: string } | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const [edgeError, setEdgeError] = useState<string | null>(null);
   const [deleteHint, setDeleteHint] = useState<string | null>(null);
@@ -610,6 +617,30 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
     setStatus(`Snapshot r${json.revision.revision} · draft rev ${json.draft.revisionNumber}`);
   }
 
+
+  async function openMaskEditor() {
+    const versionId =
+      typeof selectedConfig.assetVersionId === 'string'
+        ? selectedConfig.assetVersionId
+        : null;
+    if (!versionId) {
+      setStatus('Set assetVersionId on source_image (or paste a version id) to edit mask');
+      return;
+    }
+    const res = await fetch(
+      `/api/workspaces/${workspaceId}/asset-versions/${versionId}/download-url?kind=NORMALIZED_PNG`,
+    );
+    const json = await res.json();
+    if (!res.ok) {
+      setStatus(`Mask editor: ${json?.error?.message ?? res.status}`);
+      return;
+    }
+    setMaskImageUrl(json.url);
+    setMaskSourceDims({ w: 1024, h: 1024, versionId }); // dims refined after load; API metadata optional
+    // Try to get real dims from assets list is heavy; use 1024 placeholder — render uses DB dims.
+    setMaskEditorOpen(true);
+  }
+
   if (narrow) {
     return (
       <div style={{ padding: 24 }}>
@@ -851,8 +882,53 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
             <pre style={{ fontSize: 11, opacity: 0.8, whiteSpace: 'pre-wrap', marginTop: 12 }}>
               {JSON.stringify(selectedConfig, null, 2)}
             </pre>
+            {(selectedType === 'source_image' ||
+              selectedType === 'replace_background' ||
+              selectedType === 'inpaint') && (
+              <div style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => void openMaskEditor()}
+                  style={{
+                    background: '#121a2e',
+                    border: '1px solid #2a3a5a',
+                    color: '#e8eefc',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                  }}
+                >
+                  Open mask editor
+                </button>
+                <div style={{ fontSize: 11, opacity: 0.65, marginTop: 4 }}>
+                  Needs assetVersionId on source_image; paste resulting maskId into replace_background / inpaint.
+                </div>
+              </div>
+            )}
           </div>
         )}
+        {maskEditorOpen && maskImageUrl && maskSourceDims ? (
+          <div style={{ marginTop: 16 }}>
+            <MaskEditor
+              workspaceId={workspaceId}
+              assetVersionId={maskSourceDims.versionId}
+              imageUrl={maskImageUrl}
+              sourceWidth={maskSourceDims.w}
+              sourceHeight={maskSourceDims.h}
+              maskId={
+                typeof selectedConfig.maskId === 'string' ? selectedConfig.maskId : null
+              }
+              onSaved={(id) => {
+                if (selectedType === 'replace_background' || selectedType === 'inpaint') {
+                  updateSelectedConfig('maskId', id);
+                }
+                setStatus(`Mask saved ${id.slice(0, 8)}…`);
+              }}
+              onClose={() => setMaskEditorOpen(false)}
+            />
+          </div>
+        ) : null}
         <div style={{ marginTop: 24, fontSize: 11, opacity: 0.65 }}>
           Draft rev: {draft?.revisionNumber ?? '—'}
           <br />

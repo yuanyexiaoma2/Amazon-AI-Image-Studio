@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: Amazon AI Image Studio API
-  version: 0.3.2
-  description: OpenAPI from Zod contracts (W1 + W2 + W3-A/B Shot Plan, canvas, materialize).
+  version: 0.3.3
+  description: OpenAPI from Zod contracts (W1–W5-B masks / edit / inpaint).
 servers:
   - url: http://localhost:3000
 components:
@@ -135,7 +135,7 @@ components:
           maxLength: 255
         mimeType:
           type: string
-          enum: &a4
+          enum: &a5
             - image/png
             - image/jpeg
             - image/webp
@@ -197,7 +197,7 @@ components:
           format: uuid
         status:
           type: string
-          enum: &a5
+          enum: &a6
             - CREATED
             - UPLOADING
             - UPLOADED
@@ -207,7 +207,7 @@ components:
             - EXPIRED
         assetStatus:
           type: string
-          enum: &a6
+          enum: &a7
             - UPLOADING
             - PROCESSING
             - READY
@@ -246,7 +246,7 @@ components:
               type: integer
             status:
               type: string
-              enum: &a7
+              enum: &a8
                 - DRAFT
                 - PENDING_REVIEW
                 - APPROVED
@@ -293,7 +293,7 @@ components:
                     format: uuid
                   kind:
                     type: string
-                    enum: &a8
+                    enum: &a9
                       - LOCK
                       - ALLOW
                       - UNKNOWN
@@ -400,7 +400,7 @@ components:
               type: integer
             status:
               type: string
-              enum: &a9
+              enum: &a10
                 - DRAFT
                 - PENDING_REVIEW
                 - APPROVED
@@ -1038,7 +1038,7 @@ components:
           properties:
             type:
               type: string
-              enum: &a10
+              enum: &a11
                 - ALL
                 - BRANCH_FROM
                 - NODES
@@ -1357,6 +1357,229 @@ components:
         - items
         - createdAt
         - updatedAt
+    CreateMaskRequest:
+      type: object
+      properties:
+        strokes:
+          type: array
+          items:
+            type: object
+            properties:
+              tool:
+                type: string
+                enum: &a4
+                  - brush
+                  - erase
+              size:
+                type: number
+                minimum: 0
+                exclusiveMinimum: true
+                maximum: 1
+              points:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    x:
+                      type: number
+                      minimum: 0
+                      maximum: 1
+                    y:
+                      type: number
+                      minimum: 0
+                      maximum: 1
+                  required:
+                    - x
+                    - y
+                minItems: 1
+              feather:
+                type: number
+                minimum: 0
+                maximum: 1
+            required:
+              - tool
+              - size
+              - points
+          default: &a12 []
+        coordinateSpace:
+          type: string
+          enum:
+            - normalized_0_1
+          default: normalized_0_1
+        metadata:
+          type: object
+          properties:
+            sourceWidth:
+              type: integer
+              minimum: 0
+              exclusiveMinimum: true
+            sourceHeight:
+              type: integer
+              minimum: 0
+              exclusiveMinimum: true
+            viewportVersion:
+              type: number
+            zoom:
+              type: number
+              minimum: 0
+              exclusiveMinimum: true
+            featherDefault:
+              type: number
+              minimum: 0
+              maximum: 1
+          default: &a13 {}
+    UpdateMaskRequest:
+      type: object
+      properties:
+        strokes:
+          type: array
+          items:
+            type: object
+            properties:
+              tool:
+                type: string
+                enum: *a4
+              size:
+                type: number
+                minimum: 0
+                exclusiveMinimum: true
+                maximum: 1
+              points:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    x:
+                      type: number
+                      minimum: 0
+                      maximum: 1
+                    y:
+                      type: number
+                      minimum: 0
+                      maximum: 1
+                  required:
+                    - x
+                    - y
+                minItems: 1
+              feather:
+                type: number
+                minimum: 0
+                maximum: 1
+            required:
+              - tool
+              - size
+              - points
+        coordinateSpace:
+          type: string
+          enum:
+            - normalized_0_1
+        metadata:
+          type: object
+          additionalProperties:
+            nullable: true
+      required:
+        - strokes
+    MaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        assetVersionId:
+          type: string
+          format: uuid
+        strokes:
+          type: array
+          items:
+            type: object
+            properties:
+              tool:
+                type: string
+                enum: *a4
+              size:
+                type: number
+                minimum: 0
+                exclusiveMinimum: true
+                maximum: 1
+              points:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    x:
+                      type: number
+                      minimum: 0
+                      maximum: 1
+                    y:
+                      type: number
+                      minimum: 0
+                      maximum: 1
+                  required:
+                    - x
+                    - y
+                minItems: 1
+              feather:
+                type: number
+                minimum: 0
+                maximum: 1
+            required:
+              - tool
+              - size
+              - points
+        coordinateSpace:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - workspaceId
+        - assetVersionId
+        - strokes
+        - coordinateSpace
+        - metadata
+        - createdAt
+        - updatedAt
+    RenderMaskResponse:
+      type: object
+      properties:
+        maskId:
+          type: string
+          format: uuid
+        width:
+          type: integer
+        height:
+          type: integer
+        sha256:
+          type: string
+        byteSize:
+          type: integer
+        storageKey:
+          type: string
+        maskAssetVersionId:
+          type: string
+          nullable: true
+          format: uuid
+        downloadUrl:
+          type: string
+          format: uri
+      required:
+        - maskId
+        - width
+        - height
+        - sha256
+        - byteSize
+        - storageKey
   parameters: {}
 paths:
   /api/register:
@@ -1444,7 +1667,7 @@ paths:
                   maxLength: 255
                 mimeType:
                   type: string
-                  enum: *a4
+                  enum: *a5
                 bytes:
                   type: integer
                   minimum: 0
@@ -1543,10 +1766,10 @@ paths:
                     format: uuid
                   status:
                     type: string
-                    enum: *a5
+                    enum: *a6
                   assetStatus:
                     type: string
-                    enum: *a6
+                    enum: *a7
                 required:
                   - uploadId
                   - assetId
@@ -1588,7 +1811,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a7
+                        enum: *a8
                       facts:
                         type: array
                         items:
@@ -1627,7 +1850,7 @@ paths:
                               format: uuid
                             kind:
                               type: string
-                              enum: *a8
+                              enum: *a9
                             path:
                               type: string
                             rule:
@@ -1741,7 +1964,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a7
+                        enum: *a8
                       facts:
                         type: array
                         items:
@@ -1780,7 +2003,7 @@ paths:
                               format: uuid
                             kind:
                               type: string
-                              enum: *a8
+                              enum: *a9
                             path:
                               type: string
                             rule:
@@ -1863,7 +2086,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a9
+                        enum: *a10
                       truthRevisionId:
                         type: string
                         format: uuid
@@ -2087,7 +2310,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a9
+                        enum: *a10
                       truthRevisionId:
                         type: string
                         format: uuid
@@ -2381,7 +2604,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a9
+                        enum: *a10
                       truthRevisionId:
                         type: string
                         format: uuid
@@ -2616,7 +2839,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a9
+                        enum: *a10
                       truthRevisionId:
                         type: string
                         format: uuid
@@ -3548,7 +3771,7 @@ paths:
                   properties:
                     type:
                       type: string
-                      enum: *a10
+                      enum: *a11
                       default: ALL
                     nodeId:
                       type: string
@@ -4005,6 +4228,411 @@ paths:
       responses:
         "200":
           description: text/event-stream
+  /api/workspaces/{workspaceId}/asset-versions/{versionId}/masks:
+    get:
+      summary: List masks for an asset version
+      responses:
+        "200":
+          description: OK
+    post:
+      summary: Create mask (normalized strokes §10.4)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                strokes:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      tool:
+                        type: string
+                        enum: *a4
+                      size:
+                        type: number
+                        minimum: 0
+                        exclusiveMinimum: true
+                        maximum: 1
+                      points:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            x:
+                              type: number
+                              minimum: 0
+                              maximum: 1
+                            y:
+                              type: number
+                              minimum: 0
+                              maximum: 1
+                          required:
+                            - x
+                            - y
+                        minItems: 1
+                      feather:
+                        type: number
+                        minimum: 0
+                        maximum: 1
+                    required:
+                      - tool
+                      - size
+                      - points
+                  default: *a12
+                coordinateSpace:
+                  type: string
+                  enum:
+                    - normalized_0_1
+                  default: normalized_0_1
+                metadata:
+                  type: object
+                  properties:
+                    sourceWidth:
+                      type: integer
+                      minimum: 0
+                      exclusiveMinimum: true
+                    sourceHeight:
+                      type: integer
+                      minimum: 0
+                      exclusiveMinimum: true
+                    viewportVersion:
+                      type: number
+                    zoom:
+                      type: number
+                      minimum: 0
+                      exclusiveMinimum: true
+                    featherDefault:
+                      type: number
+                      minimum: 0
+                      maximum: 1
+                  default: *a13
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  workspaceId:
+                    type: string
+                    format: uuid
+                  assetVersionId:
+                    type: string
+                    format: uuid
+                  strokes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        tool:
+                          type: string
+                          enum: *a4
+                        size:
+                          type: number
+                          minimum: 0
+                          exclusiveMinimum: true
+                          maximum: 1
+                        points:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              x:
+                                type: number
+                                minimum: 0
+                                maximum: 1
+                              y:
+                                type: number
+                                minimum: 0
+                                maximum: 1
+                            required:
+                              - x
+                              - y
+                          minItems: 1
+                        feather:
+                          type: number
+                          minimum: 0
+                          maximum: 1
+                      required:
+                        - tool
+                        - size
+                        - points
+                  coordinateSpace:
+                    type: string
+                  metadata:
+                    type: object
+                    additionalProperties:
+                      nullable: true
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+                required:
+                  - id
+                  - workspaceId
+                  - assetVersionId
+                  - strokes
+                  - coordinateSpace
+                  - metadata
+                  - createdAt
+                  - updatedAt
+  /api/workspaces/{workspaceId}/masks/{maskId}:
+    get:
+      summary: Get mask
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  workspaceId:
+                    type: string
+                    format: uuid
+                  assetVersionId:
+                    type: string
+                    format: uuid
+                  strokes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        tool:
+                          type: string
+                          enum: *a4
+                        size:
+                          type: number
+                          minimum: 0
+                          exclusiveMinimum: true
+                          maximum: 1
+                        points:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              x:
+                                type: number
+                                minimum: 0
+                                maximum: 1
+                              y:
+                                type: number
+                                minimum: 0
+                                maximum: 1
+                            required:
+                              - x
+                              - y
+                          minItems: 1
+                        feather:
+                          type: number
+                          minimum: 0
+                          maximum: 1
+                      required:
+                        - tool
+                        - size
+                        - points
+                  coordinateSpace:
+                    type: string
+                  metadata:
+                    type: object
+                    additionalProperties:
+                      nullable: true
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+                required:
+                  - id
+                  - workspaceId
+                  - assetVersionId
+                  - strokes
+                  - coordinateSpace
+                  - metadata
+                  - createdAt
+                  - updatedAt
+    put:
+      summary: Update mask strokes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                strokes:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      tool:
+                        type: string
+                        enum: *a4
+                      size:
+                        type: number
+                        minimum: 0
+                        exclusiveMinimum: true
+                        maximum: 1
+                      points:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            x:
+                              type: number
+                              minimum: 0
+                              maximum: 1
+                            y:
+                              type: number
+                              minimum: 0
+                              maximum: 1
+                          required:
+                            - x
+                            - y
+                        minItems: 1
+                      feather:
+                        type: number
+                        minimum: 0
+                        maximum: 1
+                    required:
+                      - tool
+                      - size
+                      - points
+                coordinateSpace:
+                  type: string
+                  enum:
+                    - normalized_0_1
+                metadata:
+                  type: object
+                  additionalProperties:
+                    nullable: true
+              required:
+                - strokes
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  workspaceId:
+                    type: string
+                    format: uuid
+                  assetVersionId:
+                    type: string
+                    format: uuid
+                  strokes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        tool:
+                          type: string
+                          enum: *a4
+                        size:
+                          type: number
+                          minimum: 0
+                          exclusiveMinimum: true
+                          maximum: 1
+                        points:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              x:
+                                type: number
+                                minimum: 0
+                                maximum: 1
+                              y:
+                                type: number
+                                minimum: 0
+                                maximum: 1
+                            required:
+                              - x
+                              - y
+                          minItems: 1
+                        feather:
+                          type: number
+                          minimum: 0
+                          maximum: 1
+                      required:
+                        - tool
+                        - size
+                        - points
+                  coordinateSpace:
+                    type: string
+                  metadata:
+                    type: object
+                    additionalProperties:
+                      nullable: true
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+                required:
+                  - id
+                  - workspaceId
+                  - assetVersionId
+                  - strokes
+                  - coordinateSpace
+                  - metadata
+                  - createdAt
+                  - updatedAt
+  /api/workspaces/{workspaceId}/masks/{maskId}/render:
+    post:
+      summary: Render full-res grayscale mask PNG matching source WxH
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  maskId:
+                    type: string
+                    format: uuid
+                  width:
+                    type: integer
+                  height:
+                    type: integer
+                  sha256:
+                    type: string
+                  byteSize:
+                    type: integer
+                  storageKey:
+                    type: string
+                  maskAssetVersionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  downloadUrl:
+                    type: string
+                    format: uri
+                required:
+                  - maskId
+                  - width
+                  - height
+                  - sha256
+                  - byteSize
+                  - storageKey
   /api/v1/providers/{providerKey}/webhook:
     post:
       summary: Provider webhook (raw body signature verify)

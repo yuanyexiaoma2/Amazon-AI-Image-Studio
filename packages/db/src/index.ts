@@ -66,3 +66,8 @@ export {
   reconcileOrphanProviderEvents,
   type ProviderOutputBytes,
 } from './generation-runtime.js';
+
+export {
+  MaskRepository,
+  type UpsertMaskInput,
+} from './repositories/masks.js';

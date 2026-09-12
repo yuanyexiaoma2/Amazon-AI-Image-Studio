@@ -16,3 +16,4 @@ export * from './input-fingerprint.js';
 export * from './stale-propagation.js';
 export * from './node-execution.js';
 export * from './sha256.js';
+export * from './mask-strokes.js';
