@@ -207,7 +207,7 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 
 **DONE evidence package (W4-01…W4-06):**
 - Base merge: `f54ed4a1d80a7ec4d0927e1713d4c5dcc7a9f437` (W3-B2)
-- Branch HEAD: `b99dde993599cdffc517cf273fd9502cb498de22`
+- Branch HEAD: `1bbdaef7443aabe7903403f4ac3d1145b6e0ffa9`
 - Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/11
 - Local e2e: registry → run settle SUCCEEDED → budget gate → AUTH FAILED_FINAL → webhook idempotency → SSE (Fake only, `GENERATION_INLINE=1`)
 - Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #11 before merge
