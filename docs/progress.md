@@ -6,7 +6,7 @@
 
 **Repo type (W0-01):** GREENFIELD — empty public GitHub repo; no prior application code.
 
-**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8).
+**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A work 2026-09-12 Asia/Shanghai (UTC+8).
 
 ---
 
@@ -55,11 +55,11 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | `pnpm test:e2e` | Extends to upload→inspect→extract→confirm→approve (with MinIO + `INSPECT_INLINE=1`) |
 | Secrets | No real provider keys in repo / `.env.example` / commits |
 
-**VERIFIED evidence package (W2-01…W2-06) — for 审稿 ratification:**
+**VERIFIED evidence package (W2-01…W2-06):**
 - Merge SHA: `79996ac9cd0f3e824bc1c0a608c4aa9d75fbcaa6` (PR #3 squash into main)
 - Main CI green: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34586631130
-- PR #3 review record: multi-round independent review ending APPROVED (Outbox/idempotency, Truth atomic approve, roles, failure-injection, concurrency); final HEAD before merge `322ba52de47a3c00be2c20422f26933ef7022ef8`
-- Process note: ledger rows were written in docs PR #4 before 审稿 bot ratification; **this PR asks 审稿 to APPROVE keeping W2-01…W2-06 as VERIFIED**. Implementer must not self-merge VERIFIED docs.
+- 审稿 **APPROVED** on PR #6 (ratification of merge `79996ac` + CI `34586631130`)
+- PR #3 final HEAD before merge: `322ba52de47a3c00be2c20422f26933ef7022ef8`
 
 **W2-07** remains BLOCKED_EXTERNAL：素材由项目所有者按 fixtures 现有格式提供，QA 周前到位。
 
@@ -80,8 +80,8 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W3-01 | Shot Plan/Brief + 7-image template | TODO | W3-A |
-| W3-02 | Plan generate + approve | TODO | W3-A; Fake planner until W0-02 unblocked |
+| W3-01 | Shot Plan/Brief + 7-image template | IN_PROGRESS | W3-A on `feature/w3a-shot-plan` |
+| W3-02 | Plan generate + approve | IN_PROGRESS | W3-A; FakeShotPlanProvider only (W0-02 BLOCKED_EXTERNAL) |
 
 ### W3-B — Studio canvas + materialize (after W3-A)
 

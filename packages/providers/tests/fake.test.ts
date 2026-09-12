@@ -42,3 +42,26 @@ describe('FakeVisionProvider', () => {
     await expect(v.extractFacts({ assetVersionIds: [] })).rejects.toThrow(/assetVersionIds/);
   });
 });
+
+describe('FakeShotPlanProvider', () => {
+  it('drafts default 7 briefs without PACKAGE', async () => {
+    const { FakeShotPlanProvider } = await import('../src/fake.js');
+    const p = new FakeShotPlanProvider();
+    const result = await p.draftPlan({
+      sku: 'MUG-BLK-450',
+      confirmedFacts: [{ key: 'brand', value: 'Acme' }],
+    });
+    expect(result.provider).toBe('fake-shot-plan');
+    expect(result.briefs).toHaveLength(7);
+    expect(result.briefs.some((b) => b.slot === 'PACKAGE')).toBe(false);
+    expect(result.briefs[0]?.slot).toBe('MAIN');
+  });
+
+  it('can manually include PACKAGE', async () => {
+    const { FakeShotPlanProvider } = await import('../src/fake.js');
+    const p = new FakeShotPlanProvider();
+    const result = await p.draftPlan({ includePackage: true });
+    expect(result.briefs).toHaveLength(8);
+    expect(result.briefs.at(-1)?.slot).toBe('PACKAGE');
+  });
+});

@@ -11,6 +11,10 @@
 9. Do **not** self-mark `VERIFIED` in `docs/progress.md`. `VERIFIED` requires an independent reviewer or fresh AI context. Implementers mark at most `DONE`.
 10. Auth: JWT + `sessionVersion` (ADR-0002) — not silent DB-session assumption from v1.1.
 
+11. **Collaboration:** Kimi = planning/ADR via GitHub issue #7; 马奇 = implement; 审稿 = independent review. Do not self-merge high-risk or VERIFIED ledger PRs.
+12. **VERIFIED gate (forward rule):** For any PR that promotes tasks to `VERIFIED` in `docs/progress.md`, a **public APPROVED comment from 审稿 on that PR must exist before merge**. Do not merge first and backfill later (one-time exception for PR #6 is closed).
+
+
 ## Review & delivery policy (W2+)
 
 1. **Same-week related features** → one feature branch + **one milestone PR** (not one PR per tiny task).
@@ -21,8 +25,9 @@
 6. **Pure docs / copy / style / test-maintenance** with CI green and **no behavior change** → can merge directly (still prefer PR).
 7. **Weekly milestone acceptance**; not two-round review per small task.
 8. After reviewer **CHANGES**: if fixes are scoped to the named issues and CI is green → **same reviewer quick re-check only**.
-9. Status: implementer AI marks **DONE** (+ evidence). **VERIFIED** only at weekly / high-risk approval by an independent reviewer.
-10. **W2 acceptance unit** = full chain **upload → inspect → thumbnail → version → Truth Pack** (W2-01…W2-06 at minimum; W2-07 fixtures as far as practical).
+9. Status: implementer AI marks **DONE** (+ evidence). **VERIFIED** only after **审稿** posts a **public APPROVED** on the PR **before** merge (then ledger may say VERIFIED).
+10. **W2 acceptance unit** = full chain **upload → inspect → thumbnail → version → Truth Pack** (W2-01…W2-06; W2-07 BLOCKED_EXTERNAL until real SKUs).
+11. **W3 split:** W3-A = W3-01/02 (Shot Plan + approve); W3-B = W3-03…08 (canvas + materialize). Separate PRs/reviews.
 
 ## Standard commands
 
