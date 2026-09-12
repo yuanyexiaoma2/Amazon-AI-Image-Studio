@@ -193,7 +193,24 @@ export class GenerationRepository {
 
     const outboxRows: OutboxMessage[] = [];
 
+    try {
     const run = await this.db.$transaction(async (tx) => {
+      // Re-check inside the tx so concurrent identical keys cannot double-create.
+      const raced = await tx.generationRun.findUnique({
+        where: {
+          workspaceId_idempotencyKey: {
+            workspaceId: input.workspaceId,
+            idempotencyKey: input.idempotencyKey,
+          },
+        },
+        include: {
+          items: { include: { attempts: { orderBy: { attemptNo: 'asc' } } } },
+        },
+      });
+      if (raced) {
+        return { kind: 'existing' as const, run: raced };
+      }
+
       const runId = newId();
       const createdRun = await tx.generationRun.create({
         data: {
@@ -295,12 +312,35 @@ export class GenerationRepository {
         outboxRows.push(row);
       }
 
-      return createdRun;
+      return { kind: 'created' as const, run: createdRun };
     });
 
-    const detail = await this.getRun(input.workspaceId, run.id);
+    if (run.kind === 'existing') {
+      return { run: run.run, outboxRows: [], created: false };
+    }
+
+    const detail = await this.getRun(input.workspaceId, run.run.id);
     if (!detail) throw new Error('Run missing after create');
     return { run: detail, outboxRows, created: true };
+    } catch (err) {
+      // Unique(workspaceId, idempotencyKey) race: treat as idempotent hit.
+      const code = typeof err === 'object' && err && 'code' in err ? (err as { code?: string }).code : undefined;
+      if (code === 'P2002') {
+        const existing = await this.db.generationRun.findUnique({
+          where: {
+            workspaceId_idempotencyKey: {
+              workspaceId: input.workspaceId,
+              idempotencyKey: input.idempotencyKey,
+            },
+          },
+          include: {
+            items: { include: { attempts: { orderBy: { attemptNo: 'asc' } } } },
+          },
+        });
+        if (existing) return { run: existing, outboxRows: [], created: false };
+      }
+      throw err;
+    }
   }
 
   async requestCancel(workspaceId: string, runId: string): Promise<GenerationRunDetail> {

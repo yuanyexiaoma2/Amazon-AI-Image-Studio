@@ -13,6 +13,13 @@ export class CreditInsufficientError extends Error {
   }
 }
 
+type LockedCreditAccountRow = {
+  id: string;
+  available_microunits: bigint;
+  held_microunits: bigint;
+  consumed_microunits: bigint;
+};
+
 export class CreditRepository {
   constructor(private readonly db: PrismaClient) {}
 
@@ -72,19 +79,58 @@ export class CreditRepository {
     tx?: Prisma.TransactionClient,
   ): Promise<CreditLedgerBalances> {
     const run = async (client: Prisma.TransactionClient) => {
-      const account = await client.creditAccount.findUnique({ where: { workspaceId } });
-      const acct =
-        account ??
-        (await client.creditAccount.create({
-          data: {
-            id: newId(),
-            workspaceId,
-            currency: 'USD',
-            availableMicrounits: 0n,
-            heldMicrounits: 0n,
-            consumedMicrounits: 0n,
-          },
-        }));
+      // Serialize concurrent RESERVE/SETTLE/REFUND on the same account so the
+      // controlled snapshot cannot lose updates vs the append-only ledger.
+      let locked = await client.$queryRaw<LockedCreditAccountRow[]>`
+        SELECT id, available_microunits, held_microunits, consumed_microunits
+        FROM credit_accounts
+        WHERE workspace_id = ${workspaceId}::uuid
+        FOR UPDATE
+      `;
+
+      let acctId: string;
+      let availableMicrounits: bigint;
+      let heldMicrounits: bigint;
+      let consumedMicrounits: bigint;
+
+      if (locked[0]) {
+        acctId = locked[0].id;
+        availableMicrounits = locked[0].available_microunits;
+        heldMicrounits = locked[0].held_microunits;
+        consumedMicrounits = locked[0].consumed_microunits;
+      } else {
+        try {
+          const created = await client.creditAccount.create({
+            data: {
+              id: newId(),
+              workspaceId,
+              currency: 'USD',
+              availableMicrounits: 0n,
+              heldMicrounits: 0n,
+              consumedMicrounits: 0n,
+            },
+          });
+          acctId = created.id;
+          availableMicrounits = 0n;
+          heldMicrounits = 0n;
+          consumedMicrounits = 0n;
+        } catch {
+          locked = await client.$queryRaw<LockedCreditAccountRow[]>`
+            SELECT id, available_microunits, held_microunits, consumed_microunits
+            FROM credit_accounts
+            WHERE workspace_id = ${workspaceId}::uuid
+            FOR UPDATE
+          `;
+          const row = locked[0];
+          if (!row) {
+            throw new Error('Credit account missing after concurrent create');
+          }
+          acctId = row.id;
+          availableMicrounits = row.available_microunits;
+          heldMicrounits = row.held_microunits;
+          consumedMicrounits = row.consumed_microunits;
+        }
+      }
 
       const existing = await client.creditLedgerEvent.findUnique({
         where: {
@@ -93,16 +139,16 @@ export class CreditRepository {
       });
       if (existing) {
         return {
-          availableMicrounits: Number(acct.availableMicrounits),
-          heldMicrounits: Number(acct.heldMicrounits),
-          consumedMicrounits: Number(acct.consumedMicrounits),
+          availableMicrounits: Number(availableMicrounits),
+          heldMicrounits: Number(heldMicrounits),
+          consumedMicrounits: Number(consumedMicrounits),
         };
       }
 
       const current: CreditLedgerBalances = {
-        availableMicrounits: Number(acct.availableMicrounits),
-        heldMicrounits: Number(acct.heldMicrounits),
-        consumedMicrounits: Number(acct.consumedMicrounits),
+        availableMicrounits: Number(availableMicrounits),
+        heldMicrounits: Number(heldMicrounits),
+        consumedMicrounits: Number(consumedMicrounits),
       };
 
       let next: CreditLedgerBalances;
@@ -122,7 +168,7 @@ export class CreditRepository {
         data: {
           id: newId(),
           workspaceId,
-          accountId: acct.id,
+          accountId: acctId,
           type: input.type,
           microunits: BigInt(Math.abs(input.microunits)),
           idempotencyKey: input.idempotencyKey,
@@ -134,7 +180,7 @@ export class CreditRepository {
 
       // Controlled snapshot update only after append — never silent naked mutation.
       await client.creditAccount.update({
-        where: { id: acct.id },
+        where: { id: acctId },
         data: {
           availableMicrounits: BigInt(next.availableMicrounits),
           heldMicrounits: BigInt(next.heldMicrounits),

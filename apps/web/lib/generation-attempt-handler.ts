@@ -169,8 +169,13 @@ export async function handleGenerationAttemptJob(data: GenerationAttemptJobData)
         modelId: attempt.modelId,
       });
     } catch (err) {
-      // recover path for QUERYABLE
-      if (a.recoverSubmission) {
+      // recover path for QUERYABLE / uncertain submit — not for clear RATE_LIMIT/AUTH/etc.
+      const normalized = a.normalizeError(err);
+      const mayRecover =
+        normalized.errorClass === 'UNKNOWN' ||
+        normalized.errorClass === 'TIMEOUT' ||
+        normalized.errorClass === 'TRANSIENT';
+      if (a.recoverSubmission && mayRecover) {
         const recovered = await a.recoverSubmission(attempt.idempotencyKey);
         if (recovered !== 'NOT_FOUND' && recovered !== 'UNKNOWN') {
           subResult = recovered;
@@ -407,6 +412,7 @@ async function failAttempt(
   message: string,
 ) {
   const nextStatus = attemptStatusForError(errorClass, attempt.autoRetryCount);
+  const willRetry = nextStatus === 'FAILED_RETRYABLE';
   await prisma.generationAttempt.update({
     where: { id: attempt.id },
     data: {
@@ -423,26 +429,31 @@ async function failAttempt(
     data: { status: nextStatus },
   });
 
-  // Refund reserve on final or retryable (caller may re-reserve on new attempt)
-  await credits.appendEvent(data.workspaceId, {
-    type: 'REFUND',
-    microunits: Number(
-      (
-        await prisma.creditLedgerEvent.findUnique({
-          where: {
-            workspaceId_idempotencyKey: {
-              workspaceId: data.workspaceId,
-              idempotencyKey: `reserve:${attempt.id}`,
+  // Keep the RESERVE hold across same-attempt BullMQ retries (FAILED_RETRYABLE).
+  // Refund only on terminal failure so a later settle always has a valid hold.
+  // (Creating a new attempt+reserve, or re-reserving on re-entry, are alternatives;
+  // this worker reuses the same attemptId on retry.)
+  if (!willRetry) {
+    await credits.appendEvent(data.workspaceId, {
+      type: 'REFUND',
+      microunits: Number(
+        (
+          await prisma.creditLedgerEvent.findUnique({
+            where: {
+              workspaceId_idempotencyKey: {
+                workspaceId: data.workspaceId,
+                idempotencyKey: `reserve:${attempt.id}`,
+              },
             },
-          },
-        })
-      )?.microunits ?? 0n,
-    ),
-    idempotencyKey: refundIdempotencyKey(attempt.id),
-    attemptId: attempt.id,
-    runId: data.runId,
-    note: `Refund on ${errorClass}`,
-  });
+          })
+        )?.microunits ?? 0n,
+      ),
+      idempotencyKey: refundIdempotencyKey(attempt.id),
+      attemptId: attempt.id,
+      runId: data.runId,
+      note: `Refund on ${errorClass}`,
+    });
+  }
 
   await refreshRunStatus(data.workspaceId, data.runId);
   await emitProgress(data, 'attempt.failed', {
@@ -453,7 +464,7 @@ async function failAttempt(
   });
 
   // Surface retryable to BullMQ for RATE_LIMIT/TRANSIENT/TIMEOUT/UNKNOWN
-  if (nextStatus === 'FAILED_RETRYABLE') {
+  if (willRetry) {
     const err = new Error(`RETRYABLE:${errorClass}:${message}`);
     (err as Error & { errorClass: string }).errorClass = errorClass;
     throw err;
