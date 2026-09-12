@@ -291,7 +291,8 @@ One branch / one PR / one review each; merge unlocks the next segment.
 §19.5 real-Provider success cases: **挂起** (ADR-0003). Fake matrix required.
 
 **DONE evidence package (W5-B):**
-- Branch: `feature/w5b-mask-edit` (base `f00c1de`)
-- Milestone PR: (filled after open)
+- Branch HEAD: `b864df0ba73da2b8c368a3de2ae01f176e4f35af`
+- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/14
+- Base: `f00c1deb589a9bc2951902400ff22c8e1011c99a` (W5-A)
 - Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge.
 
