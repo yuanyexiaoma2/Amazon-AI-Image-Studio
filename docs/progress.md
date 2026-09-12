@@ -67,9 +67,11 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 
 ## W3 milestones (split)
 
+**VERIFIED backlog (Kimi MSG-016 observation ②):** W3-A / W3-B1 / W3-B2 were merged with 审稿 public APPROVED but the ledger stayed DONE. Ratified here after W5-A landed on main. W4-01…06 and W5-A are left as they stand on main.
+
 **Why split:** Spec §19.3 packs Shot Plan (domain/API) and full Studio canvas (xyflow + 11 nodes + autosave + materialize) into one week. For one-PR / one-review cadence, that is too large and mixes high-risk graph UX with plan CRUD. Split into two independently reviewable milestones.
 
-### W3-A — Shot Plan + plan approve (do first)
+### W3-A — Shot Plan + plan approve (VERIFIED)
 
 **Branch:** `feature/w3a-shot-plan`  
 **Acceptance unit (one PR, one independent review):** W3-01 + W3-02
@@ -80,8 +82,8 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W3-01 | Shot Plan/Brief + 7-image template | DONE | Domain `shot-plan.ts` §11.1 default 7 (no PACKAGE); Prisma `shot_plan_*` + `shot_briefs`; tenant UUIDv7; revision **FK `truth_revision_id` → approved Truth revision**; contracts + `canvasPayload` for W3-08; migration `20260912010000_w3a_shot_plan`. Fake only. |
-| W3-02 | Plan generate + approve | DONE | `POST .../shot-plans/generate` (FakeShotPlanProvider); PUT human edit; **atomic approve** (W2 Truth structure: FOR UPDATE + PENDING_REVIEW + row counts + audit_events); roles WRITE OWNER/ADMIN/MEMBER, APPROVE OWNER/ADMIN/REVIEWER; cannot generate/approve without approved Truth; unit + integration + e2e; no W3-B (no xyflow/canvas/materialize). |
+| W3-01 | Shot Plan/Brief + 7-image template | VERIFIED | Domain `shot-plan.ts` §11.1 default 7 (no PACKAGE); Prisma `shot_plan_*` + `shot_briefs`; tenant UUIDv7; revision **FK `truth_revision_id` → approved Truth revision**; contracts + `canvasPayload` for W3-08; migration `20260912010000_w3a_shot_plan`. Fake only. Independent review APPROVED on PR #8; merged to main as `62d6bcfa21b1013cc96a41c0e48de17297bbf6d4`. |
+| W3-02 | Plan generate + approve | VERIFIED | `POST .../shot-plans/generate` (FakeShotPlanProvider); PUT human edit; **atomic approve** (W2 Truth structure: FOR UPDATE + PENDING_REVIEW + row counts + audit_events); roles WRITE OWNER/ADMIN/MEMBER, APPROVE OWNER/ADMIN/REVIEWER; cannot generate/approve without approved Truth; unit + integration + e2e; no W3-B (no xyflow/canvas/materialize). Independent review APPROVED on PR #8; merged to main as `62d6bcfa21b1013cc96a41c0e48de17297bbf6d4`. |
 
 ### W3-A commands / evidence (implementer)
 
@@ -93,12 +95,14 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | Provider | **FakeShotPlanProvider only** (W0-02 BLOCKED_EXTERNAL); no real keys |
 | Out of scope | W3-B canvas / xyflow / autosave / materialize / node registry |
 
-**DONE evidence package (W3-01…W3-02):**
-- Branch HEAD: `5ec70d53dd53575f1db03e8ded3a6bc90602db11`
-- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/8
-- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34662767687
+**VERIFIED evidence package (W3-01…W3-02):**
+- Final HEAD before merge: `9c2b2ce05a93b737add59ff3c384abb693d85fc4`
+- Milestone PR squash-merged: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/8 → main `62d6bcfa21b1013cc96a41c0e48de17297bbf6d4`
+- CI (review): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34662917739
+- Main CI green: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34664089676
+- 审稿 **APPROVED** 公开存档：https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/8#issuecomment-5642405979
 - Local e2e: W2 Truth approve → Fake generate 7 briefs → PUT edit → Shot Plan approve
-- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #8 before merge
+- MSG-016 observation ② backlog ratification (docs-only; W5-A already on main)
 
 ### W3-B split (MSG-007)
 
@@ -114,7 +118,7 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 - App-level validate `referencedAssetVersionIds` (JSONB, no FK) at materialize time.
 - Cleaned `void gate` residue in `ShotPlanRepository.saveNewRevision` during B1 (MSG-005 observation).
 
-### W3-B1 — Canvas foundation (MSG-007)
+### W3-B1 — Canvas foundation (VERIFIED)
 
 **Branch:** `feature/w3b1-canvas-foundation` (from main `62d6bcfa21b1013cc96a41c0e48de17297bbf6d4`)  
 **Acceptance unit (one PR, one independent review):** W3-03 + W3-04 + W3-06
@@ -126,12 +130,12 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W3-03 | Studio / `@xyflow/react` layout | DONE | Three-pane Studio at `/projects/[projectId]/studio`; palette stubs (no Eximia); narrow &lt;1280 warning; Fake only. |
-| W3-04 | Nodes/ports/cycle detection | DONE | `packages/domain/src/workflow-graph.ts` registry + `validateEdge` / `validateWorkflowGraph` / `detectCycles`; unit tests cover self-loop, cross-layer back-edge, port mismatch, duplicate edges, cycles. UI calls domain only. |
-| W3-05 | 11 node config schemas | DONE | **W3-B2** — Zod in `@studio/contracts` `node-configs.ts` for 11 palette + system `approval_selector`; properties panel shells; PATCH normalizes configs. Fake only. |
-| W3-06 | Autosave / revision | DONE | Prisma `workflows` / `workflow_drafts` / `workflow_revisions` + migration `20260912020000_w3b1_workflows`; PATCH `ifRevision` → 409 `WORKFLOW_REVISION_CONFLICT`; snapshot API; integration + e2e conflict tests. |
-| W3-07 | Canvas interactions | DONE | **W3-B2** — undo/redo, copy/paste, delete-with-impact hint, Fit view; `isValidConnection` drag preview; domain `validateEdge` remains source of truth. |
-| W3-08 | Plan → canvas materialize | DONE | **W3-B2** — `POST .../shot-plans/materialize`; domain `materializeShotPlanToGraph` from W3-A `canvasPayload` (shape unchanged); app-layer `assertVersionsInProject` for `referencedAssetVersionIds` (MSG-005); WRITE roles; Fake only. |
+| W3-03 | Studio / `@xyflow/react` layout | VERIFIED | Three-pane Studio at `/projects/[projectId]/studio`; palette stubs (no Eximia); narrow &lt;1280 warning; Fake only. Independent review APPROVED on PR #9; merged to main as `b22b966880c4948420e1f3b5b67ac5e4cbfa6546`. |
+| W3-04 | Nodes/ports/cycle detection | VERIFIED | `packages/domain/src/workflow-graph.ts` registry + `validateEdge` / `validateWorkflowGraph` / `detectCycles`; unit tests cover self-loop, cross-layer back-edge, port mismatch, duplicate edges, cycles. UI calls domain only. Independent review APPROVED on PR #9; merged to main as `b22b966880c4948420e1f3b5b67ac5e4cbfa6546`. |
+| W3-05 | 11 node config schemas | VERIFIED | **W3-B2** — Zod in `@studio/contracts` `node-configs.ts` for 11 palette + system `approval_selector`; properties panel shells; PATCH normalizes configs. Fake only. Independent review APPROVED on PR #10; merged to main as `f54ed4a1d80a7ec4d0927e1713d4c5dcc7a9f437`. |
+| W3-06 | Autosave / revision | VERIFIED | Prisma `workflows` / `workflow_drafts` / `workflow_revisions` + migration `20260912020000_w3b1_workflows`; PATCH `ifRevision` → 409 `WORKFLOW_REVISION_CONFLICT`; snapshot API; integration + e2e conflict tests. Independent review APPROVED on PR #9; merged to main as `b22b966880c4948420e1f3b5b67ac5e4cbfa6546`. |
+| W3-07 | Canvas interactions | VERIFIED | **W3-B2** — undo/redo, copy/paste, delete-with-impact hint, Fit view; `isValidConnection` drag preview; domain `validateEdge` remains source of truth. Independent review APPROVED on PR #10; merged to main as `f54ed4a1d80a7ec4d0927e1713d4c5dcc7a9f437`. |
+| W3-08 | Plan → canvas materialize | VERIFIED | **W3-B2** — `POST .../shot-plans/materialize`; domain `materializeShotPlanToGraph` from W3-A `canvasPayload` (shape unchanged); app-layer `assertVersionsInProject` for `referencedAssetVersionIds` (MSG-005); WRITE roles; Fake only. Independent review APPROVED on PR #10; merged to main as `f54ed4a1d80a7ec4d0927e1713d4c5dcc7a9f437`. |
 
 ### W3-B1 commands / evidence (implementer)
 
@@ -143,14 +147,16 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | Provider | **Fake only** (W0-02 BLOCKED_EXTERNAL); no real keys |
 | Out of scope | W3-B2 node schemas UI / rich interactions / materialize |
 
-**DONE evidence package (W3-03 / W3-04 / W3-06):**
-- Branch HEAD: `5bbf0543f6b6da40840b6faf6285132119be0be6`
-- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/9
-- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34664994013
+**VERIFIED evidence package (W3-03 / W3-04 / W3-06):**
+- Final HEAD before merge: `57d02ee04ad71a22c9a8c3441c93936184fb4b5a`
+- Milestone PR squash-merged: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/9 → main `b22b966880c4948420e1f3b5b67ac5e4cbfa6546`
+- CI (review): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34665142469
+- Main CI green: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34665541978
+- 审稿 **APPROVED**：https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/9#issuecomment-5642601639
 - Local e2e: create empty workflow → save positions → 409 conflict → cycle reject → refresh keeps graph → snapshot (Fake only)
-- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #9 before merge
+- MSG-016 observation ② backlog ratification (docs-only; W5-A already on main)
 
-### W3-B2 — Nodes + materialize (MSG-007 / MSG-011)
+### W3-B2 — Nodes + materialize (VERIFIED)
 
 **Branch:** `feature/w3b2-nodes-materialize` (from main `b22b966880c4948420e1f3b5b67ac5e4cbfa6546`)  
 **Acceptance unit (one PR, one independent review):** W3-05 + W3-07 + W3-08
@@ -169,13 +175,14 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | Provider | **Fake only** (W0-02 BLOCKED_EXTERNAL); no real keys / no W4-07 |
 | Out of scope | Real Provider execution; W4-01…06 (next after merge + 审稿 APPROVED per MSG-011) |
 
-**DONE evidence package (W3-05 / W3-07 / W3-08):**
-- Branch HEAD: `927b8247756ab1a3d3eab1d55bbff589f0640a36`
-- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/10
-- CI green (push): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34666303115
+**VERIFIED evidence package (W3-05 / W3-07 / W3-08):**
+- Final HEAD before merge: `ebf4f122185f7c4ef0cd90cec8870b6fd5e0aff8`
+- Milestone PR squash-merged: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/10 → main `f54ed4a1d80a7ec4d0927e1713d4c5dcc7a9f437`
+- CI (review): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34666415372
+- Main CI green: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34671461782
+- 审稿 **APPROVED** 公开存档：https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/10#issuecomment-5643273127
 - Local + CI: schemas validate; materialize → 7 generate nodes; illegal edges still blocked; Fake only
-- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #10 before squash merge
-- B2 complete pending 审稿
+- MSG-016 observation ② backlog ratification (docs-only; W5-A already on main)
 
 ---
 
