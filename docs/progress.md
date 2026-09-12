@@ -449,7 +449,7 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 ---
 
-## W9 — Buffer + release (docs only; no new product modules)
+## W9 — Buffer + release (docs only; no new product modules) (W9-01 VERIFIED)
 
 **Branch:** `docs/w9-buffer-release` (from main `c57e3163c266f4632a32c2f1a4f0941d2273c873` = W8)  
 **Acceptance unit (one PR, one independent review):** W9-01 release-buffer docs. **W9-02 Production publish stays BLOCKED_EXTERNAL.**  
@@ -460,17 +460,17 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W9-01 | 发布缓冲（issue closure / release docs） | DONE | `docs/release/go-no-go.md`, `docs/release/backlog.md`, `docs/release/monitoring.md`. Allowed §19.9 notes are explicit Backlog rows — not hidden flags. Implementer **DONE** only. |
+| W9-01 | 发布缓冲（issue closure / release docs） | VERIFIED | `docs/release/go-no-go.md`, `docs/release/backlog.md`, `docs/release/monitoring.md`. Allowed §19.9 notes are explicit Backlog rows — not hidden flags. Independent review APPROVED on PR #19; merged to main as `659d96037d89dc178f312f122cbf80ad5948da52`; tip CI green https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34699543761. Fake Phase 1 **CONDITIONAL GO** only — not Production. |
 | W9-02 | Production 发布 | BLOCKED_EXTERNAL | **NO-GO** for real Production. Missing §32.15 artifacts (signed GO, Production target/domain, real Provider budget, staffed monitors, rollback owner) + hung W0-02 / W2-07 / W4-07 + Phase 2. **Production smoke was not run and is not claimed passed.** |
 
-### W9-01 DONE deliverables (not Production VERIFIED)
+### W9-01 VERIFIED deliverables (not Production GO)
 
 | Deliverable | Path | Status |
 |---|---|---|
-| Go / No-Go checklist | `docs/release/go-no-go.md` | DONE — **CONDITIONAL GO** for Fake / Phase 1 only; **NO-GO** real Production |
-| Hung deps + leftover backlog | `docs/release/backlog.md` | DONE — external deps, W8 non-blockers, visual/perf/security leftovers, UAT P0/P1 tracker, second-provider note |
-| Monitoring / alert ownership | `docs/release/monitoring.md` | DONE — placeholders; **owner must fill** before any Production GO |
-| Architecture / AGENTS brief | `docs/architecture.md`, `AGENTS.md` | DONE — W8 VERIFIED + W9 buffer pointer |
+| Go / No-Go checklist | `docs/release/go-no-go.md` | VERIFIED — **CONDITIONAL GO** for Fake / Phase 1 only; **NO-GO** real Production |
+| Hung deps + leftover backlog | `docs/release/backlog.md` | VERIFIED — external deps, W8 non-blockers, visual/perf/security leftovers, UAT P0/P1 tracker, second-provider note |
+| Monitoring / alert ownership | `docs/release/monitoring.md` | VERIFIED — placeholders; **owner must fill** before any Production GO |
+| Architecture / AGENTS brief | `docs/architecture.md`, `AGENTS.md` | VERIFIED — W8 VERIFIED + W9 buffer pointer |
 
 ### W9 commands / evidence (implementer)
 
@@ -481,7 +481,10 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | Provider | **Fake only** (ADR-0003) |
 | Out of scope | Real Production smoke; W9-02 GO; second Provider adapter; 3D / Listing / translation / collab / UI redesign / stack swap |
 
-**DONE evidence package (W9-01 only):**
-- Branch: `docs/w9-buffer-release`
-- Implementer marks **DONE** for release docs — **do not** self-`VERIFIED` W9-01; **do not** mark W9-02 VERIFIED
-- W9-02 remains **BLOCKED_EXTERNAL** / Production **NO-GO** until W0-02 / W2-07 / W4-07 + Phase 2 + signed §32.15
+**VERIFIED evidence package (W9-01 only):**
+- Merge SHA: `659d96037d89dc178f312f122cbf80ad5948da52` (PR #19 squash into main)
+- Final HEAD before merge: `52bf613e6b9c4b8bec0c5edfa2a8b521a250c042`
+- Tip CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34699543761
+- 审稿 **APPROVED** + public archive: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/19#issuecomment-5646543987
+- Fake only (ADR-0003); no Production deploy; no real keys
+- W9-02 remains **BLOCKED_EXTERNAL** / Production **NO-GO** — Production smoke not run; until W0-02 / W2-07 / W4-07 + Phase 2 + signed §32.15
