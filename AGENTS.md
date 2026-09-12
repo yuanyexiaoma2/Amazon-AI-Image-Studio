@@ -27,7 +27,7 @@
 8. After reviewer **CHANGES**: if fixes are scoped to the named issues and CI is green → **same reviewer quick re-check only**.
 9. Status: implementer AI marks **DONE** (+ evidence). **VERIFIED** only after **审稿** posts a **public APPROVED** on the PR **before** merge (then ledger may say VERIFIED).
 10. **W2 acceptance unit** = full chain **upload → inspect → thumbnail → version → Truth Pack** (W2-01…W2-06; W2-07 BLOCKED_EXTERNAL until real SKUs).
-11. **W3 split:** W3-A = W3-01/02 (Shot Plan + approve); W3-B = W3-03…08 (canvas + materialize). Separate PRs/reviews.
+11. **W3 split:** W3-A = W3-01/02; W3-B1 = W3-03/04/06 (canvas foundation); W3-B2 = W3-05/07/08 (nodes + materialize). Separate PRs/reviews (MSG-007).
 
 ## Standard commands
 

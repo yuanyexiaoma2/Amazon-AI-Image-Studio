@@ -31,3 +31,11 @@ export {
   type SaveShotPlanRevisionInput,
   type ShotBriefInput,
 } from './repositories/shot-plan.js';
+
+export {
+  WorkflowRepository,
+  WorkflowConflictError,
+  WorkflowValidationError,
+  WorkflowNotFoundError,
+  type WorkflowWithDraft,
+} from './repositories/workflow.js';

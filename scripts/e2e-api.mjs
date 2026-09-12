@@ -581,8 +581,115 @@ async function main() {
   if (!spApproved.approvedRevisionId) fail('missing approvedRevisionId', spApproved);
   ok('W3-A Shot Plan APPROVED');
 
+  // W3-B1: create empty workflow → save → conflict → reject cycle
+  const wfCreate = await fetch(
+    `${base}/api/workspaces/${wsW2}/projects/${projectId}/workflows`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-wf-create-${suffix}`,
+      },
+      body: JSON.stringify({ name: 'E2E workflow' }),
+    },
+  );
+  const wfCreated = await wfCreate.json();
+  if (wfCreate.status !== 201) fail('workflow create', { status: wfCreate.status, wfCreated });
+  if (wfCreated.revisionNumber !== 0) fail('expected rev 0', wfCreated);
+  if (!wfCreated.graph || !Array.isArray(wfCreated.graph.nodes)) fail('missing empty graph', wfCreated);
+  ok(`W3-B1 create empty workflow ${wfCreated.workflowId.slice(0, 8)}…`);
+
+  const legalGraph = {
+    schemaVersion: 1,
+    nodes: [
+      { id: 'n1', type: 'source_image', position: { x: 12, y: 34 }, config: { schemaVersion: 1 } },
+      { id: 'n2', type: 'prompt', position: { x: 200, y: 34 }, config: { schemaVersion: 1 } },
+    ],
+    edges: [],
+  };
+  const wfPatch = await fetch(`${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}`, {
+    method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+      cookie: jarW2.header(),
+      'x-request-id': `e2e-wf-patch-${suffix}`,
+    },
+    body: JSON.stringify({ ifRevision: 0, graph: legalGraph }),
+  });
+  const wfPatched = await wfPatch.json();
+  if (wfPatch.status !== 200) fail('workflow patch', { status: wfPatch.status, wfPatched });
+  if (wfPatched.revisionNumber !== 1) fail('expected rev 1', wfPatched);
+  if (wfPatched.graph.nodes[0].position.x !== 12) fail('position not persisted', wfPatched);
+  ok('W3-B1 save draft positions');
+
+  const wfConflict = await fetch(`${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}`, {
+    method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+      cookie: jarW2.header(),
+      'x-request-id': `e2e-wf-conflict-${suffix}`,
+    },
+    body: JSON.stringify({ ifRevision: 0, graph: legalGraph }),
+  });
+  const wfConflictJson = await wfConflict.json();
+  if (wfConflict.status !== 409) fail('expected 409 conflict', { status: wfConflict.status, wfConflictJson });
+  if (wfConflictJson.error?.code !== 'WORKFLOW_REVISION_CONFLICT') {
+    fail('expected WORKFLOW_REVISION_CONFLICT', wfConflictJson);
+  }
+  ok('W3-B1 concurrent conflict 409 (no silent overwrite)');
+
+  const cyclicGraph = {
+    schemaVersion: 1,
+    nodes: [
+      { id: 'a', type: 'upscale', position: { x: 0, y: 0 }, config: { schemaVersion: 1 } },
+      { id: 'b', type: 'upscale', position: { x: 1, y: 0 }, config: { schemaVersion: 1 } },
+    ],
+    edges: [
+      { id: 'e1', source: 'a', target: 'b', sourceHandle: 'image', targetHandle: 'image' },
+      { id: 'e2', source: 'b', target: 'a', sourceHandle: 'image', targetHandle: 'image' },
+    ],
+  };
+  const wfCycle = await fetch(`${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}`, {
+    method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+      cookie: jarW2.header(),
+      'x-request-id': `e2e-wf-cycle-${suffix}`,
+    },
+    body: JSON.stringify({ ifRevision: 1, graph: cyclicGraph }),
+  });
+  if (wfCycle.status !== 400) fail('expected cycle rejected 400', { status: wfCycle.status, body: await wfCycle.json() });
+  ok('W3-B1 cyclic graph rejected');
+
+  const wfGet = await fetch(`${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}`, {
+    headers: { cookie: jarW2.header(), 'x-request-id': `e2e-wf-get-${suffix}` },
+  });
+  const wfGot = await wfGet.json();
+  if (wfGet.status !== 200) fail('workflow get', { status: wfGet.status, wfGot });
+  if (wfGot.revisionNumber !== 1) fail('refresh lost revision', wfGot);
+  if (wfGot.graph.nodes.length !== 2) fail('refresh lost nodes', wfGot);
+  ok('W3-B1 refresh keeps positions/config/edges/revision');
+
+  const wfSnap = await fetch(
+    `${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}/snapshot`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-wf-snap-${suffix}`,
+      },
+      body: JSON.stringify({ ifRevision: 1 }),
+    },
+  );
+  const wfSnapJson = await wfSnap.json();
+  if (wfSnap.status !== 201) fail('workflow snapshot', { status: wfSnap.status, wfSnapJson });
+  if (!wfSnapJson.revision?.id) fail('missing revision id', wfSnapJson);
+  ok('W3-B1 revision snapshot');
+
   console.log(
-    'E2E PASS: W2 upload→Truth approve + W3-A generate→edit→approve Shot Plan (Fake only, no canvas)',
+    'E2E PASS: W2 Truth + W3-A Shot Plan + W3-B1 workflow create/save/conflict/cycle/snapshot (Fake only)',
   );
 }
 

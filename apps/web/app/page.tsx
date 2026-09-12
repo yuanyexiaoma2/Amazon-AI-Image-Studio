@@ -1,9 +1,9 @@
 export default function HomePage() {
   return (
-    <div>
+    <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
       <h1>Amazon AI Image Studio</h1>
       <p>
-        MVP through W2: register → project → <strong>upload → inspect → thumbnail → Truth Pack</strong>.
+        MVP through W3-B1: register → project → Truth → Shot Plan → <strong>Studio canvas</strong> (autosave + graph validation).
       </p>
       <ul>
         <li>
@@ -22,8 +22,8 @@ export default function HomePage() {
           </a>
         </li>
         <li>
-          <a href="/studio" style={{ color: '#9db7ff' }}>
-            Canvas stub (@xyflow/react)
+          <a href="/projects" style={{ color: '#9db7ff' }}>
+            Studio canvas (open a project → Studio)
           </a>
         </li>
       </ul>
