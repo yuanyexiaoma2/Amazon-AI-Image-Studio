@@ -6,13 +6,13 @@
 
 **Repo type (W0-01):** GREENFIELD — empty public GitHub repo; no prior application code.
 
-**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 / W5-A / W5-B / W5-C / W6 / W7 / W8 work 2026-09-12 Asia/Shanghai (UTC+8).
+**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 / W5-A / W5-B / W5-C / W6 / W7 / W8 / W9 work 2026-09-12 Asia/Shanghai (UTC+8).
 
 ---
 
 ## Review policy (documented W2)
 
-See `AGENTS.md` and `docs/architecture.md`: same-week related work → one milestone PR; continuous commits OK; DONE by implementer; VERIFIED at weekly/high-risk review; W2 acceptance = full upload→Truth Pack chain. W3 is split into W3-A / W3-B1 / W3-B2; W5 into W5-A / W5-B / W5-C (Kimi MSG-016); W6 Phase 1 is one milestone PR (W6-01…08). Each is one independent review.
+See `AGENTS.md` and `docs/architecture.md`: same-week related work → one milestone PR; continuous commits OK; DONE by implementer; VERIFIED at weekly/high-risk review; W2 acceptance = full upload→Truth Pack chain. W3 is split into W3-A / W3-B1 / W3-B2; W5 into W5-A / W5-B / W5-C (Kimi MSG-016); W6 Phase 1 is one milestone PR (W6-01…08). W8 is one milestone PR (W8-01…07). W9 is docs-only buffer + release (no new product modules). Each is one independent review.
 
 ---
 
@@ -413,21 +413,21 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 ---
 
-## W8 — Hardening / eval / security / Production candidate (Phase 1 Fake)
+## W8 — Hardening / eval / security / Production candidate (Phase 1 Fake) (VERIFIED)
 
 **Branch:** `feature/w8-hardening` (from main `21bd2e7fb26ad7617975e570d98b1555dc9a6003` = W7)  
 **Acceptance unit (one PR, one independent review):** W8-01…W8-07  
-**Fake only** (ADR-0003). No real keys. No Production deploy. Do not start W9. Do not merge without 审稿.
+**Fake only** (ADR-0003). No real keys. No Production deploy. W9 unlocked after this VERIFIED ratification (docs-only buffer + release).
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W8-01 | Expand visual eval set + baseline report | DONE | Phase 1 uses **3 synthetic SKUs** (W2-07 10 real hung); `eval-briefs.json` + `golden-qa/`; `pnpm test:eval` → `docs/eval/w8-phase1-baseline-report.md` |
-| W8-02 | Tune prompts/refs/QA thresholds vs Fake failures | DONE | `prompt-templates.ts` + MAIN template locks; rule pack **v2** (extent 0.82 / overlay 0.92 / blur review 85); `docs/eval/w8-02-prompt-qa-tuning.md` |
-| W8-03 | Concurrency / backpressure / 30-image stress | DONE | Worker `concurrency` + admit-time `QUEUE_BACKPRESSURE`; `pnpm test:stress-30` → `docs/eval/w8-03-load-report.md`; domain tests |
-| W8-04 | Security checklist tests | DONE | Authz / signed URL / SSRF / webhook sig / log redaction automated + `docs/security/w8-04-checklist.md` |
-| W8-05 | Backup/restore/rollback/user-delete drill | DONE | `docs/runbooks/backup-restore-rollback.md`, `user-delete-drill.md`; stub `scripts/backup-restore-drill.sh` |
-| W8-06 | A11y/empty/error/browser cheap fixes | DONE | Review + Studio landmarks/live regions/empty+error; `docs/eval/w8-06-a11y-browser-notes.md` |
-| W8-07 | Staging UAT + release + Prod candidate notes | DONE | `docs/release/w8-07-*.md` — no real Production keys; §18.4 Fake exception documented |
+| W8-01 | Expand visual eval set + baseline report | VERIFIED | Phase 1 uses **3 synthetic SKUs** (W2-07 10 real hung); `eval-briefs.json` + `golden-qa/`; `pnpm test:eval` → `docs/eval/w8-phase1-baseline-report.md` |
+| W8-02 | Tune prompts/refs/QA thresholds vs Fake failures | VERIFIED | `prompt-templates.ts` + MAIN template locks; rule pack **v2** (extent 0.82 / overlay 0.92 / blur review 85); `docs/eval/w8-02-prompt-qa-tuning.md` |
+| W8-03 | Concurrency / backpressure / 30-image stress | VERIFIED | Worker `concurrency` + admit-time `QUEUE_BACKPRESSURE`; `pnpm test:stress-30` → `docs/eval/w8-03-load-report.md`; domain tests |
+| W8-04 | Security checklist tests | VERIFIED | Authz / signed URL / SSRF / webhook sig / log redaction automated + `docs/security/w8-04-checklist.md` |
+| W8-05 | Backup/restore/rollback/user-delete drill | VERIFIED | `docs/runbooks/backup-restore-rollback.md`, `user-delete-drill.md`; stub `scripts/backup-restore-drill.sh` |
+| W8-06 | A11y/empty/error/browser cheap fixes | VERIFIED | Review + Studio landmarks/live regions/empty+error; `docs/eval/w8-06-a11y-browser-notes.md` |
+| W8-07 | Staging UAT + release + Prod candidate notes | VERIFIED | `docs/release/w8-07-*.md` — no real Production keys; §18.4 Fake exception documented |
 
 ### W8 commands / evidence (implementer)
 
@@ -437,9 +437,51 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | `pnpm test:eval` | Fake baseline report under `docs/eval/` |
 | `pnpm test:stress-30` | 30-item Fake load report |
 | Provider | **Fake only** (ADR-0003); no real keys |
-| Out of scope | Real Provider Phase 2; W9; Production go-live; merge without 审稿 |
+| Out of scope | Real Provider Phase 2; Production go-live; real keys |
 
-**DONE evidence package (W8-01…W8-07):**
-- Branch: `feature/w8-hardening`
-- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge
-- Do not merge; do not start W9.
+**VERIFIED evidence package (W8-01…W8-07):**
+- Merge SHA: `c57e3163c266f4632a32c2f1a4f0941d2273c873` (PR #18 squash into main)
+- Final HEAD before merge: `838e741928c9128eb3bffd84cea80fffebf79d4c`
+- Tip CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34699179820
+- 审稿 **APPROVED** + public comment: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/18#issuecomment-5646504447
+- Fake only (ADR-0003); no Production deploy; no real keys
+- W9 unlocked after this VERIFIED ratification (buffer + release docs only)
+
+---
+
+## W9 — Buffer + release (docs only; no new product modules)
+
+**Branch:** `docs/w9-buffer-release` (from main `c57e3163c266f4632a32c2f1a4f0941d2273c873` = W8)  
+**Acceptance unit (one PR, one independent review):** W9-01 release-buffer docs. **W9-02 Production publish stays BLOCKED_EXTERNAL.**  
+**Fake only** (ADR-0003). No real keys. No Production deploy. No new product modules (spec §19.9).
+
+§19.9 allowed (docs only this week): Provider/docs inconsistency notes; visual-consistency backlog; perf/browser/security leftover list; UAT P0/P1 tracker; conditional second-provider note.  
+§19.9 forbidden (not started): 3D, full Listing, translation center, collaboration, UI redesign, swapping DB / canvas / queue.
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| W9-01 | 发布缓冲（issue closure / release docs） | DONE | `docs/release/go-no-go.md`, `docs/release/backlog.md`, `docs/release/monitoring.md`. Allowed §19.9 notes are explicit Backlog rows — not hidden flags. Implementer **DONE** only. |
+| W9-02 | Production 发布 | BLOCKED_EXTERNAL | **NO-GO** for real Production. Missing §32.15 artifacts (signed GO, Production target/domain, real Provider budget, staffed monitors, rollback owner) + hung W0-02 / W2-07 / W4-07 + Phase 2. **Production smoke was not run and is not claimed passed.** |
+
+### W9-01 DONE deliverables (not Production VERIFIED)
+
+| Deliverable | Path | Status |
+|---|---|---|
+| Go / No-Go checklist | `docs/release/go-no-go.md` | DONE — **CONDITIONAL GO** for Fake / Phase 1 only; **NO-GO** real Production |
+| Hung deps + leftover backlog | `docs/release/backlog.md` | DONE — external deps, W8 non-blockers, visual/perf/security leftovers, UAT P0/P1 tracker, second-provider note |
+| Monitoring / alert ownership | `docs/release/monitoring.md` | DONE — placeholders; **owner must fill** before any Production GO |
+| Architecture / AGENTS brief | `docs/architecture.md`, `AGENTS.md` | DONE — W8 VERIFIED + W9 buffer pointer |
+
+### W9 commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| Scope | Docs only. No new product modules. No real keys. |
+| `pnpm lint` / `typecheck` / `test` / `build` | Unchanged product code; CI on PR-to-main still required |
+| Provider | **Fake only** (ADR-0003) |
+| Out of scope | Real Production smoke; W9-02 GO; second Provider adapter; 3D / Listing / translation / collab / UI redesign / stack swap |
+
+**DONE evidence package (W9-01 only):**
+- Branch: `docs/w9-buffer-release`
+- Implementer marks **DONE** for release docs — **do not** self-`VERIFIED` W9-01; **do not** mark W9-02 VERIFIED
+- W9-02 remains **BLOCKED_EXTERNAL** / Production **NO-GO** until W0-02 / W2-07 / W4-07 + Phase 2 + signed §32.15

@@ -17,6 +17,7 @@
 - High-risk always need independent review before merge: auth, tenant isolation, **DB migrations**, billing, real Provider calls, queue idempotency, deletion, compliance export.
 - Pure docs/copy/style/test-maintenance with CI green + no behavior change → can merge directly.
 - W2 acceptance unit = **upload → inspect → thumbnail → version → Truth Pack**.
+- W8-01…07 **VERIFIED** on main `c57e316` (PR #18). W9 is docs-only buffer + release (`docs/release/`); no new product modules.
 
 ## Auth (deviation from v1.1)
 
@@ -64,7 +65,8 @@ and potential rollback to DB sessions.
 
 GitHub Actions verifies Postgres, Redis, MinIO health; runs `prisma migrate deploy`;
 unit + integration tests; build; real API E2E (`pnpm test:e2e`) including upload→Truth Pack when services are up.
-Triggers on `main`, `feat/**`, `feature/**`, `fix/**`.
+Push triggers: `main`, `feat/**`, `feature/**`, `fix/**`. **Pull requests targeting `main` also run CI** (including `docs/**` buffer PRs).
+`pnpm test:eval` / `test:stress-30` are local/report jobs (not in CI yet — see `docs/release/backlog.md` PERF-01).
 
 ## Studio canvas (W3-B1 + W3-B2)
 
@@ -102,3 +104,29 @@ Triggers on `main`, `feat/**`, `feature/**`, `fix/**`.
 - Approvals are append-only (`APPROVE | REJECT | OVERRIDE_BLOCK | REVOKE`). `qa_gate` PASS never substitutes human Approval. OWNER/ADMIN/REVIEWER may approve PASS/REVIEW; only OWNER/ADMIN may OVERRIDE_BLOCK (reason required). nonWaivable FAIL cannot be overridden.
 - Export re-checks effective approval + nonWaivable + MAIN hard BLOCK in the API; Worker builds deterministic STORE ZIP (`manifest.json`, `qa-report.csv`, images) with bundle `createdAt` timestamps and SHA-256 checksums.
 - Phase 2 real Provider / real SKU eval remains hung (ADR-0003).
+
+
+## W7 — Variants / batch / admin (Fake)
+
+- Variant entities + batch-derive from approved master (no Approval inherit).
+- Per-item reserve/settle/refund; `BUDGET_EXCEEDED` unless confirmBudget; item retry.
+- Variant QA via W6 Fake Vision scenarios; export filters non-PASS.
+- Admin jobs / credit ADJUST / reconciliation — OWNER/ADMIN.
+- Runbooks: `docs/runbooks/variant-batch.md`, `credit-reconciliation.md`, `provider-outage-stuck-jobs.md`.
+
+## W8 — Hardening (Phase 1 Fake, VERIFIED)
+
+- Fake visual eval on **3 synthetic SKUs** + golden QA; prompt/QA pack v2; 30-item Fake load + queue backpressure.
+- Security checklist tests (authz, signed URL TTL, SSRF refusal, webhook HMAC, log redact).
+- Backup/restore + user-delete runbooks (drill tables unsigned).
+- Cheap a11y/empty/error landmarks on Review + Studio.
+- Release candidate notes: `docs/release/w8-07-*.md`. Not a Production go-live.
+
+## W9 — Buffer + release (docs only)
+
+- No new product modules (spec §19.9). No 3D / Listing / translation / collab / UI redesign / stack swap.
+- Living release pack:
+  - `docs/release/go-no-go.md` — **CONDITIONAL GO** Fake/Phase 1; **NO-GO** real Production until W0-02 / W2-07 / W4-07 + Phase 2 + signed §32.15.
+  - `docs/release/backlog.md` — hung external deps, provider/docs gaps, visual/perf/security leftovers, UAT P0/P1 tracker, second-provider skip.
+  - `docs/release/monitoring.md` — alert ownership **placeholders** (owner to fill). Do not claim monitors are staffed.
+- `W9-02` Production publish remains `BLOCKED_EXTERNAL`. Production smoke was **not** run.
