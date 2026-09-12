@@ -407,7 +407,7 @@ One branch / one PR / one review each; merge unlocks the next segment.
 **DONE evidence package (W7-01…W7-07):**
 - Branch HEAD: `1187a32e0b7b8507f3ae937f725387b61036f73f`
 - Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/17
-- CI: pending on PR #17
+- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34697121685
 - Local e2e: 3×7 Fake batch PARTIAL (1 AUTH fail + 20 ok) → retry; structure/logo BLOCK; ledger drift=false; admin ADJUST; export filter (`INSPECT_INLINE=1`)
 - Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge
 - Do not merge; do not start W8.
