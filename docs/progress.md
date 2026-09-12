@@ -322,10 +322,10 @@ One branch / one PR / one review each; merge unlocks the next segment.
 §19.5 real-Provider success cases: **挂起** (ADR-0003). Fake matrix required.
 
 **DONE evidence package (W5-C):**
-- Branch HEAD: `325ec5c743d2722ac6c22ceb7011e85f5dcf1bf4`
+- Branch HEAD: `bf8ba8b261f66473a8a50c38a94da7d6f691c36d`
 - Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/15
 - Base: `66944c384e4ec96cbbada1a66644576e214bb54a` (W5-B)
-- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34692479235
+- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34692606608
 - Local + CI: domain canvas/placement; Fake OUTPAINT/UPSCALE; normalize unit tests; e2e outpaint+upscale SUCCEEDED (`GENERATION_INLINE=1`)
 - Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge.
 
