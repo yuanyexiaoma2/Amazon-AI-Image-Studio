@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: Amazon AI Image Studio API
-  version: 0.2.0
-  description: OpenAPI generated from Zod contracts (W1 + W2 upload / Truth Pack).
+  version: 0.3.0
+  description: OpenAPI from Zod contracts (W1 + W2 Truth Pack + W3-A Shot Plan).
 servers:
   - url: http://localhost:3000
 components:
@@ -135,7 +135,7 @@ components:
           maxLength: 255
         mimeType:
           type: string
-          enum: &a2
+          enum: &a3
             - image/png
             - image/jpeg
             - image/webp
@@ -197,7 +197,7 @@ components:
           format: uuid
         status:
           type: string
-          enum: &a3
+          enum: &a4
             - CREATED
             - UPLOADING
             - UPLOADED
@@ -207,7 +207,7 @@ components:
             - EXPIRED
         assetStatus:
           type: string
-          enum: &a4
+          enum: &a5
             - UPLOADING
             - PROCESSING
             - READY
@@ -246,7 +246,7 @@ components:
               type: integer
             status:
               type: string
-              enum: &a5
+              enum: &a6
                 - DRAFT
                 - PENDING_REVIEW
                 - APPROVED
@@ -293,7 +293,7 @@ components:
                     format: uuid
                   kind:
                     type: string
-                    enum: &a6
+                    enum: &a7
                       - LOCK
                       - ALLOW
                       - UNKNOWN
@@ -372,6 +372,316 @@ components:
             minLength: 1
       required:
         - facts
+    ShotPlanResponse:
+      type: object
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        currentRevisionId:
+          type: string
+          nullable: true
+          format: uuid
+        approvedRevisionId:
+          type: string
+          nullable: true
+          format: uuid
+        revision:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            revision:
+              type: integer
+            status:
+              type: string
+              enum: &a8
+                - DRAFT
+                - PENDING_REVIEW
+                - APPROVED
+                - SUPERSEDED
+            truthRevisionId:
+              type: string
+              format: uuid
+            provider:
+              type: string
+              nullable: true
+            modelId:
+              type: string
+              nullable: true
+            briefs:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  slot:
+                    type: string
+                    enum: &a2
+                      - MAIN
+                      - FEATURE
+                      - DETAIL
+                      - DIMENSION
+                      - LIFESTYLE
+                      - PACKAGE
+                  purpose:
+                    type: string
+                  orderIndex:
+                    type: integer
+                    minimum: 0
+                    exclusiveMinimum: true
+                  copy:
+                    type: array
+                    items:
+                      nullable: true
+                  constraints:
+                    type: object
+                    properties:
+                      must:
+                        type: array
+                        items:
+                          type: string
+                      mustNot:
+                        type: array
+                        items:
+                          type: string
+                      qaPolicy:
+                        type: string
+                      aspectRatio:
+                        type: string
+                      targetPixels:
+                        type: object
+                        properties:
+                          width:
+                            type: integer
+                            minimum: 0
+                            exclusiveMinimum: true
+                          height:
+                            type: integer
+                            minimum: 0
+                            exclusiveMinimum: true
+                        required:
+                          - width
+                          - height
+                      referencedAssetVersionIds:
+                        type: array
+                        items:
+                          type: string
+                          format: uuid
+                    required:
+                      - must
+                      - mustNot
+                      - qaPolicy
+                      - aspectRatio
+                      - targetPixels
+                      - referencedAssetVersionIds
+                required:
+                  - id
+                  - slot
+                  - purpose
+                  - orderIndex
+                  - copy
+                  - constraints
+            approvedAt:
+              type: string
+              nullable: true
+              format: date-time
+            approvedByUserId:
+              type: string
+              nullable: true
+              format: uuid
+          required:
+            - id
+            - revision
+            - status
+            - truthRevisionId
+            - provider
+            - modelId
+            - briefs
+            - approvedAt
+            - approvedByUserId
+        canvasPayload:
+          type: object
+          nullable: true
+          properties:
+            planDocumentId:
+              type: string
+              format: uuid
+            planRevisionId:
+              type: string
+              format: uuid
+            projectId:
+              type: string
+              format: uuid
+            workspaceId:
+              type: string
+              format: uuid
+            truthRevisionId:
+              type: string
+              format: uuid
+            briefs:
+              type: array
+              items:
+                type: object
+                properties:
+                  briefId:
+                    type: string
+                    format: uuid
+                  slot:
+                    type: string
+                    enum: *a2
+                  purpose:
+                    type: string
+                  orderIndex:
+                    type: integer
+                  aspectRatio:
+                    type: string
+                  targetPixels:
+                    type: object
+                    properties:
+                      width:
+                        type: integer
+                      height:
+                        type: integer
+                    required:
+                      - width
+                      - height
+                  copy:
+                    type: array
+                    items:
+                      nullable: true
+                  must:
+                    type: array
+                    items:
+                      type: string
+                  mustNot:
+                    type: array
+                    items:
+                      type: string
+                  qaPolicy:
+                    type: string
+                  referencedAssetVersionIds:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                required:
+                  - briefId
+                  - slot
+                  - purpose
+                  - orderIndex
+                  - aspectRatio
+                  - targetPixels
+                  - copy
+                  - must
+                  - mustNot
+                  - qaPolicy
+                  - referencedAssetVersionIds
+          required:
+            - planDocumentId
+            - planRevisionId
+            - projectId
+            - workspaceId
+            - truthRevisionId
+            - briefs
+      required:
+        - documentId
+        - projectId
+        - currentRevisionId
+        - approvedRevisionId
+        - revision
+        - canvasPayload
+    GenerateShotPlanRequest:
+      type: object
+      properties:
+        truthRevisionId:
+          type: string
+          format: uuid
+        includePackage:
+          type: boolean
+    SaveShotPlanRequest:
+      type: object
+      properties:
+        truthRevisionId:
+          type: string
+          format: uuid
+        readyForReview:
+          type: boolean
+          default: true
+        briefs:
+          type: array
+          items:
+            type: object
+            properties:
+              slot:
+                type: string
+                enum: *a2
+              purpose:
+                type: string
+                minLength: 1
+                maxLength: 512
+              orderIndex:
+                type: integer
+                minimum: 0
+                exclusiveMinimum: true
+              copy:
+                type: array
+                items:
+                  nullable: true
+              must:
+                type: array
+                items:
+                  type: string
+              mustNot:
+                type: array
+                items:
+                  type: string
+              qaPolicy:
+                type: string
+              aspectRatio:
+                type: string
+              targetPixels:
+                type: object
+                properties:
+                  width:
+                    type: integer
+                    minimum: 0
+                    exclusiveMinimum: true
+                  height:
+                    type: integer
+                    minimum: 0
+                    exclusiveMinimum: true
+                required:
+                  - width
+                  - height
+              referencedAssetVersionIds:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+            required:
+              - slot
+              - purpose
+              - orderIndex
+          minItems: 1
+          maxItems: 20
+      required:
+        - briefs
+    ApproveShotPlanRequest:
+      type: object
+      properties:
+        revisionId:
+          type: string
+          format: uuid
+      required:
+        - revisionId
   parameters: {}
 paths:
   /api/register:
@@ -459,7 +769,7 @@ paths:
                   maxLength: 255
                 mimeType:
                   type: string
-                  enum: *a2
+                  enum: *a3
                 bytes:
                   type: integer
                   minimum: 0
@@ -558,10 +868,10 @@ paths:
                     format: uuid
                   status:
                     type: string
-                    enum: *a3
+                    enum: *a4
                   assetStatus:
                     type: string
-                    enum: *a4
+                    enum: *a5
                 required:
                   - uploadId
                   - assetId
@@ -603,7 +913,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a5
+                        enum: *a6
                       facts:
                         type: array
                         items:
@@ -642,7 +952,7 @@ paths:
                               format: uuid
                             kind:
                               type: string
-                              enum: *a6
+                              enum: *a7
                             path:
                               type: string
                             rule:
@@ -756,7 +1066,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a5
+                        enum: *a6
                       facts:
                         type: array
                         items:
@@ -795,7 +1105,7 @@ paths:
                               format: uuid
                             kind:
                               type: string
-                              enum: *a6
+                              enum: *a7
                             path:
                               type: string
                             rule:
@@ -830,3 +1140,992 @@ paths:
                   - currentRevisionId
                   - approvedRevisionId
                   - revision
+  /api/workspaces/{workspaceId}/projects/{projectId}/shot-plans/generate:
+    post:
+      summary: Generate Shot Plan draft (FakeShotPlanProvider; requires approved Truth
+        revision)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                truthRevisionId:
+                  type: string
+                  format: uuid
+                includePackage:
+                  type: boolean
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documentId:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  currentRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  approvedRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  revision:
+                    type: object
+                    nullable: true
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      revision:
+                        type: integer
+                      status:
+                        type: string
+                        enum: *a8
+                      truthRevisionId:
+                        type: string
+                        format: uuid
+                      provider:
+                        type: string
+                        nullable: true
+                      modelId:
+                        type: string
+                        nullable: true
+                      briefs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            slot:
+                              type: string
+                              enum: *a2
+                            purpose:
+                              type: string
+                            orderIndex:
+                              type: integer
+                              minimum: 0
+                              exclusiveMinimum: true
+                            copy:
+                              type: array
+                              items:
+                                nullable: true
+                            constraints:
+                              type: object
+                              properties:
+                                must:
+                                  type: array
+                                  items:
+                                    type: string
+                                mustNot:
+                                  type: array
+                                  items:
+                                    type: string
+                                qaPolicy:
+                                  type: string
+                                aspectRatio:
+                                  type: string
+                                targetPixels:
+                                  type: object
+                                  properties:
+                                    width:
+                                      type: integer
+                                      minimum: 0
+                                      exclusiveMinimum: true
+                                    height:
+                                      type: integer
+                                      minimum: 0
+                                      exclusiveMinimum: true
+                                  required:
+                                    - width
+                                    - height
+                                referencedAssetVersionIds:
+                                  type: array
+                                  items:
+                                    type: string
+                                    format: uuid
+                              required:
+                                - must
+                                - mustNot
+                                - qaPolicy
+                                - aspectRatio
+                                - targetPixels
+                                - referencedAssetVersionIds
+                          required:
+                            - id
+                            - slot
+                            - purpose
+                            - orderIndex
+                            - copy
+                            - constraints
+                      approvedAt:
+                        type: string
+                        nullable: true
+                        format: date-time
+                      approvedByUserId:
+                        type: string
+                        nullable: true
+                        format: uuid
+                    required:
+                      - id
+                      - revision
+                      - status
+                      - truthRevisionId
+                      - provider
+                      - modelId
+                      - briefs
+                      - approvedAt
+                      - approvedByUserId
+                  canvasPayload:
+                    type: object
+                    nullable: true
+                    properties:
+                      planDocumentId:
+                        type: string
+                        format: uuid
+                      planRevisionId:
+                        type: string
+                        format: uuid
+                      projectId:
+                        type: string
+                        format: uuid
+                      workspaceId:
+                        type: string
+                        format: uuid
+                      truthRevisionId:
+                        type: string
+                        format: uuid
+                      briefs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            briefId:
+                              type: string
+                              format: uuid
+                            slot:
+                              type: string
+                              enum: *a2
+                            purpose:
+                              type: string
+                            orderIndex:
+                              type: integer
+                            aspectRatio:
+                              type: string
+                            targetPixels:
+                              type: object
+                              properties:
+                                width:
+                                  type: integer
+                                height:
+                                  type: integer
+                              required:
+                                - width
+                                - height
+                            copy:
+                              type: array
+                              items:
+                                nullable: true
+                            must:
+                              type: array
+                              items:
+                                type: string
+                            mustNot:
+                              type: array
+                              items:
+                                type: string
+                            qaPolicy:
+                              type: string
+                            referencedAssetVersionIds:
+                              type: array
+                              items:
+                                type: string
+                                format: uuid
+                          required:
+                            - briefId
+                            - slot
+                            - purpose
+                            - orderIndex
+                            - aspectRatio
+                            - targetPixels
+                            - copy
+                            - must
+                            - mustNot
+                            - qaPolicy
+                            - referencedAssetVersionIds
+                    required:
+                      - planDocumentId
+                      - planRevisionId
+                      - projectId
+                      - workspaceId
+                      - truthRevisionId
+                      - briefs
+                required:
+                  - documentId
+                  - projectId
+                  - currentRevisionId
+                  - approvedRevisionId
+                  - revision
+                  - canvasPayload
+  /api/workspaces/{workspaceId}/projects/{projectId}/shot-plans:
+    get:
+      summary: Get current Shot Plan + canvasPayload (W3-08 prep)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documentId:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  currentRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  approvedRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  revision:
+                    type: object
+                    nullable: true
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      revision:
+                        type: integer
+                      status:
+                        type: string
+                        enum: *a8
+                      truthRevisionId:
+                        type: string
+                        format: uuid
+                      provider:
+                        type: string
+                        nullable: true
+                      modelId:
+                        type: string
+                        nullable: true
+                      briefs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            slot:
+                              type: string
+                              enum: *a2
+                            purpose:
+                              type: string
+                            orderIndex:
+                              type: integer
+                              minimum: 0
+                              exclusiveMinimum: true
+                            copy:
+                              type: array
+                              items:
+                                nullable: true
+                            constraints:
+                              type: object
+                              properties:
+                                must:
+                                  type: array
+                                  items:
+                                    type: string
+                                mustNot:
+                                  type: array
+                                  items:
+                                    type: string
+                                qaPolicy:
+                                  type: string
+                                aspectRatio:
+                                  type: string
+                                targetPixels:
+                                  type: object
+                                  properties:
+                                    width:
+                                      type: integer
+                                      minimum: 0
+                                      exclusiveMinimum: true
+                                    height:
+                                      type: integer
+                                      minimum: 0
+                                      exclusiveMinimum: true
+                                  required:
+                                    - width
+                                    - height
+                                referencedAssetVersionIds:
+                                  type: array
+                                  items:
+                                    type: string
+                                    format: uuid
+                              required:
+                                - must
+                                - mustNot
+                                - qaPolicy
+                                - aspectRatio
+                                - targetPixels
+                                - referencedAssetVersionIds
+                          required:
+                            - id
+                            - slot
+                            - purpose
+                            - orderIndex
+                            - copy
+                            - constraints
+                      approvedAt:
+                        type: string
+                        nullable: true
+                        format: date-time
+                      approvedByUserId:
+                        type: string
+                        nullable: true
+                        format: uuid
+                    required:
+                      - id
+                      - revision
+                      - status
+                      - truthRevisionId
+                      - provider
+                      - modelId
+                      - briefs
+                      - approvedAt
+                      - approvedByUserId
+                  canvasPayload:
+                    type: object
+                    nullable: true
+                    properties:
+                      planDocumentId:
+                        type: string
+                        format: uuid
+                      planRevisionId:
+                        type: string
+                        format: uuid
+                      projectId:
+                        type: string
+                        format: uuid
+                      workspaceId:
+                        type: string
+                        format: uuid
+                      truthRevisionId:
+                        type: string
+                        format: uuid
+                      briefs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            briefId:
+                              type: string
+                              format: uuid
+                            slot:
+                              type: string
+                              enum: *a2
+                            purpose:
+                              type: string
+                            orderIndex:
+                              type: integer
+                            aspectRatio:
+                              type: string
+                            targetPixels:
+                              type: object
+                              properties:
+                                width:
+                                  type: integer
+                                height:
+                                  type: integer
+                              required:
+                                - width
+                                - height
+                            copy:
+                              type: array
+                              items:
+                                nullable: true
+                            must:
+                              type: array
+                              items:
+                                type: string
+                            mustNot:
+                              type: array
+                              items:
+                                type: string
+                            qaPolicy:
+                              type: string
+                            referencedAssetVersionIds:
+                              type: array
+                              items:
+                                type: string
+                                format: uuid
+                          required:
+                            - briefId
+                            - slot
+                            - purpose
+                            - orderIndex
+                            - aspectRatio
+                            - targetPixels
+                            - copy
+                            - must
+                            - mustNot
+                            - qaPolicy
+                            - referencedAssetVersionIds
+                    required:
+                      - planDocumentId
+                      - planRevisionId
+                      - projectId
+                      - workspaceId
+                      - truthRevisionId
+                      - briefs
+                required:
+                  - documentId
+                  - projectId
+                  - currentRevisionId
+                  - approvedRevisionId
+                  - revision
+                  - canvasPayload
+    put:
+      summary: Human-edit Shot Plan (new revision; default PENDING_REVIEW)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                truthRevisionId:
+                  type: string
+                  format: uuid
+                readyForReview:
+                  type: boolean
+                  default: true
+                briefs:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      slot:
+                        type: string
+                        enum: *a2
+                      purpose:
+                        type: string
+                        minLength: 1
+                        maxLength: 512
+                      orderIndex:
+                        type: integer
+                        minimum: 0
+                        exclusiveMinimum: true
+                      copy:
+                        type: array
+                        items:
+                          nullable: true
+                      must:
+                        type: array
+                        items:
+                          type: string
+                      mustNot:
+                        type: array
+                        items:
+                          type: string
+                      qaPolicy:
+                        type: string
+                      aspectRatio:
+                        type: string
+                      targetPixels:
+                        type: object
+                        properties:
+                          width:
+                            type: integer
+                            minimum: 0
+                            exclusiveMinimum: true
+                          height:
+                            type: integer
+                            minimum: 0
+                            exclusiveMinimum: true
+                        required:
+                          - width
+                          - height
+                      referencedAssetVersionIds:
+                        type: array
+                        items:
+                          type: string
+                          format: uuid
+                    required:
+                      - slot
+                      - purpose
+                      - orderIndex
+                  minItems: 1
+                  maxItems: 20
+              required:
+                - briefs
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documentId:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  currentRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  approvedRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  revision:
+                    type: object
+                    nullable: true
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      revision:
+                        type: integer
+                      status:
+                        type: string
+                        enum: *a8
+                      truthRevisionId:
+                        type: string
+                        format: uuid
+                      provider:
+                        type: string
+                        nullable: true
+                      modelId:
+                        type: string
+                        nullable: true
+                      briefs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            slot:
+                              type: string
+                              enum: *a2
+                            purpose:
+                              type: string
+                            orderIndex:
+                              type: integer
+                              minimum: 0
+                              exclusiveMinimum: true
+                            copy:
+                              type: array
+                              items:
+                                nullable: true
+                            constraints:
+                              type: object
+                              properties:
+                                must:
+                                  type: array
+                                  items:
+                                    type: string
+                                mustNot:
+                                  type: array
+                                  items:
+                                    type: string
+                                qaPolicy:
+                                  type: string
+                                aspectRatio:
+                                  type: string
+                                targetPixels:
+                                  type: object
+                                  properties:
+                                    width:
+                                      type: integer
+                                      minimum: 0
+                                      exclusiveMinimum: true
+                                    height:
+                                      type: integer
+                                      minimum: 0
+                                      exclusiveMinimum: true
+                                  required:
+                                    - width
+                                    - height
+                                referencedAssetVersionIds:
+                                  type: array
+                                  items:
+                                    type: string
+                                    format: uuid
+                              required:
+                                - must
+                                - mustNot
+                                - qaPolicy
+                                - aspectRatio
+                                - targetPixels
+                                - referencedAssetVersionIds
+                          required:
+                            - id
+                            - slot
+                            - purpose
+                            - orderIndex
+                            - copy
+                            - constraints
+                      approvedAt:
+                        type: string
+                        nullable: true
+                        format: date-time
+                      approvedByUserId:
+                        type: string
+                        nullable: true
+                        format: uuid
+                    required:
+                      - id
+                      - revision
+                      - status
+                      - truthRevisionId
+                      - provider
+                      - modelId
+                      - briefs
+                      - approvedAt
+                      - approvedByUserId
+                  canvasPayload:
+                    type: object
+                    nullable: true
+                    properties:
+                      planDocumentId:
+                        type: string
+                        format: uuid
+                      planRevisionId:
+                        type: string
+                        format: uuid
+                      projectId:
+                        type: string
+                        format: uuid
+                      workspaceId:
+                        type: string
+                        format: uuid
+                      truthRevisionId:
+                        type: string
+                        format: uuid
+                      briefs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            briefId:
+                              type: string
+                              format: uuid
+                            slot:
+                              type: string
+                              enum: *a2
+                            purpose:
+                              type: string
+                            orderIndex:
+                              type: integer
+                            aspectRatio:
+                              type: string
+                            targetPixels:
+                              type: object
+                              properties:
+                                width:
+                                  type: integer
+                                height:
+                                  type: integer
+                              required:
+                                - width
+                                - height
+                            copy:
+                              type: array
+                              items:
+                                nullable: true
+                            must:
+                              type: array
+                              items:
+                                type: string
+                            mustNot:
+                              type: array
+                              items:
+                                type: string
+                            qaPolicy:
+                              type: string
+                            referencedAssetVersionIds:
+                              type: array
+                              items:
+                                type: string
+                                format: uuid
+                          required:
+                            - briefId
+                            - slot
+                            - purpose
+                            - orderIndex
+                            - aspectRatio
+                            - targetPixels
+                            - copy
+                            - must
+                            - mustNot
+                            - qaPolicy
+                            - referencedAssetVersionIds
+                    required:
+                      - planDocumentId
+                      - planRevisionId
+                      - projectId
+                      - workspaceId
+                      - truthRevisionId
+                      - briefs
+                required:
+                  - documentId
+                  - projectId
+                  - currentRevisionId
+                  - approvedRevisionId
+                  - revision
+                  - canvasPayload
+  /api/workspaces/{workspaceId}/projects/{projectId}/shot-plans/approve:
+    post:
+      summary: Atomically approve Shot Plan revision (W2 Truth approve structure)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                revisionId:
+                  type: string
+                  format: uuid
+              required:
+                - revisionId
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documentId:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  currentRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  approvedRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  revision:
+                    type: object
+                    nullable: true
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      revision:
+                        type: integer
+                      status:
+                        type: string
+                        enum: *a8
+                      truthRevisionId:
+                        type: string
+                        format: uuid
+                      provider:
+                        type: string
+                        nullable: true
+                      modelId:
+                        type: string
+                        nullable: true
+                      briefs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            slot:
+                              type: string
+                              enum: *a2
+                            purpose:
+                              type: string
+                            orderIndex:
+                              type: integer
+                              minimum: 0
+                              exclusiveMinimum: true
+                            copy:
+                              type: array
+                              items:
+                                nullable: true
+                            constraints:
+                              type: object
+                              properties:
+                                must:
+                                  type: array
+                                  items:
+                                    type: string
+                                mustNot:
+                                  type: array
+                                  items:
+                                    type: string
+                                qaPolicy:
+                                  type: string
+                                aspectRatio:
+                                  type: string
+                                targetPixels:
+                                  type: object
+                                  properties:
+                                    width:
+                                      type: integer
+                                      minimum: 0
+                                      exclusiveMinimum: true
+                                    height:
+                                      type: integer
+                                      minimum: 0
+                                      exclusiveMinimum: true
+                                  required:
+                                    - width
+                                    - height
+                                referencedAssetVersionIds:
+                                  type: array
+                                  items:
+                                    type: string
+                                    format: uuid
+                              required:
+                                - must
+                                - mustNot
+                                - qaPolicy
+                                - aspectRatio
+                                - targetPixels
+                                - referencedAssetVersionIds
+                          required:
+                            - id
+                            - slot
+                            - purpose
+                            - orderIndex
+                            - copy
+                            - constraints
+                      approvedAt:
+                        type: string
+                        nullable: true
+                        format: date-time
+                      approvedByUserId:
+                        type: string
+                        nullable: true
+                        format: uuid
+                    required:
+                      - id
+                      - revision
+                      - status
+                      - truthRevisionId
+                      - provider
+                      - modelId
+                      - briefs
+                      - approvedAt
+                      - approvedByUserId
+                  canvasPayload:
+                    type: object
+                    nullable: true
+                    properties:
+                      planDocumentId:
+                        type: string
+                        format: uuid
+                      planRevisionId:
+                        type: string
+                        format: uuid
+                      projectId:
+                        type: string
+                        format: uuid
+                      workspaceId:
+                        type: string
+                        format: uuid
+                      truthRevisionId:
+                        type: string
+                        format: uuid
+                      briefs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            briefId:
+                              type: string
+                              format: uuid
+                            slot:
+                              type: string
+                              enum: *a2
+                            purpose:
+                              type: string
+                            orderIndex:
+                              type: integer
+                            aspectRatio:
+                              type: string
+                            targetPixels:
+                              type: object
+                              properties:
+                                width:
+                                  type: integer
+                                height:
+                                  type: integer
+                              required:
+                                - width
+                                - height
+                            copy:
+                              type: array
+                              items:
+                                nullable: true
+                            must:
+                              type: array
+                              items:
+                                type: string
+                            mustNot:
+                              type: array
+                              items:
+                                type: string
+                            qaPolicy:
+                              type: string
+                            referencedAssetVersionIds:
+                              type: array
+                              items:
+                                type: string
+                                format: uuid
+                          required:
+                            - briefId
+                            - slot
+                            - purpose
+                            - orderIndex
+                            - aspectRatio
+                            - targetPixels
+                            - copy
+                            - must
+                            - mustNot
+                            - qaPolicy
+                            - referencedAssetVersionIds
+                    required:
+                      - planDocumentId
+                      - planRevisionId
+                      - projectId
+                      - workspaceId
+                      - truthRevisionId
+                      - briefs
+                required:
+                  - documentId
+                  - projectId
+                  - currentRevisionId
+                  - approvedRevisionId
+                  - revision
+                  - canvasPayload
