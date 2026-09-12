@@ -10,8 +10,20 @@ export type {
   ShotPlanDraftRequest,
   ShotPlanDraftResult,
   PlannedShotBrief,
+  OcrProvider,
+  OcrInspectRequest,
+  OcrInspectResult,
+  VisionQaProvider,
+  VisionQaRequest,
+  VisionQaResult,
 } from './ports.js';
-export { FakeImageProvider, FakeVisionProvider, FakeShotPlanProvider } from './fake.js';
+export {
+  FakeImageProvider,
+  FakeVisionProvider,
+  FakeShotPlanProvider,
+  FakeOcrProvider,
+  FakeVisionQaProvider,
+} from './fake.js';
 
 export type {
   ImageProviderAdapter,

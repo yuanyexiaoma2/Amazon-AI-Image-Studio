@@ -5,7 +5,7 @@
 ## Monorepo
 
 - `apps/web` — Next.js App Router + Auth.js
-- `apps/worker` — BullMQ worker (Redis): health + **asset inspect** + **generation-attempt**
+- `apps/worker` — BullMQ worker (Redis): health + **asset inspect** + **generation-attempt** + **qa-evaluate** + **export-bundle**
 - `packages/*` — domain, contracts, db, storage, providers, config, **imaging**
 
 ## Branch & review policy (see also `AGENTS.md`)
@@ -91,3 +91,14 @@ Triggers on `main`, `feat/**`, `feature/**`, `fix/**`.
 - `remove_background`: Fake returns IMAGE + MASK; worker ingests GENERATED + MASK AssetVersions (full request WxH on version metadata).
 - Webhook early-arrival: unknown `externalJobId` stored with `processedAt=null` (orphan); reconciled when `provider_submissions` row appears; `processedAt` set only after successful apply.
 - Fake only while ADR-0003 / W0-02 BLOCKED_EXTERNAL.
+
+
+## W6 Phase 1 — QA / Review / Export (Fake)
+
+- Market Rule Pack `amazon-main-us-v1` is versioned JSON (`docs/qa-rules/`) loaded by `@studio/domain`. Thresholds are not scattered in evaluators.
+- QA dispatch: `POST .../asset-versions/{id}/qa` writes `qa_reports` QUEUED + outbox `qa-evaluate-{reportId}` (or `QA_INLINE` / `INSPECT_INLINE`).
+- Layers: pixel metrics (`@studio/imaging`) → Fake OCR / Fake Vision QA → pure evaluators → §31.14 aggregate PASS/REVIEW/BLOCK.
+- Finding evidence regions are normalized `[0,1]`. `FILE.DECODABLE` is nonWaivable.
+- Approvals are append-only (`APPROVE | REJECT | OVERRIDE_BLOCK | REVOKE`). `qa_gate` PASS never substitutes human Approval. OWNER/ADMIN/REVIEWER may approve PASS/REVIEW; only OWNER/ADMIN may OVERRIDE_BLOCK (reason required). nonWaivable FAIL cannot be overridden.
+- Export re-checks effective approval + nonWaivable + MAIN hard BLOCK in the API; Worker builds deterministic STORE ZIP (`manifest.json`, `qa-report.csv`, images) with bundle `createdAt` timestamps and SHA-256 checksums.
+- Phase 2 real Provider / real SKU eval remains hung (ADR-0003).

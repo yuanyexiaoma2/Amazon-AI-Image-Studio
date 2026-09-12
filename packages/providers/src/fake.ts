@@ -8,6 +8,12 @@ import type {
   ShotPlanDraftRequest,
   ShotPlanDraftResult,
   ShotPlanProvider,
+  OcrInspectRequest,
+  OcrInspectResult,
+  OcrProvider,
+  VisionQaProvider,
+  VisionQaRequest,
+  VisionQaResult,
 } from './ports.js';
 import { DEFAULT_SEVEN_IMAGE_TEMPLATE } from '@studio/domain';
 
@@ -167,6 +173,182 @@ export class FakeShotPlanProvider implements ShotPlanProvider {
       modelId: 'fake-shot-plan-v1',
       briefs,
       latencyMs: Date.now() - started,
+    };
+  }
+}
+
+function matchIdentity(): VisionQaResult['identity'] {
+  return {
+    geometry: 'MATCH',
+    logo: 'MATCH',
+    ports: 'MATCH',
+    controls: 'MATCH',
+    material: 'MATCH',
+    itemCount: 'MATCH',
+    overall: 'MATCH',
+    regions: [{ x: 0.1, y: 0.1, width: 0.8, height: 0.8 }],
+    message: 'Fake Vision: identity matches confirmed truth',
+  };
+}
+
+/**
+ * Fake OCR — scenario-driven tokens. Never calls external APIs.
+ * SUCCESS: no overlay (optional confirmed brand as on-print).
+ */
+export class FakeOcrProvider implements OcrProvider {
+  readonly name = 'fake-ocr';
+
+  async inspect(request: OcrInspectRequest): Promise<OcrInspectResult> {
+    const scenario = (request.scenario ?? 'SUCCESS').toUpperCase();
+    const brandFact = request.confirmedFacts?.find((f) => f.key === 'brand');
+    const brand = typeof brandFact?.value === 'string' ? brandFact.value : 'Acme';
+
+    if (scenario === 'OVERLAY_TEXT') {
+      return {
+        provider: this.name,
+        modelId: 'fake-ocr-v1',
+        tokens: [
+          {
+            text: 'SALE 50%',
+            confidence: 0.95,
+            region: { x: 0.08, y: 0.08, width: 0.22, height: 0.1 },
+            onProductPrint: false,
+          },
+        ],
+      };
+    }
+    if (scenario === 'FACT_MISMATCH') {
+      return {
+        provider: this.name,
+        modelId: 'fake-ocr-v1',
+        tokens: [
+          {
+            text: `brand:ACOME`,
+            confidence: 0.96,
+            region: { x: 0.31, y: 0.42, width: 0.18, height: 0.08 },
+            onProductPrint: true,
+          },
+        ],
+      };
+    }
+    if (scenario === 'LOW_CONFIDENCE') {
+      return {
+        provider: this.name,
+        modelId: 'fake-ocr-v1',
+        tokens: [
+          {
+            text: 'SALE',
+            confidence: 0.4,
+            region: { x: 0.7, y: 0.05, width: 0.2, height: 0.08 },
+            onProductPrint: false,
+          },
+        ],
+      };
+    }
+    return {
+      provider: this.name,
+      modelId: 'fake-ocr-v1',
+      tokens: [
+        {
+          text: brand,
+          confidence: 0.92,
+          region: { x: 0.35, y: 0.45, width: 0.2, height: 0.08 },
+          onProductPrint: true,
+        },
+      ],
+    };
+  }
+}
+
+/**
+ * Fake Vision QA — structured identity / sold-items / defects. No real keys.
+ */
+export class FakeVisionQaProvider implements VisionQaProvider {
+  readonly name = 'fake-vision-qa';
+
+  async inspectProduct(request: VisionQaRequest): Promise<VisionQaResult> {
+    const scenario = (request.scenario ?? 'SUCCESS').toUpperCase();
+    if (scenario === 'IDENTITY_MISMATCH') {
+      return {
+        provider: this.name,
+        modelId: 'fake-vision-qa-v1',
+        identity: {
+          ...matchIdentity(),
+          logo: 'FAIL',
+          overall: 'FAIL',
+          message: 'Fake Vision: logo / brand mark drifted from confirmed truth',
+          regions: [{ x: 0.31, y: 0.42, width: 0.18, height: 0.08 }],
+        },
+        soldItems: {
+          status: 'PASS',
+          inventoryConflict: false,
+          segmentationConflict: false,
+          regions: [],
+        },
+      };
+    }
+    if (scenario === 'UNSOLD_ACCESSORY') {
+      return {
+        provider: this.name,
+        modelId: 'fake-vision-qa-v1',
+        identity: matchIdentity(),
+        soldItems: {
+          status: 'REVIEW',
+          inventoryConflict: false,
+          segmentationConflict: false,
+          message: 'Possible extra accessory — review against pack list',
+          regions: [{ x: 0.72, y: 0.12, width: 0.2, height: 0.22 }],
+        },
+      };
+    }
+    if (scenario === 'UNSOLD_CONFLICT') {
+      return {
+        provider: this.name,
+        modelId: 'fake-vision-qa-v1',
+        identity: matchIdentity(),
+        soldItems: {
+          status: 'FAIL',
+          inventoryConflict: true,
+          segmentationConflict: true,
+          message: 'Accessory conflicts with confirmed inventory and mask',
+          regions: [{ x: 0.72, y: 0.12, width: 0.2, height: 0.22 }],
+        },
+      };
+    }
+    if (scenario === 'WATERMARK') {
+      return {
+        provider: this.name,
+        modelId: 'fake-vision-qa-v1',
+        identity: matchIdentity(),
+        soldItems: {
+          status: 'PASS',
+          inventoryConflict: false,
+          segmentationConflict: false,
+          regions: [],
+        },
+        borderWatermark: {
+          status: 'REVIEW',
+          confidence: 0.7,
+          regions: [{ x: 0.75, y: 0.75, width: 0.2, height: 0.15 }],
+          message: 'Possible watermark',
+        },
+      };
+    }
+    return {
+      provider: this.name,
+      modelId: 'fake-vision-qa-v1',
+      identity: matchIdentity(),
+      soldItems: {
+        status: 'PASS',
+        inventoryConflict: false,
+        segmentationConflict: false,
+        regions: [],
+      },
+      borderWatermark: {
+        status: 'PASS',
+        confidence: 0.99,
+        regions: [],
+      },
     };
   }
 }

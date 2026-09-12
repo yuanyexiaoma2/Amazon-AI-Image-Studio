@@ -13,6 +13,9 @@
  * 7) W5-A: generate fingerprint/assets; remove_background+MASK; webhook orphan reconcile; STALE
  * 8) W5-B: mask editor API (strokes+render) + replace_background + inpaint Fake
  * 9) W5-C: outpaint (canvas/placement) + upscale (normalize) Fake
+ * 10) W6 Phase 1: QA (amazon-main-us-v1 + Fake OCR/Vision) → Review approvals → ZIP export
+ *     Playwright is not in this repo; API-level new-project→ZIP is the W6-08 chain.
+ *     INSPECT_INLINE also runs QA/export inline (QA_INLINE / EXPORT_INLINE optional).
  */
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createHash } from 'node:crypto';
@@ -230,6 +233,109 @@ async function disableAccount(jar) {
   });
   const json = await res.json();
   return { status: res.status, json };
+}
+
+
+async function uploadPng(jar, workspaceId, projectId, filename, pngBuffer) {
+  const checksum = createHash('sha256').update(pngBuffer).digest('hex');
+  const presignRes = await fetch(`${base}/api/workspaces/${workspaceId}/uploads/presign`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      cookie: jar.header(),
+      'x-request-id': `e2e-presign-${filename}-${suffix}`,
+    },
+    body: JSON.stringify({
+      projectId,
+      filename,
+      mimeType: 'image/png',
+      bytes: pngBuffer.length,
+    }),
+  });
+  const presign = await presignRes.json();
+  if (presignRes.status !== 201) fail('presign ' + filename, { status: presignRes.status, presign });
+  const putRes = await fetch(presign.uploadUrl, {
+    method: 'PUT',
+    headers: presign.headers ?? { 'Content-Type': 'image/png' },
+    body: pngBuffer,
+  });
+  if (!putRes.ok) fail('S3 PUT ' + filename, { status: putRes.status, text: await putRes.text() });
+  const completeRes = await fetch(
+    `${base}/api/workspaces/${workspaceId}/uploads/${presign.uploadId}/complete`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jar.header(),
+        'x-request-id': `e2e-complete-${filename}-${suffix}`,
+      },
+      body: JSON.stringify({
+        checksumSha256: checksum,
+        completionKey: `e2e-complete-${presign.uploadId}`,
+      }),
+    },
+  );
+  const complete = await completeRes.json();
+  if (completeRes.status !== 200) fail('complete ' + filename, { status: completeRes.status, complete });
+  let asset = null;
+  for (let i = 0; i < 40; i++) {
+    const aRes = await fetch(`${base}/api/workspaces/${workspaceId}/assets/${presign.assetId}`, {
+      headers: { cookie: jar.header(), 'x-request-id': `e2e-asset-${filename}-${i}` },
+    });
+    asset = await aRes.json();
+    if (aRes.status === 200 && (asset.status === 'READY' || asset.status === 'REJECTED')) break;
+    await sleep(250);
+  }
+  if (!asset || asset.status !== 'READY' || !asset.currentVersionId) {
+    fail('asset not READY ' + filename, asset);
+  }
+  return { assetId: presign.assetId, versionId: asset.currentVersionId, asset };
+}
+
+async function makeMainCandidate({ bg, size = 2000, subject = 1720 }) {
+  const origin = Math.floor((size - subject) / 2);
+  return sharp({
+    create: { width: size, height: size, channels: 3, background: bg },
+  })
+    .composite([
+      {
+        input: await sharp({
+          create: { width: subject, height: subject, channels: 3, background: { r: 36, g: 36, b: 36 } },
+        })
+          .png()
+          .toBuffer(),
+        left: origin,
+        top: origin,
+      },
+    ])
+    .png()
+    .toBuffer();
+}
+
+async function pollQa(jar, workspaceId, reportId) {
+  let report = null;
+  for (let i = 0; i < 40; i++) {
+    const res = await fetch(`${base}/api/workspaces/${workspaceId}/qa-reports/${reportId}`, {
+      headers: { cookie: jar.header(), 'x-request-id': `e2e-qa-poll-${reportId}-${i}` },
+    });
+    report = await res.json();
+    if (res.status === 200 && (report.status === 'SUCCEEDED' || report.status === 'FAILED')) return report;
+    await sleep(200);
+  }
+  fail('QA did not finish', report);
+}
+
+async function pollExport(jar, workspaceId, bundleId) {
+  let bundle = null;
+  for (let i = 0; i < 40; i++) {
+    const res = await fetch(`${base}/api/workspaces/${workspaceId}/exports/${bundleId}`, {
+      headers: { cookie: jar.header(), 'x-request-id': `e2e-ex-poll-${bundleId}-${i}` },
+    });
+    bundle = await res.json();
+    if (res.status === 200 && (bundle.status === 'SUCCEEDED' || bundle.status === 'FAILED')) return bundle;
+    await sleep(200);
+  }
+  fail('export did not finish', bundle);
 }
 
 async function main() {
@@ -1449,9 +1555,239 @@ async function main() {
   if (!(upSnap.width >= 2048 || upSnap.height >= 2048)) fail('W5-07 upscale dims', upSnap);
   ok('W5-06/07 Fake outpaint + upscale succeeded with canvas/normalize specs');
 
-  console.log(
-    'E2E PASS: W2…W5-C outpaint + upscale (Fake only)',
+  // --- W6 Phase 1: QA + approve + BLOCK export + OVERRIDE + ZIP ---
+  const passPng = await makeMainCandidate({ bg: { r: 255, g: 255, b: 255 } });
+  const passUp = await uploadPng(jarW2, wsW2, projectId, 'main-pass.png', passPng);
+  ok(`W6 pass asset version=${passUp.versionId}`);
+
+  const qaPassRes = await fetch(
+    `${base}/api/workspaces/${wsW2}/asset-versions/${passUp.versionId}/qa`,
+    {
+      method: 'POST',
+      headers: {
+        cookie: jarW2.header(),
+        'content-type': 'application/json',
+        'x-request-id': `e2e-qa-pass-${suffix}`,
+      },
+      body: JSON.stringify({ slot: 'MAIN', ocrScenario: 'SUCCESS', visionScenario: 'SUCCESS' }),
+    },
   );
+  const qaPassQueued = await qaPassRes.json();
+  if (qaPassRes.status !== 201) fail('W6 QA dispatch pass', { status: qaPassRes.status, qaPassQueued });
+  const qaPass = qaPassQueued.status === 'SUCCEEDED' ? qaPassQueued : await pollQa(jarW2, wsW2, qaPassQueued.id);
+  if (qaPass.status !== 'SUCCEEDED') fail('W6 QA pass not SUCCEEDED', qaPass);
+  if (qaPass.overallStatus !== 'PASS') fail('W6 expected PASS overall', qaPass);
+  if (!qaPass.findings?.length) fail('W6 missing findings', qaPass);
+  if (!qaPass.disclaimer) fail('W6 missing QA disclaimer', qaPass);
+  const bgFinding = qaPass.findings.find((f) => f.ruleId === 'MAIN.BACKGROUND_WHITE');
+  if (!bgFinding || bgFinding.status !== 'PASS') fail('W6 background rule', bgFinding);
+  ok(`W6-01…05 PASS report ${qaPass.id.slice(0, 8)} findings=${qaPass.findings.length}`);
+
+  // qa_gate PASS ≠ Approval: export must fail
+  const exportNoAp = await fetch(`${base}/api/workspaces/${wsW2}/projects/${projectId}/exports`, {
+    method: 'POST',
+    headers: {
+      cookie: jarW2.header(),
+      'content-type': 'application/json',
+      'x-request-id': `e2e-ex-noap-${suffix}`,
+    },
+    body: JSON.stringify({
+      items: [{ assetVersionId: passUp.versionId, slot: 'MAIN', qaReportId: qaPass.id }],
+    }),
+  });
+  const exportNoApJson = await exportNoAp.json();
+  if (exportNoAp.status !== 409) fail('expected export blocked without approval', { status: exportNoAp.status, exportNoApJson });
+  ok('W6 qa_gate PASS is not human Approval (export 409)');
+
+  const apPass = await fetch(
+    `${base}/api/workspaces/${wsW2}/asset-versions/${passUp.versionId}/approvals`,
+    {
+      method: 'POST',
+      headers: {
+        cookie: jarW2.header(),
+        'content-type': 'application/json',
+        'x-request-id': `e2e-ap-pass-${suffix}`,
+      },
+      body: JSON.stringify({ qaReportId: qaPass.id, decision: 'APPROVE' }),
+    },
+  );
+  const apPassJson = await apPass.json();
+  if (apPass.status !== 201) fail('W6 approve PASS', { status: apPass.status, apPassJson });
+  ok('W6-06 APPROVE on PASS report');
+
+  const exPassRes = await fetch(`${base}/api/workspaces/${wsW2}/projects/${projectId}/exports`, {
+    method: 'POST',
+    headers: {
+      cookie: jarW2.header(),
+      'content-type': 'application/json',
+      'x-request-id': `e2e-ex-pass-${suffix}`,
+    },
+    body: JSON.stringify({
+      items: [{ assetVersionId: passUp.versionId, slot: 'MAIN', qaReportId: qaPass.id, variantCode: 'BASE' }],
+    }),
+  });
+  const exPassQueued = await exPassRes.json();
+  if (exPassRes.status !== 201) fail('W6 export PASS', { status: exPassRes.status, exPassQueued });
+  const exPass = exPassQueued.status === 'SUCCEEDED' ? exPassQueued : await pollExport(jarW2, wsW2, exPassQueued.id);
+  if (exPass.status !== 'SUCCEEDED') fail('W6 export not SUCCEEDED', exPass);
+  if (!exPass.zipSha256 || !exPass.manifestSha256) fail('W6 missing checksums', exPass);
+  const dl = await fetch(`${base}/api/workspaces/${wsW2}/exports/${exPass.id}/download-url`, {
+    headers: { cookie: jarW2.header(), 'x-request-id': `e2e-dl-${suffix}` },
+  });
+  const dlJson = await dl.json();
+  if (dl.status !== 200 || !dlJson.url) fail('W6 download-url', { status: dl.status, dlJson });
+  const zipRes = await fetch(dlJson.url);
+  const zipBuf = Buffer.from(await zipRes.arrayBuffer());
+  if (zipRes.status !== 200) fail('W6 ZIP GET', { status: zipRes.status });
+  const zipText = zipBuf.toString('latin1');
+  if (!zipText.includes('manifest.json') || !zipText.includes('qa-report.csv')) {
+    fail('W6 ZIP missing manifest/csv names', zipText.slice(0, 200));
+  }
+  const zipHash = createHash('sha256').update(zipBuf).digest('hex');
+  if (zipHash !== exPass.zipSha256) fail('W6 ZIP checksum mismatch', { zipHash, expected: exPass.zipSha256 });
+  ok(`W6-07 ZIP bytes=${exPass.zipBytes} sha=${exPass.zipSha256.slice(0, 12)}…`);
+
+  // Cross-tenant denied
+  const qaX = await fetch(`${base}/api/workspaces/${wsW2}/asset-versions/${passUp.versionId}/qa`, {
+    method: 'POST',
+    headers: {
+      cookie: jarB.header(),
+      'content-type': 'application/json',
+      'x-request-id': `e2e-qa-x-${suffix}`,
+    },
+    body: JSON.stringify({}),
+  });
+  if (qaX.status !== 403) fail('expected cross-workspace QA 403', { status: qaX.status });
+  ok('W6 cross-workspace QA denied');
+
+  // MAIN hard BLOCK (non-white) blocks default export; OVERRIDE then exports
+  const blockPng = await makeMainCandidate({ bg: { r: 200, g: 24, b: 24 } });
+  const blockUp = await uploadPng(jarW2, wsW2, projectId, 'main-block.png', blockPng);
+  const qaBlockRes = await fetch(
+    `${base}/api/workspaces/${wsW2}/asset-versions/${blockUp.versionId}/qa`,
+    {
+      method: 'POST',
+      headers: {
+        cookie: jarW2.header(),
+        'content-type': 'application/json',
+        'x-request-id': `e2e-qa-block-${suffix}`,
+      },
+      body: JSON.stringify({ slot: 'MAIN' }),
+    },
+  );
+  const qaBlockQueued = await qaBlockRes.json();
+  if (qaBlockRes.status !== 201) fail('W6 QA block dispatch', { status: qaBlockRes.status, qaBlockQueued });
+  const qaBlock = qaBlockQueued.status === 'SUCCEEDED' ? qaBlockQueued : await pollQa(jarW2, wsW2, qaBlockQueued.id);
+  if (qaBlock.overallStatus !== 'BLOCK') fail('W6 expected BLOCK for red background', qaBlock);
+  const bw = qaBlock.findings.find((f) => f.ruleId === 'MAIN.BACKGROUND_WHITE');
+  if (bw?.status !== 'FAIL') fail('W6 BACKGROUND_WHITE should FAIL', bw);
+
+  const approveBlock = await fetch(
+    `${base}/api/workspaces/${wsW2}/asset-versions/${blockUp.versionId}/approvals`,
+    {
+      method: 'POST',
+      headers: {
+        cookie: jarW2.header(),
+        'content-type': 'application/json',
+        'x-request-id': `e2e-ap-block-bad-${suffix}`,
+      },
+      body: JSON.stringify({ qaReportId: qaBlock.id, decision: 'APPROVE' }),
+    },
+  );
+  if (approveBlock.status !== 400) fail('BLOCK cannot APPROVE', { status: approveBlock.status, json: await approveBlock.json() });
+
+  const exBlock = await fetch(`${base}/api/workspaces/${wsW2}/projects/${projectId}/exports`, {
+    method: 'POST',
+    headers: {
+      cookie: jarW2.header(),
+      'content-type': 'application/json',
+      'x-request-id': `e2e-ex-block-${suffix}`,
+    },
+    body: JSON.stringify({
+      items: [{ assetVersionId: blockUp.versionId, slot: 'MAIN', qaReportId: qaBlock.id }],
+    }),
+  });
+  const exBlockJson = await exBlock.json();
+  if (exBlock.status !== 409) fail('MAIN BLOCK must block default export', { status: exBlock.status, exBlockJson });
+  ok('W6 MAIN hard BLOCK blocks default export');
+
+  const ov = await fetch(
+    `${base}/api/workspaces/${wsW2}/asset-versions/${blockUp.versionId}/approvals`,
+    {
+      method: 'POST',
+      headers: {
+        cookie: jarW2.header(),
+        'content-type': 'application/json',
+        'x-request-id': `e2e-ov-${suffix}`,
+      },
+      body: JSON.stringify({
+        qaReportId: qaBlock.id,
+        decision: 'OVERRIDE_BLOCK',
+        reason: 'ops accept halo on synthetic fixture',
+      }),
+    },
+  );
+  const ovJson = await ov.json();
+  if (ov.status !== 201) fail('W6 OVERRIDE_BLOCK', { status: ov.status, ovJson });
+  if (ovJson.decision !== 'OVERRIDE_BLOCK' || !ovJson.reason) fail('override payload', ovJson);
+
+  const exOvRes = await fetch(`${base}/api/workspaces/${wsW2}/projects/${projectId}/exports`, {
+    method: 'POST',
+    headers: {
+      cookie: jarW2.header(),
+      'content-type': 'application/json',
+      'x-request-id': `e2e-ex-ov-${suffix}`,
+    },
+    body: JSON.stringify({
+      items: [{ assetVersionId: blockUp.versionId, slot: 'MAIN', qaReportId: qaBlock.id }],
+    }),
+  });
+  const exOvQueued = await exOvRes.json();
+  if (exOvRes.status !== 201) fail('W6 export after override', { status: exOvRes.status, exOvQueued });
+  const exOv = exOvQueued.status === 'SUCCEEDED' ? exOvQueued : await pollExport(jarW2, wsW2, exOvQueued.id);
+  if (exOv.status !== 'SUCCEEDED') fail('W6 override export failed', exOv);
+  ok('W6-06/07 OVERRIDE_BLOCK export retains reason + checksums');
+
+  // OCR overlay scenario → BLOCK
+  const qaOcrRes = await fetch(
+    `${base}/api/workspaces/${wsW2}/asset-versions/${passUp.versionId}/qa`,
+    {
+      method: 'POST',
+      headers: {
+        cookie: jarW2.header(),
+        'content-type': 'application/json',
+        'x-request-id': `e2e-qa-ocr-${suffix}`,
+      },
+      body: JSON.stringify({ slot: 'MAIN', ocrScenario: 'OVERLAY_TEXT' }),
+    },
+  );
+  const qaOcrQueued = await qaOcrRes.json();
+  if (qaOcrRes.status !== 201) fail('W6 OCR QA', { status: qaOcrRes.status, qaOcrQueued });
+  const qaOcr = qaOcrQueued.status === 'SUCCEEDED' ? qaOcrQueued : await pollQa(jarW2, wsW2, qaOcrQueued.id);
+  const overlay = qaOcr.findings.find((f) => f.ruleId === 'MAIN.NO_OVERLAY_TEXT');
+  if (overlay?.status !== 'FAIL') fail('W6 overlay OCR FAIL', overlay);
+  if (qaOcr.overallStatus !== 'BLOCK') fail('W6 overlay should BLOCK', qaOcr);
+  ok('W6-03 Fake OCR overlay → FAIL/BLOCK');
+
+  const qaVisRes = await fetch(
+    `${base}/api/workspaces/${wsW2}/asset-versions/${passUp.versionId}/qa`,
+    {
+      method: 'POST',
+      headers: {
+        cookie: jarW2.header(),
+        'content-type': 'application/json',
+        'x-request-id': `e2e-qa-vis-${suffix}`,
+      },
+      body: JSON.stringify({ slot: 'MAIN', visionScenario: 'IDENTITY_MISMATCH' }),
+    },
+  );
+  const qaVisQueued = await qaVisRes.json();
+  const qaVis = qaVisQueued.status === 'SUCCEEDED' ? qaVisQueued : await pollQa(jarW2, wsW2, qaVisQueued.id);
+  const ident = qaVis.findings.find((f) => f.ruleId === 'PRODUCT.IDENTITY');
+  if (ident?.status !== 'FAIL') fail('W6 identity FAIL', ident);
+  ok('W6-04 Fake Vision identity mismatch → FAIL');
+
+  console.log('E2E PASS: W2…W6 Phase 1 QA/Review/Export ZIP (Fake only; Playwright not in repo)');
 }
 
 main().catch((err) => {

@@ -6,13 +6,13 @@
 
 **Repo type (W0-01):** GREENFIELD — empty public GitHub repo; no prior application code.
 
-**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 / W5-A / W5-B / W5-C work 2026-09-12 Asia/Shanghai (UTC+8).
+**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 / W5-A / W5-B / W5-C / W6 work 2026-09-12 Asia/Shanghai (UTC+8).
 
 ---
 
 ## Review policy (documented W2)
 
-See `AGENTS.md` and `docs/architecture.md`: same-week related work → one milestone PR; continuous commits OK; DONE by implementer; VERIFIED at weekly/high-risk review; W2 acceptance = full upload→Truth Pack chain. W3 is split into W3-A / W3-B1 / W3-B2; W5 into W5-A / W5-B / W5-C (Kimi MSG-016); each is one milestone PR + one independent review.
+See `AGENTS.md` and `docs/architecture.md`: same-week related work → one milestone PR; continuous commits OK; DONE by implementer; VERIFIED at weekly/high-risk review; W2 acceptance = full upload→Truth Pack chain. W3 is split into W3-A / W3-B1 / W3-B2; W5 into W5-A / W5-B / W5-C (Kimi MSG-016); W6 Phase 1 is one milestone PR (W6-01…08). Each is one independent review.
 
 ---
 
@@ -306,15 +306,15 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 ---
 
-## W5-C — Outpaint + upscale / output normalize (DONE — awaiting 审稿)
+## W5-C — Outpaint + upscale / output normalize (VERIFIED)
 
 **Branch:** `feature/w5c-outpaint-upscale` (from main `66944c3` = W5-B)  
 **Acceptance unit:** W5-06 + W5-07
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W5-06 | `outpaint` executor | DONE | IMAGE + optional PROMPT → IMAGE_LIST; `targetRatio` / `placement` / `modelKey`; domain `computeOutpaintCanvas` (frame expand + original position); Fake `OUTPAINT`; request snapshot + fingerprint via W4/W5-A Run/Attempt/STALE path. |
-| W5-07 | `upscale` + output normalize | DONE | IMAGE → IMAGE; `engineKey` (`default-upscale`) / `targetResolution`; Fake `UPSCALE`; long-edge tier dims; ingest PNG normalize (`normalizeProviderImageOutput`) to request WxH. |
+| W5-06 | `outpaint` executor | VERIFIED | IMAGE + optional PROMPT → IMAGE_LIST; `targetRatio` / `placement` / `modelKey`; domain `computeOutpaintCanvas` (frame expand + original position); Fake `OUTPAINT`; request snapshot + fingerprint via W4/W5-A Run/Attempt/STALE path. |
+| W5-07 | `upscale` + output normalize | VERIFIED | IMAGE → IMAGE; `engineKey` (`default-upscale`) / `targetResolution`; Fake `UPSCALE`; long-edge tier dims; ingest PNG normalize (`normalizeProviderImageOutput`) to request WxH. |
 
 ### W5-C commands / evidence (implementer)
 
@@ -328,11 +328,46 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 §19.5 real-Provider success cases: **挂起** (ADR-0003). Fake matrix required.
 
-**DONE evidence package (W5-C):**
-- Branch HEAD: `bf8ba8b261f66473a8a50c38a94da7d6f691c36d`
-- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/15
-- Base: `66944c384e4ec96cbbada1a66644576e214bb54a` (W5-B)
-- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34692606608
-- Local + CI: domain canvas/placement; Fake OUTPAINT/UPSCALE; normalize unit tests; e2e outpaint+upscale SUCCEEDED (`GENERATION_INLINE=1`)
+**VERIFIED evidence package (W5-C):**
+- Merge SHA: `7025b871692478f181cefe1da26507451786eb89` (PR #15 squash into main)
+- Final HEAD before merge: `bf8ba8b261f66473a8a50c38a94da7d6f691c36d`
+- CI green: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34692729746
+- 审稿 **APPROVED** + public comment: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/15#issuecomment-5645793937
+- Fake only (ADR-0003); §19.5 real-Provider success cases remain 挂起
+
+---
+
+## W6 — Amazon QA, Review, Export (Phase 1 / ADR-0003) (DONE)
+
+**Branch:** `feature/w6-qa-export` (from main `7025b87` = W5-C)  
+**Acceptance unit (one PR, one independent review):** W6-01…W6-08  
+**Phase 1 only:** 3 synthetic SKUs + Fake OCR/Vision prove QA mechanics. Real Provider / real SKU eval = Phase 2 hung (ADR-0003). No real keys.
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| W6-01 | Market Rule Pack + `amazon-main-us-v1` | DONE | Versioned JSON `docs/qa-rules/amazon-main-us-v1.json` + `docs/qa-rules/amazon-main-us-v1.md`; runtime pack in `@studio/domain`; merge algorithm (specificity/priority, CR required to lower severity / clear nonWaivable); `global_market_rule_definitions` + activations. |
+| W6-02 | Size/format/background/ratio/border/blur | DONE | Deterministic evaluators + `@studio/imaging` `analyzeQaPixels` (white complement minus 5px@2k halo, subject extent, edge margin, Laplacian blur, border band). |
+| W6-03 | OCR vs confirmed facts | DONE | `FakeOcrProvider` scenarios SUCCESS/OVERLAY_TEXT/FACT_MISMATCH/LOW_CONFIDENCE; `MAIN.NO_OVERLAY_TEXT` + `PRODUCT.FACT_TEXT_MATCH`. |
+| W6-04 | Vision identity / defects | DONE | `FakeVisionQaProvider` SUCCESS/IDENTITY_MISMATCH/UNSOLD_*; `PRODUCT.IDENTITY` + `MAIN.ONLY_SOLD_ITEMS`. |
+| W6-05 | Findings + tri-state aggregation | DONE | Finding schema + evidence regions `[0,1]`; overall PASS/REVIEW/BLOCK per §31.14; `FILE.DECODABLE` nonWaivable. |
+| W6-06 | Review / approve / override | DONE | `/projects/[id]/review` compare + evidence boxes; append-only APPROVE/REJECT/OVERRIDE_BLOCK/REVOKE; roles OWNER/ADMIN/REVIEWER approve, OWNER/ADMIN override; `qa_gate` PASS ≠ Approval. |
+| W6-07 | Export Worker / manifest / CSV / ZIP | DONE | Outbox `export-bundle-{id}`; fixed `manifest.json` + UTF-8 BOM `qa-report.csv`; STORE ZIP with bundle `createdAt`; MAIN BLOCK blocks default export; checksums. |
+| W6-08 | New-project → ZIP E2E | DONE | API-level full chain in `scripts/e2e-api.mjs` (Playwright not in repo — documented). PASS export ZIP; BLOCK blocks; OVERRIDE then ZIP; Fake OCR/Vision scenarios; tenant 403. |
+
+### W6 commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm db:migrate:deploy` | Includes `20260912050000_w6_qa_export` |
+| `pnpm lint` / `typecheck` / `test` / `build` | Required green before PR |
+| `pnpm openapi:generate` | QA / approval / export paths (v0.4.0) |
+| `pnpm test:e2e` | Extends with QA→approve→ZIP and MAIN BLOCK export gate (`INSPECT_INLINE` also inlines QA/export) |
+| Provider | **Fake OCR + Fake Vision QA + Fake Image only** (ADR-0003); no real keys |
+| Out of scope | W7; W4-07 / W0-02 / W2-07; Phase 2 real smoke |
+
+`qa_gate` PASS is never human Approval. Phase 2 real-Provider / real-SKU eval remains 挂起 (ADR-0003).
+
+**DONE evidence package (W6-01…W6-08):**
 - Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge.
+- Do not merge; do not start W7.
 

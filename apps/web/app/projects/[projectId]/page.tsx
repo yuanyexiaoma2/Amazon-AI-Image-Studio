@@ -293,6 +293,10 @@ function ProjectDetailInner() {
         <a href={`/projects/${projectId}/studio?workspaceId=${workspaceId}`} style={{ color: '#9db7ff' }}>
           Open Studio canvas →
         </a>
+        {' · '}
+        <a href={`/projects/${projectId}/review?workspaceId=${workspaceId}`} style={{ color: '#9db7ff' }}>
+          Review / QA / Export →
+        </a>
       </div>
       <h1>Project assets + Truth Pack + Shot Plan</h1>
       <p style={{ opacity: 0.75 }}>

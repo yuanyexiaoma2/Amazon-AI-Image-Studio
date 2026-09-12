@@ -1,4 +1,4 @@
-// Amazon AI Image Studio — W1+W2+W3-A+W3-B1+W4+W5-A Prisma schema
+// Amazon AI Image Studio — W1+W2+W3-A+W3-B1+W4+W5-A+W6 Prisma schema
 // IDs: UUIDv7 generated in application code; DB type uuid.
 // Times: timestamptz via Prisma DateTime (@db.Timestamptz)
 // Tenancy: workspace_id on all tenant tables; composite FK (workspace_id, parent_id).
@@ -206,6 +206,11 @@ model Workspace {
   providerCostEvents  ProviderCostEvent[]
   progressEvents      ProgressEvent[]
   nodeResults         NodeResult[]
+  qaReports           QaReport[]
+  qaFindings          QaFinding[]
+  approvals           Approval[]
+  exportBundles       ExportBundle[]
+  exportBundleItems   ExportBundleItem[]
 
   @@index([ownerUserId])
   @@unique([id]) // enables composite FK targets (workspace_id, id)
@@ -251,6 +256,9 @@ model Project {
   workflows        Workflow[]
   generationRuns   GenerationRun[]
   nodeResults      NodeResult[]
+  qaReports        QaReport[]
+  approvals        Approval[]
+  exportBundles    ExportBundle[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, sku])
@@ -334,6 +342,9 @@ model AssetVersion {
   currentForAssets Asset[]              @relation("AssetCurrentVersion")
   representations AssetRepresentation[]
   masks           Mask[]
+  qaReports       QaReport[]
+  approvals       Approval[]
+  exportItems     ExportBundleItem[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, assetId, versionNumber])
@@ -989,4 +1000,217 @@ model ProgressEvent {
 
   @@index([workspaceId, projectId, createdAt])
   @@map("progress_events")
+}
+
+
+// ─── W6: QA reports / findings / approvals / export ─────────────────────────
+
+enum QaFindingStatus {
+  PASS
+  REVIEW
+  FAIL
+}
+
+enum QaReportOverallStatus {
+  PASS
+  REVIEW
+  BLOCK
+}
+
+enum QaJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum ApprovalDecision {
+  APPROVE
+  REJECT
+  OVERRIDE_BLOCK
+  REVOKE
+}
+
+enum ExportBundleStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SUPERSEDED
+}
+
+/// Immutable global rule-pack versions (spec §32.13).
+model GlobalMarketRuleDefinition {
+  id              String   @id @db.Uuid
+  key             String
+  version         Int
+  marketplaceCode String   @map("marketplace_code")
+  scopeJson       Json     @map("scope_json")
+  priority        Int
+  effectiveDate   DateTime @map("effective_date") @db.Date
+  rulesJson       Json     @map("rules_json")
+  sourceUrlsJson  Json     @map("source_urls_json")
+  contentSha256   String   @map("content_sha256")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([key, version])
+  @@map("global_market_rule_definitions")
+}
+
+model GlobalMarketRuleActivation {
+  id          String   @id @db.Uuid
+  key         String
+  version     Int
+  environment String
+  enabled     Boolean  @default(true)
+  activatedAt DateTime @default(now()) @map("activated_at") @db.Timestamptz
+
+  @@unique([key, environment])
+  @@map("global_market_rule_activations")
+}
+
+model QaReport {
+  id                   String                 @id @db.Uuid
+  workspaceId          String                 @map("workspace_id") @db.Uuid
+  projectId            String                 @map("project_id") @db.Uuid
+  assetVersionId       String                 @map("asset_version_id") @db.Uuid
+  slot                 String?
+  shotBriefId          String?                @map("shot_brief_id") @db.Uuid
+  truthRevisionId      String?                @map("truth_revision_id") @db.Uuid
+  workflowRevisionId   String?                @map("workflow_revision_id") @db.Uuid
+  rulePackKey          String                 @map("rule_pack_key")
+  rulePackVersion      Int                    @map("rule_pack_version")
+  rulePackSnapshotJson Json                   @map("rule_pack_snapshot_json")
+  rulePackSha256       String                 @map("rule_pack_sha256")
+  overallStatus        QaReportOverallStatus? @map("overall_status")
+  status               QaJobStatus            @default(QUEUED)
+  inputFingerprint     String?                @map("input_fingerprint")
+  visionSnapshotJson   Json?                  @map("vision_snapshot_json")
+  ocrSnapshotJson      Json?                  @map("ocr_snapshot_json")
+  ocrScenario          String?                @map("ocr_scenario")
+  visionScenario       String?                @map("vision_scenario")
+  createdByUserId      String                 @map("created_by_user_id") @db.Uuid
+  errorJson            Json?                  @map("error_json")
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  completedAt          DateTime?              @map("completed_at") @db.Timestamptz
+
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  project      Project           @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
+  assetVersion AssetVersion      @relation(fields: [workspaceId, assetVersionId], references: [workspaceId, id], onDelete: Restrict)
+  findings     QaFinding[]
+  approvals    Approval[]
+  exportItems  ExportBundleItem[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, projectId, createdAt])
+  @@index([workspaceId, assetVersionId])
+  @@map("qa_reports")
+}
+
+model QaFinding {
+  id              String          @id @db.Uuid
+  workspaceId     String          @map("workspace_id") @db.Uuid
+  reportId        String          @map("report_id") @db.Uuid
+  ruleId          String          @map("rule_id")
+  ruleVersion     Int             @map("rule_version")
+  evaluator       String
+  status          QaFindingStatus
+  severity        String
+  nonWaivable     Boolean         @default(false) @map("non_waivable")
+  score           Float?
+  message         String          @db.Text
+  evidenceJson    Json            @map("evidence_json")
+  suggestedAction String?         @map("suggested_action") @db.Text
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  report    QaReport  @relation(fields: [workspaceId, reportId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, reportId, ruleId])
+  @@index([workspaceId, reportId])
+  @@map("qa_findings")
+}
+
+model Approval {
+  id                  String           @id @db.Uuid
+  workspaceId         String           @map("workspace_id") @db.Uuid
+  projectId           String           @map("project_id") @db.Uuid
+  assetVersionId      String           @map("asset_version_id") @db.Uuid
+  qaReportId          String           @map("qa_report_id") @db.Uuid
+  truthRevisionId     String           @map("truth_revision_id") @db.Uuid
+  shotBriefRevisionId String?          @map("shot_brief_revision_id") @db.Uuid
+  workflowRevisionId  String?          @map("workflow_revision_id") @db.Uuid
+  inputFingerprint    String?          @map("input_fingerprint")
+  decision            ApprovalDecision
+  actorUserId         String           @map("actor_user_id") @db.Uuid
+  actorRole           String           @map("actor_role")
+  reason              String?          @db.Text
+  decidedAt           DateTime         @default(now()) @map("decided_at") @db.Timestamptz
+
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  project      Project            @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
+  assetVersion AssetVersion       @relation(fields: [workspaceId, assetVersionId], references: [workspaceId, id], onDelete: Restrict)
+  qaReport     QaReport           @relation(fields: [workspaceId, qaReportId], references: [workspaceId, id], onDelete: Restrict)
+  exportItems  ExportBundleItem[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, assetVersionId, decidedAt])
+  @@index([workspaceId, qaReportId])
+  @@map("approvals")
+}
+
+model ExportBundle {
+  id              String             @id @db.Uuid
+  workspaceId     String             @map("workspace_id") @db.Uuid
+  projectId       String             @map("project_id") @db.Uuid
+  status          ExportBundleStatus @default(QUEUED)
+  sku             String
+  marketplaceCode String             @map("marketplace_code")
+  truthRevisionId String?            @map("truth_revision_id") @db.Uuid
+  rulePackKey     String             @map("rule_pack_key")
+  rulePackVersion Int                @map("rule_pack_version")
+  manifestJson    Json?              @map("manifest_json")
+  manifestSha256  String?            @map("manifest_sha256")
+  zipStorageKey   String?            @map("zip_storage_key")
+  zipSha256       String?            @map("zip_sha256")
+  zipBytes        Int?               @map("zip_bytes")
+  errorJson       Json?              @map("error_json")
+  createdByUserId String             @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  completedAt     DateTime?          @map("completed_at") @db.Timestamptz
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  project   Project           @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
+  items     ExportBundleItem[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, projectId, createdAt])
+  @@map("export_bundles")
+}
+
+model ExportBundleItem {
+  id             String @id @db.Uuid
+  workspaceId    String @map("workspace_id") @db.Uuid
+  bundleId       String @map("bundle_id") @db.Uuid
+  assetVersionId String @map("asset_version_id") @db.Uuid
+  qaReportId     String @map("qa_report_id") @db.Uuid
+  approvalId     String @map("approval_id") @db.Uuid
+  slot           String
+  variantCode    String @map("variant_code")
+  path           String
+  sha256         String
+  bytes          Int
+  mime           String
+  outputIndex    Int    @default(0) @map("output_index")
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  bundle       ExportBundle @relation(fields: [workspaceId, bundleId], references: [workspaceId, id], onDelete: Restrict)
+  assetVersion AssetVersion @relation(fields: [workspaceId, assetVersionId], references: [workspaceId, id], onDelete: Restrict)
+  qaReport     QaReport     @relation(fields: [workspaceId, qaReportId], references: [workspaceId, id], onDelete: Restrict)
+  approval     Approval     @relation(fields: [workspaceId, approvalId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, bundleId])
+  @@map("export_bundle_items")
 }

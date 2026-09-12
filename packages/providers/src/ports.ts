@@ -89,3 +89,66 @@ export interface ShotPlanProvider {
   readonly name: string;
   draftPlan(request: ShotPlanDraftRequest): Promise<ShotPlanDraftResult>;
 }
+
+/** Fake / real OCR port for QA (W6-03). */
+export type OcrInspectRequest = {
+  assetVersionId: string;
+  scenario?: string;
+  confirmedFacts?: Array<{ key: string; value: unknown }>;
+};
+
+export type OcrInspectResult = {
+  provider: string;
+  modelId: string;
+  tokens: Array<{
+    text: string;
+    confidence: number;
+    region: { x: number; y: number; width: number; height: number };
+    onProductPrint?: boolean;
+  }>;
+};
+
+export interface OcrProvider {
+  readonly name: string;
+  inspect(request: OcrInspectRequest): Promise<OcrInspectResult>;
+}
+
+export type VisionQaRequest = {
+  assetVersionId: string;
+  scenario?: string;
+  checks?: string[];
+};
+
+export type VisionQaResult = {
+  provider: string;
+  modelId: string;
+  identity: {
+    geometry: 'MATCH' | 'REVIEW' | 'FAIL';
+    logo: 'MATCH' | 'REVIEW' | 'FAIL';
+    ports: 'MATCH' | 'REVIEW' | 'FAIL';
+    controls: 'MATCH' | 'REVIEW' | 'FAIL';
+    material: 'MATCH' | 'REVIEW' | 'FAIL';
+    itemCount: 'MATCH' | 'REVIEW' | 'FAIL';
+    overall: 'MATCH' | 'REVIEW' | 'FAIL';
+    regions: Array<{ x: number; y: number; width: number; height: number }>;
+    message?: string;
+  };
+  soldItems: {
+    status: 'PASS' | 'REVIEW' | 'FAIL';
+    inventoryConflict: boolean;
+    segmentationConflict: boolean;
+    message?: string;
+    regions: Array<{ x: number; y: number; width: number; height: number }>;
+  };
+  borderWatermark?: {
+    status: 'PASS' | 'REVIEW' | 'FAIL';
+    confidence: number;
+    regions: Array<{ x: number; y: number; width: number; height: number }>;
+    message?: string;
+  };
+};
+
+export interface VisionQaProvider {
+  readonly name: string;
+  inspectProduct(request: VisionQaRequest): Promise<VisionQaResult>;
+}
