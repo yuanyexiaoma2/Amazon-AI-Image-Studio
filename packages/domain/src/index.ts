@@ -8,3 +8,6 @@ export * from './inspect-errors.js';
 export * from './shot-plan.js';
 export * from './workflow-graph.js';
 export * from './materialize-shot-plan.js';
+export * from './generation-run.js';
+export * from './model-registry.js';
+export * from './credit-ledger.js';

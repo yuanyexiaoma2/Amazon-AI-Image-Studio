@@ -51,6 +51,7 @@ jobs:
       CI: "true"
       RUN_INTEGRATION: "1"
       INSPECT_INLINE: "1"
+      GENERATION_INLINE: "1"
       IMAGE_PROVIDER: fake
 
     steps:

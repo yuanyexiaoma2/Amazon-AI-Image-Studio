@@ -8,6 +8,8 @@
  * 5) W3-B2: materialize approved plan → 7-image workflow graph; B1 save/conflict/cycle still covered
  * Expects a running Next.js server at APP_URL (default http://127.0.0.1:3000).
  * Prefer INSPECT_INLINE=1 so complete() finishes inspect without a separate worker.
+ * Prefer GENERATION_INLINE=1 so runs settle without a separate worker.
+ * 6) W4: model-registry → run → settle → budget gate → AUTH final → webhook → SSE
  */
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createHash } from 'node:crypto';
@@ -738,8 +740,233 @@ async function main() {
   if (!wfSnapJson.revision?.id) fail('missing revision id', wfSnapJson);
   ok('W3-B1 revision snapshot');
 
+  // Prepare executable generate node for W4 run (B1 snapshot graph had no executables)
+  const runGraph = {
+    schemaVersion: 1,
+    nodes: [
+      { id: 'n1', type: 'source_image', position: { x: 12, y: 34 }, config: { schemaVersion: 1 } },
+      {
+        id: 'gen1',
+        type: 'generate',
+        position: { x: 220, y: 34 },
+        config: { schemaVersion: 1, prompt: 'e2e white background product' },
+      },
+    ],
+    edges: [],
+  };
+  const wfRunPatch = await fetch(`${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}`, {
+    method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+      cookie: jarW2.header(),
+      'x-request-id': `e2e-wf-rungraph-${suffix}`,
+    },
+    body: JSON.stringify({ ifRevision: 1, graph: runGraph }),
+  });
+  const wfRunPatched = await wfRunPatch.json();
+  if (wfRunPatch.status !== 200) fail('run graph patch', { status: wfRunPatch.status, wfRunPatched });
+  const wfRunSnap = await fetch(
+    `${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}/snapshot`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-wf-runsnap-${suffix}`,
+      },
+      body: JSON.stringify({ ifRevision: 2 }),
+    },
+  );
+  const wfRunSnapJson = await wfRunSnap.json();
+  if (wfRunSnap.status !== 201) fail('run snapshot', { status: wfRunSnap.status, wfRunSnapJson });
+  ok('W4 prep: generate node snapshot');
+
+  // ─── W4: model registry, run, credits, webhook, SSE ─────────────────
+  const regRes = await fetch(`${base}/api/workspaces/${wsW2}/model-registry`, {
+    headers: { cookie: jarW2.header(), 'x-request-id': `e2e-registry-${suffix}` },
+  });
+  const regJson = await regRes.json();
+  if (regRes.status !== 200) fail('model-registry', { status: regRes.status, regJson });
+  if (!Array.isArray(regJson.models) || regJson.models.length < 1) fail('expected models', regJson);
+  if (!regJson.credits || regJson.credits.availableMicrounits < 1) fail('expected credits grant', regJson);
+  ok('W4-01 model-registry + credit snapshot');
+
+  const revisionId = wfRunSnapJson.revision.id;
+  const idem = `e2e-run-${suffix}`;
+  const runCreate = await fetch(
+    `${base}/api/workspaces/${wsW2}/workflow-revisions/${revisionId}/runs`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-run-${suffix}`,
+      },
+      body: JSON.stringify({
+        scope: { type: 'ALL' },
+        idempotencyKey: idem,
+        budgetLimit: { currency: 'USD', amount: 5 },
+        confirmBudget: true,
+        scenario: 'SUCCESS',
+      }),
+    },
+  );
+  const runJson = await runCreate.json();
+  if (runCreate.status !== 201 && runCreate.status !== 200) {
+    fail('create run', { status: runCreate.status, runJson });
+  }
+  if (!runJson.run?.id) fail('missing run id', runJson);
+  ok('W4-02/03 create run (reserve+outbox)');
+
+  const runReplay = await fetch(
+    `${base}/api/workspaces/${wsW2}/workflow-revisions/${revisionId}/runs`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-run-replay-${suffix}`,
+      },
+      body: JSON.stringify({
+        scope: { type: 'ALL' },
+        idempotencyKey: idem,
+        confirmBudget: true,
+      }),
+    },
+  );
+  const runReplayJson = await runReplay.json();
+  if (runReplay.status !== 200) fail('idempotent run replay', { status: runReplay.status, runReplayJson });
+  if (runReplayJson.run?.id !== runJson.run.id) fail('idempotency broke', runReplayJson);
+  ok('W4-02 run idempotencyKey replay');
+
+  let finalRun = null;
+  for (let i = 0; i < 40; i++) {
+    const g = await fetch(`${base}/api/workspaces/${wsW2}/runs/${runJson.run.id}`, {
+      headers: { cookie: jarW2.header(), 'x-request-id': `e2e-run-poll-${suffix}-${i}` },
+    });
+    finalRun = await g.json();
+    if (['SUCCEEDED', 'FAILED_FINAL', 'CANCELED'].includes(finalRun.status)) break;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  if (!finalRun || finalRun.status !== 'SUCCEEDED') {
+    fail('run did not succeed', finalRun);
+  }
+  ok('W4-02 worker settle → SUCCEEDED');
+
+  // Budget gate
+  const budgetDeny = await fetch(
+    `${base}/api/workspaces/${wsW2}/workflow-revisions/${revisionId}/runs`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-budget-${suffix}`,
+      },
+      body: JSON.stringify({
+        scope: { type: 'ALL' },
+        idempotencyKey: `e2e-budget-${suffix}`,
+        budgetLimit: { currency: 'USD', amount: 0.000001 },
+        confirmBudget: false,
+      }),
+    },
+  );
+  const budgetJson = await budgetDeny.json();
+  if (budgetDeny.status !== 402 || budgetJson.error?.code !== 'BUDGET_EXCEEDED') {
+    fail('expected BUDGET_EXCEEDED', { status: budgetDeny.status, budgetJson });
+  }
+  ok('W4-03 budget gate');
+
+  // AUTH failure matrix (no auto success)
+  const authRun = await fetch(
+    `${base}/api/workspaces/${wsW2}/workflow-revisions/${revisionId}/runs`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-auth-${suffix}`,
+      },
+      body: JSON.stringify({
+        scope: { type: 'ALL' },
+        idempotencyKey: `e2e-auth-${suffix}`,
+        confirmBudget: true,
+        budgetLimit: { currency: 'USD', amount: 5 },
+        scenario: 'AUTH',
+      }),
+    },
+  );
+  const authJson = await authRun.json();
+  if (authRun.status !== 201 && authRun.status !== 200) fail('auth scenario run', authJson);
+  let authFinal = null;
+  for (let i = 0; i < 40; i++) {
+    const g = await fetch(`${base}/api/workspaces/${wsW2}/runs/${authJson.run.id}`, {
+      headers: { cookie: jarW2.header() },
+    });
+    authFinal = await g.json();
+    if (['FAILED_FINAL', 'FAILED_RETRYABLE', 'SUCCEEDED'].includes(authFinal.status)) break;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  if (!authFinal || authFinal.status !== 'FAILED_FINAL') {
+    fail('AUTH should be FAILED_FINAL (no auto-retry)', authFinal);
+  }
+  ok('W4-06 AUTH → FAILED_FINAL (no auto-retry)');
+
+  // Webhook verify + idempotent event id
+  const { createHmac } = await import('node:crypto');
+  // Find a submission external job from succeeded run — use fake webhook with unknown job first
+  const whBody = JSON.stringify({
+    eventId: `evt-${suffix}`,
+    externalJobId: 'fake-unknown-job',
+    status: 'SUCCEEDED',
+  });
+  const secret = process.env.FAKE_WEBHOOK_SECRET || 'fake-webhook-secret';
+  const sig = createHmac('sha256', secret).update(whBody).digest('hex');
+  const wh1 = await fetch(`${base}/api/v1/providers/fake/webhook`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-fake-signature': sig,
+      'x-request-id': `e2e-wh-${suffix}`,
+    },
+    body: whBody,
+  });
+  const wh1Json = await wh1.json();
+  if (wh1.status !== 202 || wh1Json.warning !== 'UNKNOWN_EXTERNAL_JOB') {
+    fail('webhook unknown job', { status: wh1.status, wh1Json });
+  }
+  const wh2 = await fetch(`${base}/api/v1/providers/fake/webhook`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-fake-signature': sig,
+      'x-request-id': `e2e-wh2-${suffix}`,
+    },
+    body: whBody,
+  });
+  const wh2Json = await wh2.json();
+  if (wh2.status !== 200 || !wh2Json.duplicate) {
+    fail('webhook duplicate should 200 duplicate', { status: wh2.status, wh2Json });
+  }
+  ok('W4-04 webhook verify + idempotent event id');
+
+  // SSE endpoint opens
+  const sse = await fetch(`${base}/api/workspaces/${wsW2}/events?projectId=${projectId}`, {
+    headers: { cookie: jarW2.header(), accept: 'text/event-stream', 'x-request-id': `e2e-sse-${suffix}` },
+  });
+  if (sse.status !== 200) fail('SSE status', { status: sse.status });
+  const ct = sse.headers.get('content-type') || '';
+  if (!ct.includes('text/event-stream')) fail('SSE content-type', ct);
+  // read a bit then cancel
+  const reader = sse.body.getReader();
+  const { value } = await reader.read();
+  const chunk = new TextDecoder().decode(value || new Uint8Array());
+  if (!chunk.includes('ready')) fail('SSE missing ready', chunk);
+  await reader.cancel();
+  ok('W4-05 SSE /events?projectId=');
+
   console.log(
-    'E2E PASS: W2 Truth + W3-A Shot Plan + W3-B2 materialize + W3-B1 workflow create/save/conflict/cycle/snapshot (Fake only)',
+    'E2E PASS: W2 Truth + W3-A Shot Plan + W3-B2 materialize + W3-B1 workflow + W4 run/credits/webhook/SSE (Fake only)',
   );
 }
 

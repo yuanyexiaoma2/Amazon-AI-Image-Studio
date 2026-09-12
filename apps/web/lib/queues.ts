@@ -134,3 +134,91 @@ export async function enqueueInspect(data: InspectJobData): Promise<void> {
   });
   await enqueueInspectFromOutbox(created);
 }
+
+export const GENERATION_QUEUE = 'generation-attempt';
+
+export type GenerationAttemptJobData = {
+  workspaceId: string;
+  projectId: string;
+  runId: string;
+  itemId: string;
+  attemptId: string;
+};
+
+let generationQueue: Queue<GenerationAttemptJobData> | null = null;
+
+export function getGenerationQueue(): Queue<GenerationAttemptJobData> {
+  if (!generationQueue) {
+    const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
+    generationQueue = new Queue<GenerationAttemptJobData>(GENERATION_QUEUE, {
+      connection: connectionFromUrl(redisUrl),
+    });
+  }
+  return generationQueue;
+}
+
+export async function publishGenerationOutbox(outbox: {
+  id: string;
+  workspaceId: string;
+  jobId: string;
+  payload: unknown;
+}): Promise<void> {
+  const outboxRepo = new OutboxRepository(prisma);
+  const data = outbox.payload as GenerationAttemptJobData;
+
+  if (process.env.GENERATION_INLINE === '1' || process.env.GENERATION_INLINE === 'true') {
+    const { runGenerationAttemptInline } = await import('./run-generation-inline');
+    await runGenerationAttemptInline(data);
+    await outboxRepo.markPublished(outbox.workspaceId, outbox.id);
+    return;
+  }
+
+  try {
+    await getGenerationQueue().add('generation-attempt', data, {
+      jobId: outbox.jobId,
+      removeOnComplete: 100,
+      removeOnFail: 50,
+      attempts: 6,
+      backoff: { type: 'exponential', delay: 1000 },
+    });
+    await outboxRepo.markPublished(outbox.workspaceId, outbox.id);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/job.+already exists|exists/i.test(msg)) {
+      await outboxRepo.markPublished(outbox.workspaceId, outbox.id);
+      return;
+    }
+    await outboxRepo.bumpAttempt(outbox.workspaceId, outbox.id, msg);
+    throw err;
+  }
+}
+
+export async function enqueueGenerationFromOutbox(outbox: {
+  id: string;
+  workspaceId: string;
+  jobId: string;
+  payload: unknown;
+}): Promise<{ published: boolean }> {
+  try {
+    await publishGenerationOutbox(outbox);
+    return { published: true };
+  } catch {
+    return { published: false };
+  }
+}
+
+export async function relayPendingGenerationOutbox(limit = 50): Promise<number> {
+  const outboxRepo = new OutboxRepository(prisma);
+  const pending = await outboxRepo.listPending(limit);
+  let published = 0;
+  for (const row of pending) {
+    if (!row.jobId.startsWith('gen-attempt-')) continue;
+    try {
+      await publishGenerationOutbox(row);
+      published += 1;
+    } catch {
+      // leave for recovery
+    }
+  }
+  return published;
+}

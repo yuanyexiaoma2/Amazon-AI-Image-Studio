@@ -84,3 +84,8 @@ export class OutboxRepository {
 export function inspectJobId(uploadId: string): string {
   return `inspect-${uploadId}`;
 }
+
+/** Stable BullMQ job id for generation attempt. */
+export function generationAttemptJobId(attemptId: string): string {
+  return `gen-attempt-${attemptId}`;
+}
