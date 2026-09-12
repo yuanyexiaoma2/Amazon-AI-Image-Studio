@@ -12,12 +12,22 @@ import {
   budgetExceeded,
   canCancelRun,
   canRetryAttempt,
+  computeInputFingerprint,
+  extractPromptFromInputs,
+  extractReferenceAssetVersionIds,
+  extractTruthRevisionId,
   getModelByKey,
+  isDeterministicNodeType,
+  operationForNodeType,
+  resolutionToPixels,
+  resolvePortInputs,
   reserveIdempotencyKey,
   refundIdempotencyKey,
   settleIdempotencyKey,
   type BudgetLimit,
+  type WorkflowGraph,
 } from '@studio/domain';
+import { NodeResultRepository } from './node-results.js';
 import { newId } from '../ids.js';
 import { OutboxRepository, generationAttemptJobId } from './outbox.js';
 import { CreditRepository, CreditInsufficientError } from './credits.js';
@@ -109,10 +119,12 @@ function selectNodes(graph: GraphJson, scope: CreateRunInput['scope']): GraphNod
 export class GenerationRepository {
   private readonly outbox: OutboxRepository;
   private readonly credits: CreditRepository;
+  private readonly nodeResults: NodeResultRepository;
 
   constructor(private readonly db: PrismaClient) {
     this.outbox = new OutboxRepository(db);
     this.credits = new CreditRepository(db);
+    this.nodeResults = new NodeResultRepository(db);
   }
 
   async getRun(workspaceId: string, runId: string): Promise<GenerationRunDetail | null> {
@@ -229,7 +241,105 @@ export class GenerationRepository {
         },
       });
 
+      const fullGraph = {
+        schemaVersion: 1,
+        nodes: (graph.nodes ?? []).map((n) => ({
+          id: n.id,
+          type: n.type,
+          position: { x: 0, y: 0 },
+          config: n.config ?? {},
+        })),
+        edges: (graph.edges ?? []) as WorkflowGraph['edges'],
+      } satisfies WorkflowGraph;
+
       for (const node of nodes) {
+        const nodeModel =
+          getModelByKey(
+            (typeof node.config?.modelKey === 'string' ? node.config.modelKey : undefined) ??
+              input.modelKey ??
+              FAKE_PRIMARY_MODEL.key,
+          ) ?? model;
+        const op = operationForNodeType(node.type) ?? 'GENERATE';
+        const inputs = resolvePortInputs(fullGraph, node.id);
+        const { prompt, negativePrompt, shotBriefId } = extractPromptFromInputs(
+          { id: node.id, type: node.type, position: { x: 0, y: 0 }, config: node.config },
+          inputs,
+        );
+        const truthRevisionId = extractTruthRevisionId(
+          { id: node.id, type: node.type, position: { x: 0, y: 0 }, config: node.config },
+          inputs,
+        );
+        const refIds = extractReferenceAssetVersionIds(inputs);
+        const dims = resolutionToPixels(
+          typeof node.config?.resolution === 'string' ? node.config.resolution : '2K',
+        );
+        const count =
+          typeof node.config?.count === 'number' && node.type === 'generate'
+            ? Math.min(8, Math.max(1, node.config.count as number))
+            : 1;
+
+        // Resolve sha256 for upstream assets when present (unknown → still fingerprint, mark unreproducible)
+        const upstreamAssets: Array<{
+          portId: string;
+          order: number;
+          assetVersionId: string;
+          sha256: string;
+        }> = [];
+        const unknownFields: string[] = [];
+        for (let i = 0; i < refIds.length; i++) {
+          const avId = refIds[i]!;
+          const ver = await tx.assetVersion.findFirst({
+            where: { id: avId, workspaceId: input.workspaceId },
+          });
+          if (!ver) {
+            unknownFields.push(`upstreamAssets[${i}].sha256`);
+            upstreamAssets.push({
+              portId: inputs.find((x) => x.sourceConfig.assetVersionId === avId)?.portId ?? 'references',
+              order: i,
+              assetVersionId: avId,
+              sha256: 'unknown',
+            });
+          } else {
+            upstreamAssets.push({
+              portId: inputs.find((x) => x.sourceConfig.assetVersionId === avId)?.portId ?? 'references',
+              order: i,
+              assetVersionId: avId,
+              sha256: ver.sha256,
+            });
+          }
+        }
+
+        const fp = computeInputFingerprint({
+          nodeType: node.type,
+          nodeConfig: (node.config ?? {}) as Record<string, unknown>,
+          upstreamAssets,
+          masks: [],
+          truthRevisionId,
+          shotBriefRevisionId: shotBriefId,
+          prompt,
+          negativePrompt,
+          modelRegistryConfigVersion: nodeModel.configVersion,
+          unknownFields,
+        });
+
+        // Reuse path: deterministic always; generative only when reuseSucceededInputs=true
+        const reusable = await tx.nodeResult.findFirst({
+          where: {
+            workspaceId: input.workspaceId,
+            workflowRevisionId: revision.id,
+            nodeId: node.id,
+            status: 'SUCCEEDED',
+            inputFingerprint: fp.sha256,
+          },
+        });
+        // Spec §32.1: generative ops must never silently reuse — only deterministic
+        // auto-reuse when fingerprint matches. Fake scenario overrides always re-run.
+        const mayReuse =
+          !!reusable &&
+          !input.scenario &&
+          isDeterministicNodeType(node.type) &&
+          input.reuseSucceededInputs !== false;
+
         const itemId = newId();
         const itemKey = `${runId}:${node.id}:0`;
         await tx.generationItem.create({
@@ -240,21 +350,50 @@ export class GenerationRepository {
             nodeId: node.id,
             outputIndex: 0,
             itemKey,
-            status: 'QUEUED',
-            modelKey: model.key,
+            status: mayReuse ? 'SUCCEEDED' : 'QUEUED',
+            modelKey: nodeModel.key,
           },
         });
+
+        if (mayReuse) {
+          continue;
+        }
 
         const attemptId = newId();
         const attemptNo = 1;
         const attemptIdem = `${itemKey}:attempt:${attemptNo}`;
-        const prompt =
-          typeof node.config?.prompt === 'string'
-            ? node.config.prompt
-            : `Generate for node ${node.id}`;
         const scenario =
           input.scenario ??
           (typeof node.config?.scenario === 'string' ? node.config.scenario : undefined);
+
+        const requestSnapshot = {
+          operation: op,
+          prompt,
+          negativePrompt: negativePrompt || undefined,
+          modelId: nodeModel.modelId,
+          width: dims.width,
+          height: dims.height,
+          aspectRatio: typeof node.config?.ratio === 'string' ? node.config.ratio : '1:1',
+          resolutionTier: typeof node.config?.resolution === 'string' ? node.config.resolution : '2K',
+          count,
+          seed: typeof node.config?.seed === 'number' ? node.config.seed : undefined,
+          idempotencyKey: attemptIdem,
+          scenario,
+          nodeId: node.id,
+          nodeType: node.type,
+          truthRevisionId,
+          shotBriefId,
+          referenceAssetVersionIds: refIds,
+          inputFingerprint: fp.sha256,
+          fingerprintReproducible: fp.reproducible,
+          subjectHint:
+            typeof node.config?.subjectHint === 'string' ? node.config.subjectHint : undefined,
+          edgeMode: typeof node.config?.edgeMode === 'string' ? node.config.edgeMode : undefined,
+          clientMetadata: {
+            workflowRevisionId: revision.id,
+            projectId: revision.workflow.projectId,
+          },
+        };
 
         await tx.generationAttempt.create({
           data: {
@@ -263,29 +402,21 @@ export class GenerationRepository {
             itemId,
             attemptNo,
             idempotencyKey: attemptIdem,
-            provider: model.provider,
-            modelId: model.modelId,
-            modelSnapshotJson: model as unknown as Prisma.InputJsonValue,
-            requestSnapshot: {
-              operation: 'GENERATE',
-              prompt,
-              modelId: model.modelId,
-              width: 1024,
-              height: 1024,
-              idempotencyKey: attemptIdem,
-              scenario,
-              nodeId: node.id,
-              nodeType: node.type,
-            } as Prisma.InputJsonValue,
+            provider: nodeModel.provider,
+            modelId: nodeModel.modelId,
+            modelSnapshotJson: nodeModel as unknown as Prisma.InputJsonValue,
+            requestSnapshot: requestSnapshot as Prisma.InputJsonValue,
+            inputFingerprint: fp.sha256,
             status: 'QUEUED',
           },
         });
 
+        const reserveMicro = amountToMicrounits(nodeModel.pricing.estimatedUnitCost) * count;
         await this.credits.appendEvent(
           input.workspaceId,
           {
             type: 'RESERVE',
-            microunits: unitMicro,
+            microunits: reserveMicro,
             idempotencyKey: reserveIdempotencyKey(attemptId),
             attemptId,
             runId,
@@ -310,6 +441,15 @@ export class GenerationRepository {
           },
         });
         outboxRows.push(row);
+      }
+
+      // If every item was satisfied by fingerprint reuse, mark run SUCCEEDED.
+      const items = await tx.generationItem.findMany({ where: { runId, workspaceId: input.workspaceId } });
+      if (items.length > 0 && items.every((i) => i.status === 'SUCCEEDED')) {
+        await tx.generationRun.update({
+          where: { id: runId },
+          data: { status: 'SUCCEEDED' },
+        });
       }
 
       return { kind: 'created' as const, run: createdRun };

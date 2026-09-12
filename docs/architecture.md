@@ -82,3 +82,12 @@ Triggers on `main`, `feat/**`, `feature/**`, `fix/**`.
 - Webhook: raw body HMAC; idempotent `provider_events`; unknown external job does not guess-match.
 - SSE: `GET .../events?projectId=` streams `progress_events` (poll-backed).
 - Retry policy (§9.3): AUTH/VALIDATION/POLICY/QUOTA no auto-retry; RATE_LIMIT/TRANSIENT with backoff; TIMEOUT ≤2; UNKNOWN once.
+
+## W5-A executors (generate / fingerprint / remove_background)
+
+- Node executors still dispatch via W4 Run → Attempt → Outbox → `generation-attempt` worker (or `GENERATION_INLINE`).
+- Input fingerprint: RFC 8785 JCS → SHA-256 in `@studio/domain` (`input-fingerprint.ts`); stored on `generation_attempts.input_fingerprint` and `node_results`.
+- STALE: `node_results.status=STALE` (+ optional `generation_outputs.disposition=STALE`); BFS descendants per §32.2; Truth approve + workflow snapshot graph-diff apply propagation. Does not delete outputs.
+- `remove_background`: Fake returns IMAGE + MASK; worker ingests GENERATED + MASK AssetVersions (full request WxH on version metadata).
+- Webhook early-arrival: unknown `externalJobId` stored with `processedAt=null` (orphan); reconciled when `provider_submissions` row appears; `processedAt` set only after successful apply.
+- Fake only while ADR-0003 / W0-02 BLOCKED_EXTERNAL.

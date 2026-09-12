@@ -1,4 +1,4 @@
-// Amazon AI Image Studio — W1+W2+W3-A+W3-B1+W4 Prisma schema
+// Amazon AI Image Studio — W1+W2+W3-A+W3-B1+W4+W5-A Prisma schema
 // IDs: UUIDv7 generated in application code; DB type uuid.
 // Times: timestamptz via Prisma DateTime (@db.Timestamptz)
 // Tenancy: workspace_id on all tenant tables; composite FK (workspace_id, parent_id).
@@ -205,6 +205,7 @@ model Workspace {
   creditLedgerEvents  CreditLedgerEvent[]
   providerCostEvents  ProviderCostEvent[]
   progressEvents      ProgressEvent[]
+  nodeResults         NodeResult[]
 
   @@index([ownerUserId])
   @@unique([id]) // enables composite FK targets (workspace_id, id)
@@ -249,6 +250,7 @@ model Project {
   shotPlanDocument ShotPlanDocument?
   workflows        Workflow[]
   generationRuns   GenerationRun[]
+  nodeResults      NodeResult[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, sku])
@@ -628,10 +630,51 @@ model WorkflowRevision {
   workflow   Workflow   @relation("WorkflowRevisions", fields: [workspaceId, workflowId], references: [workspaceId, id], onDelete: Restrict)
   currentFor Workflow[] @relation("WorkflowCurrentRevision")
   generationRuns GenerationRun[]
+  nodeResults    NodeResult[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, workflowId, revision])
   @@map("workflow_revisions")
+}
+
+// ─── W5-A: Node results / fingerprint / STALE ────────────────────────────────
+
+enum NodeExecutionStatus {
+  IDLE
+  STALE
+  BLOCKED
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+/// Per workflow-revision node execution cache / STALE marker (spec §8.1 / §32.1–32.2).
+model NodeResult {
+  id                 String              @id @db.Uuid
+  workspaceId        String              @map("workspace_id") @db.Uuid
+  projectId          String              @map("project_id") @db.Uuid
+  workflowRevisionId String              @map("workflow_revision_id") @db.Uuid
+  nodeId             String              @map("node_id")
+  status             NodeExecutionStatus @default(IDLE)
+  inputFingerprint   String?             @map("input_fingerprint")
+  staleReason        String?             @map("stale_reason") @db.Text
+  staleCause         String?             @map("stale_cause")
+  outputJson         Json                @default("{}") @map("output_json")
+  lastAttemptId      String?             @map("last_attempt_id") @db.Uuid
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  project          Project          @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
+  workflowRevision WorkflowRevision @relation(fields: [workspaceId, workflowRevisionId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, workflowRevisionId, nodeId])
+  @@index([workspaceId, projectId, status])
+  @@index([workspaceId, inputFingerprint])
+  @@map("node_results")
 }
 
 // ─── W4: Model registry snapshots, runs, credits, provider events ───────────
@@ -660,6 +703,7 @@ enum GenerationItemStatus {
   FAILED_FINAL
   CANCEL_REQUESTED
   CANCELED
+  SKIPPED_DEPENDENCY
 }
 
 enum GenerationAttemptStatus {
@@ -696,6 +740,7 @@ enum GenerationOutputDisposition {
   LATE_AFTER_CANCEL
   CORRUPT
   REJECTED
+  STALE
 }
 
 model ModelRegistryEntry {
@@ -785,6 +830,7 @@ model GenerationAttempt {
   modelId           String                   @map("model_id")
   modelSnapshotJson Json                     @map("model_snapshot_json")
   requestSnapshot   Json                     @map("request_snapshot")
+  inputFingerprint  String?                  @map("input_fingerprint")
   status            GenerationAttemptStatus  @default(QUEUED)
   errorClass        String?                  @map("error_class")
   errorMessage      String?                  @map("error_message") @db.Text

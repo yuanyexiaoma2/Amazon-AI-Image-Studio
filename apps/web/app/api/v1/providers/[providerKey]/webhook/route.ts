@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma, newId } from '@studio/db';
+import { prisma, newId, reconcileOrphanProviderEvents } from '@studio/db';
 import { FakeImageProviderAdapter, ProviderAdapterError } from '@studio/providers';
 import { getOrCreateRequestId } from '@/lib/request-id';
 import { makeApiError } from '@studio/contracts';
@@ -9,6 +9,8 @@ type Ctx = { params: Promise<{ providerKey: string }> };
 /**
  * POST /api/v1/providers/{providerKey}/webhook
  * Raw body signature verify; provider event id idempotent (spec §12.6).
+ * W5-A ride-along: early-arrival events are stored as orphans (processedAt=null)
+ * and reconciled when the matching ProviderSubmission appears.
  */
 export async function POST(request: Request, context: Ctx) {
   const requestId = getOrCreateRequestId(request.headers.get('x-request-id'));
@@ -46,6 +48,7 @@ export async function POST(request: Request, context: Ctx) {
       },
     },
   });
+  // Only skip as duplicate after successful apply (processedAt set).
   if (existing?.processedAt) {
     return NextResponse.json(
       { ok: true, duplicate: true, eventId: verified.providerEventId },
@@ -61,20 +64,23 @@ export async function POST(request: Request, context: Ctx) {
     : null;
 
   if (!submission) {
-    await prisma.providerEvent.create({
-      data: {
-        id: newId(),
-        workspaceId: null,
-        provider: providerKey,
-        externalEventId: verified.providerEventId,
-        externalJobId: verified.externalJobId,
-        payloadHash: verified.payloadHash,
-        payloadJson: verified.raw as never,
-        processedAt: new Date(),
-      },
-    });
+    // Orphan / early-arrival: persist with processedAt=null for later reconcile.
+    if (!existing) {
+      await prisma.providerEvent.create({
+        data: {
+          id: newId(),
+          workspaceId: null,
+          provider: providerKey,
+          externalEventId: verified.providerEventId,
+          externalJobId: verified.externalJobId,
+          payloadHash: verified.payloadHash,
+          payloadJson: verified.raw as never,
+          processedAt: null,
+        },
+      });
+    }
     return NextResponse.json(
-      { ok: true, warning: 'UNKNOWN_EXTERNAL_JOB' },
+      { ok: true, warning: 'UNKNOWN_EXTERNAL_JOB', orphan: true },
       { status: 202, headers: { 'x-request-id': requestId } },
     );
   }
@@ -126,10 +132,14 @@ export async function POST(request: Request, context: Ctx) {
     },
   });
 
+  // Mark processed only after successful apply.
   await prisma.providerEvent.updateMany({
     where: { provider: providerKey, externalEventId: verified.providerEventId },
     data: { processedAt: new Date(), workspaceId: submission.workspaceId },
   });
+
+  // Also drain any other orphans for this job (idempotent).
+  await reconcileOrphanProviderEvents(prisma, providerKey, verified.externalJobId);
 
   return NextResponse.json(
     { ok: true, duplicate: false, eventId: verified.providerEventId },

@@ -50,7 +50,14 @@ export const FAKE_PRIMARY_MODEL: ModelRegistryEntry = {
   configVersion: 1,
 };
 
-export const DEFAULT_MODEL_REGISTRY: ModelRegistryEntry[] = [FAKE_PRIMARY_MODEL];
+/** Alias used by generate node default config / materialize (W3-B2). */
+export const FAKE_EDIT_MODEL: ModelRegistryEntry = {
+  ...FAKE_PRIMARY_MODEL,
+  key: 'primary-image-edit',
+  displayName: 'Fake Primary Product Image (edit alias)',
+};
+
+export const DEFAULT_MODEL_REGISTRY: ModelRegistryEntry[] = [FAKE_PRIMARY_MODEL, FAKE_EDIT_MODEL];
 
 export function listEnabledModels(
   registry: ReadonlyArray<ModelRegistryEntry> = DEFAULT_MODEL_REGISTRY,

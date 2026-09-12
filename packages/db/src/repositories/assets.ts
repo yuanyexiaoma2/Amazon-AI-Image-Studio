@@ -237,4 +237,69 @@ export class AssetRepository {
       throw new Error('Evidence Asset Version not in current project/workspace');
     }
   }
+
+  /**
+   * Create a READY GENERATED/MASK asset with a single version + ORIGINAL_UPLOAD (or MASK_PNG) representation.
+   * Used by W5 node executors after Fake/provider success.
+   */
+  async createGeneratedAssetWithVersion(input: {
+    workspaceId: string;
+    projectId: string;
+    createdByUserId: string;
+    kind: 'GENERATED' | 'MASK' | 'REFERENCE';
+    originalFilename: string;
+    sha256: string;
+    mime: string;
+    width: number;
+    height: number;
+    byteSize: number;
+    storageKey: string;
+    representationKind?: 'ORIGINAL_UPLOAD' | 'MASK_PNG' | 'NORMALIZED_PNG';
+    metadataJson?: Prisma.InputJsonValue;
+    primaryParentVersionId?: string | null;
+  }): Promise<{ asset: Asset; version: AssetVersion; representation: AssetRepresentation }> {
+    const assetId = newId();
+    const versionId = newId();
+    const asset = await this.db.asset.create({
+      data: {
+        id: assetId,
+        workspaceId: input.workspaceId,
+        projectId: input.projectId,
+        kind: input.kind,
+        status: 'READY',
+        originalFilename: input.originalFilename,
+        createdByUserId: input.createdByUserId,
+      },
+    });
+    const version = await this.db.assetVersion.create({
+      data: {
+        id: versionId,
+        workspaceId: input.workspaceId,
+        assetId,
+        versionNumber: 1,
+        sha256: input.sha256,
+        mime: input.mime,
+        width: input.width,
+        height: input.height,
+        colorSpace: 'sRGB',
+        byteSize: input.byteSize,
+        metadataJson: input.metadataJson ?? {},
+        primaryParentVersionId: input.primaryParentVersionId ?? null,
+      },
+    });
+    const representation = await this.addRepresentation({
+      workspaceId: input.workspaceId,
+      assetVersionId: versionId,
+      kind: input.representationKind ?? (input.kind === 'MASK' ? 'MASK_PNG' : 'ORIGINAL_UPLOAD'),
+      storageKey: input.storageKey,
+      sha256: input.sha256,
+      bytes: input.byteSize,
+      width: input.width,
+      height: input.height,
+      contentType: input.mime,
+    });
+    await this.setCurrentVersion(input.workspaceId, assetId, versionId);
+    const ready = await this.findById(input.workspaceId, assetId);
+    return { asset: ready!, version, representation };
+  }
 }

@@ -6,7 +6,7 @@
 
 **Repo type (W0-01):** GREENFIELD — empty public GitHub repo; no prior application code.
 
-**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 work 2026-09-12 Asia/Shanghai (UTC+8).
+**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 / W5-A work 2026-09-12 Asia/Shanghai (UTC+8).
 
 ---
 
@@ -233,16 +233,32 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 ---
 
-## W5-A — Executors foundation (IN PROGRESS)
+## W5-A — Executors foundation (DONE — awaiting 审稿)
 
 **Branch:** `feature/w5a-executors` (from main `16d67b3`)  
 **Acceptance unit:** W5-01 + W5-08 + W5-02 (+ webhook early-arrival orphan reconcile per 审稿)
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W5-01 | `generate` node executor | IN_PROGRESS | Wire node executor through W4 Run/Attempt; Fake only. |
-| W5-08 | Input fingerprint + downstream STALE | IN_PROGRESS | RFC 8785 JCS → SHA-256; STALE propagation §32.2. |
-| W5-02 | `remove_background` + full-res mask | IN_PROGRESS | Fake REMOVE_BACKGROUND + MASK asset version. |
-| (ride) | Webhook early-arrival reconcile | IN_PROGRESS | `processedAt=null` orphan until submission; 审稿评估成立. |
+| W5-01 | `generate` node executor | DONE | Request snapshot per node type/ports; Fake GENERATE through W4 Run/Attempt/Worker; ingest GENERATED AssetVersion on success; NodeResult SUCCEEDED + fingerprint. |
+| W5-08 | Input fingerprint + downstream STALE | DONE | Domain RFC 8785 JCS → SHA-256 (`input-fingerprint.ts`); STALE BFS §32.2; `node_results` + disposition STALE; graph snapshot + Truth approve propagate; no silent reuse of STALE (reuse requires SUCCEEDED+matching fingerprint). |
+| W5-02 | `remove_background` + full-res mask | DONE | Fake REMOVE_BACKGROUND returns image+mask roles; MASK AssetVersion + Mask row; full request WxH recorded on version. |
+| (ride) | Webhook early-arrival reconcile | DONE | Orphan events `processedAt=null`; replay stays 202; reconcile when submission appears; `processedAt` only after apply. |
+
+### W5-A commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm db:migrate:deploy` | Includes `20260912040000_w5a_node_results` |
+| `pnpm lint` / `typecheck` / `test` / `build` | Required green before PR |
+| `pnpm test:e2e` | Extends with remove_background+generate Fake success + orphan webhook semantics (`GENERATION_INLINE=1`) |
+| Provider | **FakeImageProviderAdapter only** (ADR-0003); no real keys |
+| Out of scope | W5-B/C; W4-07 / W0-02 / W2-07 |
 
 §19.5 real-Provider success cases: **挂起** (ADR-0003). Fake matrix required.
+
+**DONE evidence package (W5-A):**
+- Branch: `feature/w5a-executors` (see PR for HEAD SHA + CI)
+- Local: domain fingerprint/STALE unit tests; Fake REMOVE_BACKGROUND mask roles; webhook orphan 202; e2e generate+remove_background SUCCEEDED (`GENERATION_INLINE=1`)
+- Migration: `20260912040000_w5a_node_results`
+- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge.

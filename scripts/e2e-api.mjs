@@ -10,6 +10,7 @@
  * Prefer INSPECT_INLINE=1 so complete() finishes inspect without a separate worker.
  * Prefer GENERATION_INLINE=1 so runs settle without a separate worker.
  * 6) W4: model-registry → run → settle → budget gate → AUTH final → webhook → SSE
+ * 7) W5-A: generate fingerprint/assets; remove_background+MASK; webhook orphan reconcile; STALE
  */
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createHash } from 'node:crypto';
@@ -932,9 +933,10 @@ async function main() {
     body: whBody,
   });
   const wh1Json = await wh1.json();
-  if (wh1.status !== 202 || wh1Json.warning !== 'UNKNOWN_EXTERNAL_JOB') {
-    fail('webhook unknown job', { status: wh1.status, wh1Json });
+  if (wh1.status !== 202 || wh1Json.warning !== 'UNKNOWN_EXTERNAL_JOB' || !wh1Json.orphan) {
+    fail('webhook unknown job should be orphan', { status: wh1.status, wh1Json });
   }
+  // Replay while still orphan — must NOT be treated as processed duplicate.
   const wh2 = await fetch(`${base}/api/v1/providers/fake/webhook`, {
     method: 'POST',
     headers: {
@@ -945,10 +947,10 @@ async function main() {
     body: whBody,
   });
   const wh2Json = await wh2.json();
-  if (wh2.status !== 200 || !wh2Json.duplicate) {
-    fail('webhook duplicate should 200 duplicate', { status: wh2.status, wh2Json });
+  if (wh2.status !== 202 || wh2Json.warning !== 'UNKNOWN_EXTERNAL_JOB') {
+    fail('orphan replay should stay 202 UNKNOWN_EXTERNAL_JOB', { status: wh2.status, wh2Json });
   }
-  ok('W4-04 webhook verify + idempotent event id');
+  ok('W4-04/W5-A webhook verify + orphan early-arrival (processedAt=null)');
 
   // SSE endpoint opens
   const sse = await fetch(`${base}/api/workspaces/${wsW2}/events?projectId=${projectId}`, {
@@ -965,8 +967,130 @@ async function main() {
   await reader.cancel();
   ok('W4-05 SSE /events?projectId=');
 
+  // ─── W5-A: remove_background + generate fingerprint/assets ───
+  const w5Graph = {
+    schemaVersion: 1,
+    nodes: [
+      {
+        id: 'src1',
+        type: 'source_image',
+        position: { x: 0, y: 0 },
+        config: { schemaVersion: 1 },
+      },
+      {
+        id: 'cut1',
+        type: 'remove_background',
+        position: { x: 200, y: 0 },
+        config: { schemaVersion: 1, subjectHint: 'product', edgeMode: 'auto' },
+      },
+      {
+        id: 'gen1',
+        type: 'generate',
+        position: { x: 400, y: 0 },
+        config: {
+          schemaVersion: 1,
+          modelKey: 'primary-image-edit',
+          count: 1,
+          resolution: '1K',
+          prompt: 'W5-A generate',
+        },
+      },
+    ],
+    edges: [
+      {
+        id: 'e-src-cut',
+        source: 'src1',
+        target: 'cut1',
+        sourceHandle: 'image',
+        targetHandle: 'image',
+      },
+    ],
+  };
+
+  const w5Get = await fetch(`${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}`, {
+    headers: { cookie: jarW2.header(), 'x-request-id': `e2e-w5-get-${suffix}` },
+  });
+  const w5Got = await w5Get.json();
+  if (w5Get.status !== 200) fail('W5-A workflow get', { status: w5Get.status, w5Got });
+  const w5IfRev =
+    w5Got.revisionNumber ??
+    w5Got.draft?.revisionNumber ??
+    w5Got.workflow?.draft?.revisionNumber;
+  if (w5IfRev == null) fail('W5-A missing draft revisionNumber', w5Got);
+
+  const w5Patch = await fetch(`${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}`, {
+    method: 'PATCH',
+    headers: {
+      cookie: jarW2.header(),
+      'content-type': 'application/json',
+      'x-request-id': `e2e-w5-patch-${suffix}`,
+    },
+    body: JSON.stringify({ ifRevision: w5IfRev, graph: w5Graph }),
+  });
+  const w5Patched = await w5Patch.json();
+  if (w5Patch.status !== 200) fail('W5-A graph patch', { status: w5Patch.status, w5Patched });
+  const w5DraftRev =
+    w5Patched.revisionNumber ??
+    w5Patched.draft?.revisionNumber ??
+    w5Patched.workflow?.draft?.revisionNumber;
+  const w5Snap = await fetch(
+    `${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}/snapshot`,
+    {
+      method: 'POST',
+      headers: {
+        cookie: jarW2.header(),
+        'content-type': 'application/json',
+        'x-request-id': `e2e-w5-snap-${suffix}`,
+      },
+      body: JSON.stringify({ ifRevision: w5DraftRev }),
+    },
+  );
+  const w5SnapJson = await w5Snap.json();
+  if (w5Snap.status !== 201) fail('W5-A snapshot', { status: w5Snap.status, w5SnapJson });
+  const w5RevisionId = w5SnapJson.revision?.id;
+  ok('W5-A snapshot remove_background+generate graph');
+
+  const w5Run = await fetch(
+    `${base}/api/workspaces/${wsW2}/workflow-revisions/${w5RevisionId}/runs`,
+    {
+      method: 'POST',
+      headers: {
+        cookie: jarW2.header(),
+        'content-type': 'application/json',
+        'x-request-id': `e2e-w5-run-${suffix}`,
+      },
+      body: JSON.stringify({
+        idempotencyKey: `e2e-w5-run-${suffix}`,
+        scenario: 'SUCCESS',
+        reuseSucceededInputs: false,
+      }),
+    },
+  );
+  const w5RunJson = await w5Run.json();
+  if (w5Run.status !== 201 && w5Run.status !== 200) {
+    fail('W5-A create run', { status: w5Run.status, w5RunJson });
+  }
+  let w5Final = null;
+  for (let i = 0; i < 50; i++) {
+    const g = await fetch(`${base}/api/workspaces/${wsW2}/runs/${w5RunJson.run.id}`, {
+      headers: { cookie: jarW2.header(), 'x-request-id': `e2e-w5-poll-${suffix}-${i}` },
+    });
+    w5Final = await g.json();
+    const st = w5Final.status ?? w5Final.run?.status;
+    if (st === 'SUCCEEDED' || st === 'FAILED_FINAL' || st === 'FAILED_RETRYABLE') break;
+    await sleep(250);
+  }
+  const w5Status = w5Final?.status ?? w5Final?.run?.status;
+  if (w5Status !== 'SUCCEEDED') fail('W5-A run did not succeed', w5Final);
+  const w5Items = w5Final.items || w5Final.run?.items || [];
+  const cutItem = w5Items.find((it) => it.nodeId === 'cut1');
+  const genItem = w5Items.find((it) => it.nodeId === 'gen1');
+  if (!cutItem || cutItem.status !== 'SUCCEEDED') fail('W5-02 remove_background item', cutItem);
+  if (!genItem || genItem.status !== 'SUCCEEDED') fail('W5-01 generate item', genItem);
+  ok('W5-01/02 Fake generate + remove_background succeeded');
+
   console.log(
-    'E2E PASS: W2 Truth + W3-A Shot Plan + W3-B2 materialize + W3-B1 workflow + W4 run/credits/webhook/SSE (Fake only)',
+    'E2E PASS: W2…W4 + W5-A generate/fingerprint/remove_background/webhook-orphan (Fake only)',
   );
 }
 

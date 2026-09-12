@@ -29,6 +29,7 @@
 10. **W2 acceptance unit** = full chain **upload → inspect → thumbnail → version → Truth Pack** (W2-01…W2-06; W2-07 BLOCKED_EXTERNAL until real SKUs).
 11. **W3 split:** W3-A = W3-01/02; W3-B1 = W3-03/04/06 (canvas foundation); W3-B2 = W3-05/07/08 (nodes + materialize). Separate PRs/reviews (MSG-007).
 12. **W4:** Model Registry / Run / Credits / Webhook / SSE = W4-01…06 one milestone PR; W4-07 BLOCKED_EXTERNAL; Fake only; DONE not VERIFIED.
+13. **W5 split:** W5-A = W5-01/08/02 (+ webhook orphan); W5-B = 03/04/05; W5-C = 06/07. Fake only per ADR-0003; DONE not VERIFIED.
 
 ## Standard commands
 

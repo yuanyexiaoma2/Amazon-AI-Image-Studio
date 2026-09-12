@@ -1,4 +1,5 @@
 import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
+import { deflateSync } from 'node:zlib';
 import {
   FAKE_PRIMARY_MODEL,
   shouldAutoRetry,
@@ -22,6 +23,56 @@ const TINY_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   'base64',
 );
+
+/** Minimal RGB PNG stamp for Fake MASK bytes; AssetVersion stores full request WxH. */
+function makeSolidPngBase64(width: number, height: number, gray: number): string {
+  const w = Math.max(1, Math.min(width, 64));
+  const h = Math.max(1, Math.min(height, 64));
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++) {
+    const row = y * (w * 3 + 1);
+    raw[row] = 0;
+    for (let x = 0; x < w; x++) {
+      const i = row + 1 + x * 3;
+      raw[i] = gray;
+      raw[i + 1] = gray;
+      raw[i + 2] = gray;
+    }
+  }
+  const compressed = deflateSync(raw);
+  function crc32(buf: Buffer): number {
+    let c = ~0;
+    for (let i = 0; i < buf.length; i++) {
+      c ^= buf[i]!;
+      for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+    }
+    return ~c >>> 0;
+  }
+  function chunk(type: string, data: Buffer): Buffer {
+    const typeBuf = Buffer.from(type, 'ascii');
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length, 0);
+    const crcBuf = Buffer.concat([typeBuf, data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(crcBuf), 0);
+    return Buffer.concat([len, typeBuf, data, crc]);
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+  const png = Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', compressed),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+  return png.toString('base64');
+}
 
 type InternalJob = {
   externalJobId: string;
@@ -315,18 +366,49 @@ export class FakeImageProviderAdapter implements ImageProviderAdapter {
 
     if (job.status === 'SUCCEEDED') {
       const corrupt = job.scenario === 'CORRUPT_OUTPUT';
+      const w = job.request.width ?? 1;
+      const h = job.request.height ?? 1;
+      if (corrupt) {
+        return {
+          externalJobId,
+          status: 'SUCCEEDED',
+          progress: 100,
+          outputs: [
+            {
+              bytesBase64: Buffer.from('not-an-image').toString('base64'),
+              mimeType: 'application/octet-stream',
+              width: w,
+              height: h,
+              role: 'image',
+            },
+          ],
+          actualCostMicrounits: job.actualCostMicrounits,
+        };
+      }
+      const outputs: NonNullable<ProviderJobStatus['outputs']> = [
+        {
+          bytesBase64: TINY_PNG.toString('base64'),
+          mimeType: 'image/png',
+          width: w,
+          height: h,
+          role: 'image',
+        },
+      ];
+      if (job.request.operation === 'REMOVE_BACKGROUND') {
+        // Full-resolution MASK: solid white PNG at requested WxH (generated below).
+        outputs.push({
+          bytesBase64: makeSolidPngBase64(w, h, 255),
+          mimeType: 'image/png',
+          width: w,
+          height: h,
+          role: 'mask',
+        });
+      }
       return {
         externalJobId,
         status: 'SUCCEEDED',
         progress: 100,
-        outputs: [
-          {
-            bytesBase64: corrupt ? Buffer.from('not-an-image').toString('base64') : TINY_PNG.toString('base64'),
-            mimeType: corrupt ? 'application/octet-stream' : 'image/png',
-            width: job.request.width ?? 1,
-            height: job.request.height ?? 1,
-          },
-        ],
+        outputs,
         actualCostMicrounits: job.actualCostMicrounits,
       };
     }

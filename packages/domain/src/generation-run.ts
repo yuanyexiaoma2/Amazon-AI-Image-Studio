@@ -15,7 +15,7 @@ export type GenerationRunStatus =
   | 'CANCEL_REQUESTED'
   | 'CANCELED';
 
-export type GenerationItemStatus = GenerationRunStatus;
+export type GenerationItemStatus = GenerationRunStatus | 'SKIPPED_DEPENDENCY';
 
 export type GenerationAttemptStatus =
   | 'QUEUED'

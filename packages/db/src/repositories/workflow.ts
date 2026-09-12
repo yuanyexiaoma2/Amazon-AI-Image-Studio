@@ -1,6 +1,7 @@
 import type { PrismaClient, Workflow, WorkflowDraft, WorkflowRevision } from '@prisma/client';
 import {
   emptyWorkflowGraph,
+  propagateStaleFromGraphDiff,
   validateWorkflowGraph,
   type WorkflowGraph,
 } from '@studio/domain';
@@ -321,6 +322,45 @@ export class WorkflowRepository {
       });
       if (wfUpdate.count !== 1) {
         throw new WorkflowConflictError('Failed to advance workflow current_revision_id');
+      }
+
+      // W5-08: when graph drifts from prior revision, mark prior NodeResults STALE (keep outputs).
+      if (last) {
+        const prevGraph = asGraph(last.graphJson);
+        const ev = propagateStaleFromGraphDiff(prevGraph, graph);
+        if (ev.staleNodeIds.length > 0) {
+          for (const nodeId of ev.staleNodeIds) {
+            const existing = await tx.nodeResult.findUnique({
+              where: {
+                workspaceId_workflowRevisionId_nodeId: {
+                  workspaceId: args.workspaceId,
+                  workflowRevisionId: last.id,
+                  nodeId,
+                },
+              },
+            });
+            if (existing && existing.status === 'SUCCEEDED') {
+              await tx.nodeResult.update({
+                where: { id: existing.id },
+                data: {
+                  status: 'STALE',
+                  staleReason: ev.reason,
+                  staleCause: ev.cause,
+                },
+              });
+              if (existing.lastAttemptId) {
+                await tx.generationOutput.updateMany({
+                  where: {
+                    workspaceId: args.workspaceId,
+                    attemptId: existing.lastAttemptId,
+                    disposition: 'CURRENT',
+                  },
+                  data: { disposition: 'STALE' },
+                });
+              }
+            }
+          }
+        }
       }
 
       await tx.auditEvent.create({

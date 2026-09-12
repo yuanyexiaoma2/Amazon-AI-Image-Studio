@@ -107,3 +107,28 @@ describe('FakeImageProviderAdapter §9 + W4-06 matrix', () => {
     expect(e.unitCount).toBe(2);
   });
 });
+
+describe('Fake REMOVE_BACKGROUND (W5-02)', () => {
+  it('returns image + full-res MASK output roles', async () => {
+    resetFakeProviderState();
+    const a = new FakeImageProviderAdapter();
+    const sub = await a.submit({
+      operation: 'REMOVE_BACKGROUND',
+      prompt: 'cutout',
+      modelId: 'fake-v1',
+      idempotencyKey: 'rb-1',
+      width: 2048,
+      height: 2048,
+      scenario: 'SUCCESS',
+    });
+    const st = await a.getStatus(sub.externalJobId);
+    expect(st.status).toBe('SUCCEEDED');
+    expect(st.outputs?.length).toBe(2);
+    expect(st.outputs?.[0]?.role).toBe('image');
+    expect(st.outputs?.[1]?.role).toBe('mask');
+    expect(st.outputs?.[1]?.width).toBe(2048);
+    expect(st.outputs?.[1]?.height).toBe(2048);
+    const maskBytes = Buffer.from(st.outputs![1]!.bytesBase64!, 'base64');
+    expect(maskBytes[0]).toBe(0x89); // PNG magic
+  });
+});
