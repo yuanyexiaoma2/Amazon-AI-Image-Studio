@@ -1,8 +1,9 @@
 openapi: 3.0.3
 info:
   title: Amazon AI Image Studio API
-  version: 0.3.0
-  description: OpenAPI from Zod contracts (W1 + W2 Truth Pack + W3-A Shot Plan).
+  version: 0.3.1
+  description: OpenAPI from Zod contracts (W1 + W2 + W3-A Shot Plan + W3-B1
+    Workflow canvas).
 servers:
   - url: http://localhost:3000
 components:
@@ -135,7 +136,7 @@ components:
           maxLength: 255
         mimeType:
           type: string
-          enum: &a3
+          enum: &a4
             - image/png
             - image/jpeg
             - image/webp
@@ -197,7 +198,7 @@ components:
           format: uuid
         status:
           type: string
-          enum: &a4
+          enum: &a5
             - CREATED
             - UPLOADING
             - UPLOADED
@@ -207,7 +208,7 @@ components:
             - EXPIRED
         assetStatus:
           type: string
-          enum: &a5
+          enum: &a6
             - UPLOADING
             - PROCESSING
             - READY
@@ -246,7 +247,7 @@ components:
               type: integer
             status:
               type: string
-              enum: &a6
+              enum: &a7
                 - DRAFT
                 - PENDING_REVIEW
                 - APPROVED
@@ -293,7 +294,7 @@ components:
                     format: uuid
                   kind:
                     type: string
-                    enum: &a7
+                    enum: &a8
                       - LOCK
                       - ALLOW
                       - UNKNOWN
@@ -400,7 +401,7 @@ components:
               type: integer
             status:
               type: string
-              enum: &a8
+              enum: &a9
                 - DRAFT
                 - PENDING_REVIEW
                 - APPROVED
@@ -682,6 +683,218 @@ components:
           format: uuid
       required:
         - revisionId
+    CreateWorkflowRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          default: Untitled workflow
+    PatchWorkflowRequest:
+      type: object
+      properties:
+        ifRevision:
+          type: integer
+          minimum: 0
+        graph:
+          type: object
+          properties:
+            schemaVersion:
+              type: number
+              enum:
+                - 1
+            nodes:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    minLength: 1
+                    maxLength: 128
+                  type:
+                    type: string
+                    minLength: 1
+                    maxLength: 64
+                  position:
+                    type: object
+                    properties:
+                      x:
+                        type: number
+                      y:
+                        type: number
+                    required:
+                      - x
+                      - y
+                  config:
+                    type: object
+                    additionalProperties:
+                      nullable: true
+                    default: &a3
+                      schemaVersion: 1
+                required:
+                  - id
+                  - type
+                  - position
+              maxItems: 500
+            edges:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    minLength: 1
+                    maxLength: 128
+                  source:
+                    type: string
+                    minLength: 1
+                    maxLength: 128
+                  target:
+                    type: string
+                    minLength: 1
+                    maxLength: 128
+                  sourceHandle:
+                    type: string
+                    nullable: true
+                    maxLength: 64
+                  targetHandle:
+                    type: string
+                    nullable: true
+                    maxLength: 64
+                required:
+                  - id
+                  - source
+                  - target
+              maxItems: 2000
+          required:
+            - schemaVersion
+            - nodes
+            - edges
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+      required:
+        - ifRevision
+        - graph
+    SnapshotWorkflowRequest:
+      type: object
+      properties:
+        ifRevision:
+          type: integer
+          minimum: 0
+      required:
+        - ifRevision
+    WorkflowDraft:
+      type: object
+      properties:
+        workflowId:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        revisionNumber:
+          type: integer
+          minimum: 0
+        currentRevisionId:
+          type: string
+          nullable: true
+          format: uuid
+        graph:
+          type: object
+          properties:
+            schemaVersion:
+              type: number
+              enum:
+                - 1
+            nodes:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    minLength: 1
+                    maxLength: 128
+                  type:
+                    type: string
+                    minLength: 1
+                    maxLength: 64
+                  position:
+                    type: object
+                    properties:
+                      x:
+                        type: number
+                      y:
+                        type: number
+                    required:
+                      - x
+                      - y
+                  config:
+                    type: object
+                    additionalProperties:
+                      nullable: true
+                    default: *a3
+                required:
+                  - id
+                  - type
+                  - position
+              maxItems: 500
+            edges:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    minLength: 1
+                    maxLength: 128
+                  source:
+                    type: string
+                    minLength: 1
+                    maxLength: 128
+                  target:
+                    type: string
+                    minLength: 1
+                    maxLength: 128
+                  sourceHandle:
+                    type: string
+                    nullable: true
+                    maxLength: 64
+                  targetHandle:
+                    type: string
+                    nullable: true
+                    maxLength: 64
+                required:
+                  - id
+                  - source
+                  - target
+              maxItems: 2000
+          required:
+            - schemaVersion
+            - nodes
+            - edges
+        updatedAt:
+          type: string
+          format: date-time
+        updatedByUserId:
+          type: string
+          nullable: true
+          format: uuid
+      required:
+        - workflowId
+        - projectId
+        - name
+        - revisionNumber
+        - currentRevisionId
+        - graph
+        - updatedAt
+        - updatedByUserId
   parameters: {}
 paths:
   /api/register:
@@ -769,7 +982,7 @@ paths:
                   maxLength: 255
                 mimeType:
                   type: string
-                  enum: *a3
+                  enum: *a4
                 bytes:
                   type: integer
                   minimum: 0
@@ -868,10 +1081,10 @@ paths:
                     format: uuid
                   status:
                     type: string
-                    enum: *a4
+                    enum: *a5
                   assetStatus:
                     type: string
-                    enum: *a5
+                    enum: *a6
                 required:
                   - uploadId
                   - assetId
@@ -913,7 +1126,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a6
+                        enum: *a7
                       facts:
                         type: array
                         items:
@@ -952,7 +1165,7 @@ paths:
                               format: uuid
                             kind:
                               type: string
-                              enum: *a7
+                              enum: *a8
                             path:
                               type: string
                             rule:
@@ -1066,7 +1279,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a6
+                        enum: *a7
                       facts:
                         type: array
                         items:
@@ -1105,7 +1318,7 @@ paths:
                               format: uuid
                             kind:
                               type: string
-                              enum: *a7
+                              enum: *a8
                             path:
                               type: string
                             rule:
@@ -1188,7 +1401,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a8
+                        enum: *a9
                       truthRevisionId:
                         type: string
                         format: uuid
@@ -1412,7 +1625,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a8
+                        enum: *a9
                       truthRevisionId:
                         type: string
                         format: uuid
@@ -1706,7 +1919,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a8
+                        enum: *a9
                       truthRevisionId:
                         type: string
                         format: uuid
@@ -1941,7 +2154,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a8
+                        enum: *a9
                       truthRevisionId:
                         type: string
                         format: uuid
@@ -2129,3 +2342,492 @@ paths:
                   - approvedRevisionId
                   - revision
                   - canvasPayload
+  /api/workspaces/{workspaceId}/projects/{projectId}/workflows:
+    post:
+      summary: Create empty workflow + draft (W3-B1)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                  default: Untitled workflow
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workflowId:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  revisionNumber:
+                    type: integer
+                    minimum: 0
+                  currentRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  graph:
+                    type: object
+                    properties:
+                      schemaVersion:
+                        type: number
+                        enum:
+                          - 1
+                      nodes:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            type:
+                              type: string
+                              minLength: 1
+                              maxLength: 64
+                            position:
+                              type: object
+                              properties:
+                                x:
+                                  type: number
+                                y:
+                                  type: number
+                              required:
+                                - x
+                                - y
+                            config:
+                              type: object
+                              additionalProperties:
+                                nullable: true
+                              default: *a3
+                          required:
+                            - id
+                            - type
+                            - position
+                        maxItems: 500
+                      edges:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            source:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            target:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            sourceHandle:
+                              type: string
+                              nullable: true
+                              maxLength: 64
+                            targetHandle:
+                              type: string
+                              nullable: true
+                              maxLength: 64
+                          required:
+                            - id
+                            - source
+                            - target
+                        maxItems: 2000
+                    required:
+                      - schemaVersion
+                      - nodes
+                      - edges
+                  updatedAt:
+                    type: string
+                    format: date-time
+                  updatedByUserId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                required:
+                  - workflowId
+                  - projectId
+                  - name
+                  - revisionNumber
+                  - currentRevisionId
+                  - graph
+                  - updatedAt
+                  - updatedByUserId
+  /api/workspaces/{workspaceId}/workflows/{workflowId}:
+    get:
+      summary: Get workflow draft graph + revisionNumber
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workflowId:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  revisionNumber:
+                    type: integer
+                    minimum: 0
+                  currentRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  graph:
+                    type: object
+                    properties:
+                      schemaVersion:
+                        type: number
+                        enum:
+                          - 1
+                      nodes:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            type:
+                              type: string
+                              minLength: 1
+                              maxLength: 64
+                            position:
+                              type: object
+                              properties:
+                                x:
+                                  type: number
+                                y:
+                                  type: number
+                              required:
+                                - x
+                                - y
+                            config:
+                              type: object
+                              additionalProperties:
+                                nullable: true
+                              default: *a3
+                          required:
+                            - id
+                            - type
+                            - position
+                        maxItems: 500
+                      edges:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            source:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            target:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            sourceHandle:
+                              type: string
+                              nullable: true
+                              maxLength: 64
+                            targetHandle:
+                              type: string
+                              nullable: true
+                              maxLength: 64
+                          required:
+                            - id
+                            - source
+                            - target
+                        maxItems: 2000
+                    required:
+                      - schemaVersion
+                      - nodes
+                      - edges
+                  updatedAt:
+                    type: string
+                    format: date-time
+                  updatedByUserId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                required:
+                  - workflowId
+                  - projectId
+                  - name
+                  - revisionNumber
+                  - currentRevisionId
+                  - graph
+                  - updatedAt
+                  - updatedByUserId
+    patch:
+      summary: Autosave draft with ifRevision (409 WORKFLOW_REVISION_CONFLICT)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ifRevision:
+                  type: integer
+                  minimum: 0
+                graph:
+                  type: object
+                  properties:
+                    schemaVersion:
+                      type: number
+                      enum:
+                        - 1
+                    nodes:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                          type:
+                            type: string
+                            minLength: 1
+                            maxLength: 64
+                          position:
+                            type: object
+                            properties:
+                              x:
+                                type: number
+                              y:
+                                type: number
+                            required:
+                              - x
+                              - y
+                          config:
+                            type: object
+                            additionalProperties:
+                              nullable: true
+                            default: *a3
+                        required:
+                          - id
+                          - type
+                          - position
+                      maxItems: 500
+                    edges:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                          source:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                          target:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                          sourceHandle:
+                            type: string
+                            nullable: true
+                            maxLength: 64
+                          targetHandle:
+                            type: string
+                            nullable: true
+                            maxLength: 64
+                        required:
+                          - id
+                          - source
+                          - target
+                      maxItems: 2000
+                  required:
+                    - schemaVersion
+                    - nodes
+                    - edges
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+              required:
+                - ifRevision
+                - graph
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workflowId:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  revisionNumber:
+                    type: integer
+                    minimum: 0
+                  currentRevisionId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  graph:
+                    type: object
+                    properties:
+                      schemaVersion:
+                        type: number
+                        enum:
+                          - 1
+                      nodes:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            type:
+                              type: string
+                              minLength: 1
+                              maxLength: 64
+                            position:
+                              type: object
+                              properties:
+                                x:
+                                  type: number
+                                y:
+                                  type: number
+                              required:
+                                - x
+                                - y
+                            config:
+                              type: object
+                              additionalProperties:
+                                nullable: true
+                              default: *a3
+                          required:
+                            - id
+                            - type
+                            - position
+                        maxItems: 500
+                      edges:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            source:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            target:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            sourceHandle:
+                              type: string
+                              nullable: true
+                              maxLength: 64
+                            targetHandle:
+                              type: string
+                              nullable: true
+                              maxLength: 64
+                          required:
+                            - id
+                            - source
+                            - target
+                        maxItems: 2000
+                    required:
+                      - schemaVersion
+                      - nodes
+                      - edges
+                  updatedAt:
+                    type: string
+                    format: date-time
+                  updatedByUserId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                required:
+                  - workflowId
+                  - projectId
+                  - name
+                  - revisionNumber
+                  - currentRevisionId
+                  - graph
+                  - updatedAt
+                  - updatedByUserId
+        "409":
+          description: Optimistic lock conflict
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      requestId:
+                        type: string
+                      details:
+                        nullable: true
+                    required:
+                      - code
+                      - message
+                      - requestId
+                required:
+                  - error
+  /api/workspaces/{workspaceId}/workflows/{workflowId}/snapshot:
+    post:
+      summary: Create immutable workflow revision from draft
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ifRevision:
+                  type: integer
+                  minimum: 0
+              required:
+                - ifRevision
+      responses:
+        "201":
+          description: Snapshot created

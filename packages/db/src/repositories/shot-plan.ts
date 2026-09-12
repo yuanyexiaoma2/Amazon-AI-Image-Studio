@@ -8,7 +8,6 @@ import type {
 } from '@prisma/client';
 import {
   canApproveShotPlanRevision,
-  canGenerateShotPlan,
   type ShotBriefSlot as DomainSlot,
 } from '@studio/domain';
 import { newId } from '../ids.js';
@@ -148,10 +147,7 @@ export class ShotPlanRepository {
     document: ShotPlanDocument;
     revision: ShotPlanRevision & { briefs: ShotBrief[] };
   }> {
-    const gate = canGenerateShotPlan({ hasApprovedTruthRevision: true });
     // Caller must pass a verified approved truthRevisionId; re-check below.
-    void gate;
-
     await this.requireApprovedTruthRevision(
       input.workspaceId,
       input.projectId,

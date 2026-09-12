@@ -23,6 +23,12 @@ import {
   SaveShotPlanRequestSchema,
   ApproveShotPlanRequestSchema,
 } from './shot-plan.js';
+import {
+  CreateWorkflowRequestSchema,
+  PatchWorkflowRequestSchema,
+  SnapshotWorkflowRequestSchema,
+  WorkflowDraftSchema,
+} from './workflow.js';
 import YAML from 'yaml';
 
 extendZodWithOpenApi(z);
@@ -44,6 +50,10 @@ registry.register('ShotPlanResponse', ShotPlanResponseSchema);
 registry.register('GenerateShotPlanRequest', GenerateShotPlanRequestSchema);
 registry.register('SaveShotPlanRequest', SaveShotPlanRequestSchema);
 registry.register('ApproveShotPlanRequest', ApproveShotPlanRequestSchema);
+registry.register('CreateWorkflowRequest', CreateWorkflowRequestSchema);
+registry.register('PatchWorkflowRequest', PatchWorkflowRequestSchema);
+registry.register('SnapshotWorkflowRequest', SnapshotWorkflowRequestSchema);
+registry.register('WorkflowDraft', WorkflowDraftSchema);
 
 registry.registerPath({
   method: 'post',
@@ -182,13 +192,72 @@ registry.registerPath({
   },
 });
 
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/projects/{projectId}/workflows',
+  summary: 'Create empty workflow + draft (W3-B1)',
+  request: {
+    body: { content: { 'application/json': { schema: CreateWorkflowRequestSchema } } },
+  },
+  responses: {
+    201: {
+      description: 'Created',
+      content: { 'application/json': { schema: WorkflowDraftSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/workspaces/{workspaceId}/workflows/{workflowId}',
+  summary: 'Get workflow draft graph + revisionNumber',
+  responses: {
+    200: {
+      description: 'OK',
+      content: { 'application/json': { schema: WorkflowDraftSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/api/workspaces/{workspaceId}/workflows/{workflowId}',
+  summary: 'Autosave draft with ifRevision (409 WORKFLOW_REVISION_CONFLICT)',
+  request: {
+    body: { content: { 'application/json': { schema: PatchWorkflowRequestSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Saved',
+      content: { 'application/json': { schema: WorkflowDraftSchema } },
+    },
+    409: {
+      description: 'Optimistic lock conflict',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/workflows/{workflowId}/snapshot',
+  summary: 'Create immutable workflow revision from draft',
+  request: {
+    body: { content: { 'application/json': { schema: SnapshotWorkflowRequestSchema } } },
+  },
+  responses: {
+    201: { description: 'Snapshot created' },
+  },
+});
+
+
 const generator = new OpenApiGeneratorV3(registry.definitions);
 const document = generator.generateDocument({
   openapi: '3.0.3',
   info: {
     title: 'Amazon AI Image Studio API',
-    version: '0.3.0',
-    description: 'OpenAPI from Zod contracts (W1 + W2 Truth Pack + W3-A Shot Plan).',
+    version: '0.3.1',
+    description: 'OpenAPI from Zod contracts (W1 + W2 + W3-A Shot Plan + W3-B1 Workflow canvas).',
   },
   servers: [{ url: 'http://localhost:3000' }],
 });

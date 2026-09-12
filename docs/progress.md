@@ -6,13 +6,13 @@
 
 **Repo type (W0-01):** GREENFIELD — empty public GitHub repo; no prior application code.
 
-**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A work 2026-09-12 Asia/Shanghai (UTC+8).
+**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 work 2026-09-12 Asia/Shanghai (UTC+8).
 
 ---
 
 ## Review policy (documented W2)
 
-See `AGENTS.md` and `docs/architecture.md`: same-week related work → one milestone PR; continuous commits OK; DONE by implementer; VERIFIED at weekly/high-risk review; W2 acceptance = full upload→Truth Pack chain. W3 is split into W3-A (plan) and W3-B (canvas); each is one milestone PR + one independent review.
+See `AGENTS.md` and `docs/architecture.md`: same-week related work → one milestone PR; continuous commits OK; DONE by implementer; VERIFIED at weekly/high-risk review; W2 acceptance = full upload→Truth Pack chain. W3 is split into W3-A (plan), W3-B1 (canvas foundation), and W3-B2 (nodes/materialize); each is one milestone PR + one independent review.
 
 ---
 
@@ -100,27 +100,54 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 - Local e2e: W2 Truth approve → Fake generate 7 briefs → PUT edit → Shot Plan approve
 - Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #8 before merge
 
-### W3-B — Studio canvas + materialize (after W3-A)
+### W3-B split (MSG-007)
 
-**Branch:** `feature/w3b-studio-canvas` (from main after W3-A merges)  
-**Acceptance unit (one PR, one independent review):** W3-03…W3-08
+**Why further split B:** Spec §19.3 still packs xyflow layout + graph engine + autosave + 11 node schemas + rich interactions + materialize. MSG-007 splits for one-PR / one-review cadence:
 
-- `@xyflow/react` Studio three-pane layout
-- Node registry, typed ports, edge validation, cycle detection
-- 11 node UI shells + config schemas
-- Draft autosave, optimistic lock, revision snapshot
-- Undo/redo, copy/paste, delete impact, fit view
-- Shot Plan → workflow materialization
-- Week gate: Truth Pack → 7-image workflow on canvas; refresh keeps graph; illegal edges blocked; concurrent edits conflict
+- **W3-B1「画布底座」** = W3-03 + W3-04 + W3-06 (canvas shell + pure domain graph + autosave/lock)
+- **W3-B2「节点与物化」** = W3-05 + W3-07 + W3-08 (after B1 merges)
+
+#### W3-B2 pre-notes (do not implement in B1)
+
+- Zod **node config schemas** live in `@studio/contracts` (W3-05).
+- **Materialize (W3-08)** must consume W3-A `canvasPayload` **without changing its shape**.
+- App-level validate `referencedAssetVersionIds` (JSONB, no FK) at materialize time.
+- Cleaned `void gate` residue in `ShotPlanRepository.saveNewRevision` during B1 (MSG-005 observation).
+
+### W3-B1 — Canvas foundation (MSG-007)
+
+**Branch:** `feature/w3b1-canvas-foundation` (from main `62d6bcfa21b1013cc96a41c0e48de17297bbf6d4`)  
+**Acceptance unit (one PR, one independent review):** W3-03 + W3-04 + W3-06
+
+- `@xyflow/react` Studio three-pane layout (do **not** copy Eximia branding/UI)
+- Node registry / typed ports / edge validation / cycle detection as **pure domain** in `packages/domain` (+ unit tests: self-loop, cross-layer back-edge/cycle, port mismatch, duplicate edges)
+- Draft autosave (500ms), optimistic `ifRevision` lock, revision snapshot; concurrent conflict → **409 WORKFLOW_REVISION_CONFLICT** (conditional update + affected row count; never silent overwrite)
+- Milestone: create empty workflow + save; illegal edges blocked immediately; cyclic graphs cannot be saved; refresh keeps positions/config/edges/revision; concurrent edits show conflict
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W3-03 | Studio / `@xyflow/react` layout | TODO | W3-B |
-| W3-04 | Nodes/ports/cycle detection | TODO | W3-B |
-| W3-05 | 11 node config schemas | TODO | W3-B |
-| W3-06 | Autosave / revision | TODO | W3-B |
-| W3-07 | Canvas interactions | TODO | W3-B |
-| W3-08 | Plan → canvas materialize | TODO | W3-B |
+| W3-03 | Studio / `@xyflow/react` layout | DONE | Three-pane Studio at `/projects/[projectId]/studio`; palette stubs (no Eximia); narrow &lt;1280 warning; Fake only. |
+| W3-04 | Nodes/ports/cycle detection | DONE | `packages/domain/src/workflow-graph.ts` registry + `validateEdge` / `validateWorkflowGraph` / `detectCycles`; unit tests cover self-loop, cross-layer back-edge, port mismatch, duplicate edges, cycles. UI calls domain only. |
+| W3-05 | 11 node config schemas | TODO | **W3-B2** — Zod schemas in contracts; UI shells beyond registry stubs. |
+| W3-06 | Autosave / revision | DONE | Prisma `workflows` / `workflow_drafts` / `workflow_revisions` + migration `20260912020000_w3b1_workflows`; PATCH `ifRevision` → 409 `WORKFLOW_REVISION_CONFLICT`; snapshot API; integration + e2e conflict tests. |
+| W3-07 | Canvas interactions | TODO | **W3-B2** — undo/redo, copy/paste, delete impact, rich fit-view UX. |
+| W3-08 | Plan → canvas materialize | TODO | **W3-B2** — consume W3-A `canvasPayload` unchanged; validate `referencedAssetVersionIds`. |
+
+### W3-B1 commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm db:migrate:deploy` | Includes `20260912020000_w3b1_workflows` |
+| `pnpm lint` / `typecheck` / `test` / `build` | Required green before PR |
+| `pnpm test:e2e` | Extends chain with workflow create→save→409 conflict→cycle reject→snapshot |
+| Provider | **Fake only** (W0-02 BLOCKED_EXTERNAL); no real keys |
+| Out of scope | W3-B2 node schemas UI / rich interactions / materialize |
+
+**DONE evidence package (W3-03 / W3-04 / W3-06):**
+- Branch: `feature/w3b1-canvas-foundation`
+- Milestone PR (open, **not merged**): _pending_
+- CI: _pending_
+- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge
 
 ---
 

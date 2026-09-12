@@ -1,4 +1,4 @@
-// Amazon AI Image Studio — W1+W2+W3-A Prisma schema
+// Amazon AI Image Studio — W1+W2+W3-A+W3-B1 Prisma schema
 // IDs: UUIDv7 generated in application code; DB type uuid.
 // Times: timestamptz via Prisma DateTime (@db.Timestamptz)
 // Tenancy: workspace_id on all tenant tables; composite FK (workspace_id, parent_id).
@@ -193,6 +193,9 @@ model Workspace {
   shotPlanRevisions   ShotPlanRevision[]
   shotBriefs          ShotBrief[]
   auditEvents         AuditEvent[]
+  workflows           Workflow[]
+  workflowDrafts      WorkflowDraft[]
+  workflowRevisions   WorkflowRevision[]
 
   @@index([ownerUserId])
   @@unique([id]) // enables composite FK targets (workspace_id, id)
@@ -235,6 +238,7 @@ model Project {
   assets           Asset[]
   truthDocument    ProductTruthDocument?
   shotPlanDocument ShotPlanDocument?
+  workflows        Workflow[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, sku])
@@ -558,4 +562,63 @@ model AuditEvent {
 
   @@index([workspaceId, createdAt])
   @@map("audit_events")
+}
+
+model Workflow {
+  id                String    @id @db.Uuid
+  workspaceId       String    @map("workspace_id") @db.Uuid
+  projectId         String    @map("project_id") @db.Uuid
+  name              String
+  currentRevisionId String?   @map("current_revision_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz
+
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  project         Project            @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
+  currentRevision WorkflowRevision?  @relation("WorkflowCurrentRevision", fields: [workspaceId, currentRevisionId], references: [workspaceId, id], onDelete: SetNull)
+  draft           WorkflowDraft?
+  revisions       WorkflowRevision[] @relation("WorkflowRevisions")
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, projectId])
+  @@map("workflows")
+}
+
+/// Editable draft graph with optimistic revision_number (spec §8.4).
+model WorkflowDraft {
+  id             String   @id @db.Uuid
+  workspaceId    String   @map("workspace_id") @db.Uuid
+  workflowId     String   @map("workflow_id") @db.Uuid
+  graphJson      Json     @map("graph_json")
+  revisionNumber Int      @default(0) @map("revision_number")
+  updatedByUserId String? @map("updated_by_user_id") @db.Uuid
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  workflow  Workflow  @relation(fields: [workspaceId, workflowId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, workflowId])
+  @@map("workflow_drafts")
+}
+
+/// Immutable graph snapshot used for runs (created via POST .../snapshot).
+model WorkflowRevision {
+  id              String   @id @db.Uuid
+  workspaceId     String   @map("workspace_id") @db.Uuid
+  workflowId      String   @map("workflow_id") @db.Uuid
+  revision        Int
+  graphJson       Json     @map("graph_json")
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace  Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  workflow   Workflow   @relation("WorkflowRevisions", fields: [workspaceId, workflowId], references: [workspaceId, id], onDelete: Restrict)
+  currentFor Workflow[] @relation("WorkflowCurrentRevision")
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, workflowId, revision])
+  @@map("workflow_revisions")
 }
