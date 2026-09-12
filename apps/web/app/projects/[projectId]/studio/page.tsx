@@ -12,10 +12,10 @@ function StudioInner() {
 
   if (!workspaceId || !projectId) {
     return (
-      <div style={{ padding: 24 }}>
+      <main style={{ padding: 24 }} role="main">
         <h1>Studio</h1>
-        <p>Missing workspaceId query param. Open from a project page.</p>
-      </div>
+        <p role="alert">Missing workspaceId query param. Open from a project page.</p>
+      </main>
     );
   }
 
@@ -24,7 +24,7 @@ function StudioInner() {
 
 export default function ProjectStudioPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 24 }}>Loading studio…</div>}>
+    <Suspense fallback={<div style={{ padding: 24 }} role="status">Loading studio…</div>}>
       <StudioInner />
     </Suspense>
   );

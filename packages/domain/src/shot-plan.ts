@@ -39,6 +39,8 @@ export const DEFAULT_SEVEN_IMAGE_TEMPLATE: ReadonlyArray<ShotBriefTemplateEntry>
       'show only included items',
       'preserve exact product geometry and printed text',
       'product fully inside frame',
+      'preserve exact product silhouette and proportions (structure lock)',
+      'preserve logo glyph, spelling, and placement (logo lock)',
     ],
     mustNot: [
       'overlay text',
@@ -47,6 +49,8 @@ export const DEFAULT_SEVEN_IMAGE_TEMPLATE: ReadonlyArray<ShotBriefTemplateEntry>
       'decorative prop',
       'badge',
       'unincluded accessory',
+      'do not alter product geometry, ports, or controls',
+      'do not invent or move logos / printed text',
     ],
     qaPolicy: 'amazon-main-us-v1',
   },

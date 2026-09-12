@@ -45,15 +45,31 @@ function ReviewInner() {
   const [msg, setMsg] = useState('');
   const [reason, setReason] = useState('');
   const [bundleId, setBundleId] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const refresh = useCallback(async () => {
     if (!workspaceId || !projectId) return;
-    const res = await fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/qa-reports`);
-    const json = await res.json();
-    setReports(json.items ?? []);
-    setApprovals(json.approvals ?? []);
-    if (!left && json.items?.[0]?.id) setLeft(json.items[0].id);
-    if (!right && json.items?.[1]?.id) setRight(json.items[1].id);
+    setLoading(true);
+    setLoadError('');
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/qa-reports`);
+      const json = await res.json();
+      if (!res.ok) {
+        setLoadError(json?.error?.message ?? `Failed to load reports (${res.status})`);
+        setReports([]);
+        setApprovals([]);
+        return;
+      }
+      setReports(json.items ?? []);
+      setApprovals(json.approvals ?? []);
+      if (!left && json.items?.[0]?.id) setLeft(json.items[0].id);
+      if (!right && json.items?.[1]?.id) setRight(json.items[1].id);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Network error loading reports');
+    } finally {
+      setLoading(false);
+    }
   }, [workspaceId, projectId, left, right]);
 
   useEffect(() => {
@@ -112,7 +128,12 @@ function ReviewInner() {
   }
 
   function panel(report: Report | undefined, title: string) {
-    if (!report) return <p style={{ opacity: 0.6 }}>No report</p>;
+    if (!report)
+      return (
+        <p role="status" style={{ opacity: 0.75, padding: 16, border: '1px dashed #666', borderRadius: 8 }}>
+          No QA report selected. Run Fake QA from Studio or wait for evaluate jobs — empty state is expected on new projects.
+        </p>
+      );
     const tone =
       report.overallStatus === 'BLOCK' ? '#c0392b' : report.overallStatus === 'REVIEW' ? '#d68910' : '#1e8449';
     return (
@@ -163,27 +184,51 @@ function ReviewInner() {
     );
   }
 
-  if (!workspaceId) return <p>Missing workspaceId</p>;
+  if (!workspaceId)
+    return (
+      <main style={{ padding: 24 }} role="main">
+        <h1>Review</h1>
+        <p role="alert">Missing workspaceId query param. Open Review from a project page.</p>
+      </main>
+    );
 
   return (
-    <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
+    <main style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }} role="main" aria-labelledby="review-title">
       <p>
         <a href={`/projects/${projectId}?workspaceId=${workspaceId}`}>← Project</a>
         {' · '}
         <a href={`/projects/${projectId}/studio?workspaceId=${workspaceId}`}>Studio</a>
       </p>
-      <h1>Review — QA findings, compare, approve</h1>
+      <h1 id="review-title">Review — QA findings, compare, approve</h1>
       <p style={{ opacity: 0.75, maxWidth: 720 }}>
         {leftReport?.disclaimer ??
           'Automatic QA is a pre-publish assistant. qa_gate PASS is not human Approval. MAIN BLOCK blocks default export.'}
       </p>
-      <p>
+      <p aria-live="polite" role="status">
         <strong>{msg}</strong>
       </p>
+      {loading && (
+        <p role="status" style={{ opacity: 0.8 }}>
+          Loading QA reports…
+        </p>
+      )}
+      {loadError && (
+        <p role="alert" style={{ color: '#c0392b', border: '1px solid #c0392b', padding: 12, borderRadius: 8 }}>
+          {loadError}{' '}
+          <button type="button" onClick={() => void refresh()}>
+            Retry
+          </button>
+        </p>
+      )}
+      {!loading && !loadError && reports.length === 0 && (
+        <p role="status" style={{ opacity: 0.8, border: '1px dashed #888', padding: 16, borderRadius: 8 }}>
+          No QA reports yet for this project. Generate candidates in Studio (Fake), then return here to review findings.
+        </p>
+      )}
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <label>
           Left{' '}
-          <select value={left} onChange={(e) => setLeft(e.target.value)}>
+          <select aria-label="Left QA report" value={left} onChange={(e) => setLeft(e.target.value)}>
             {reports.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.slot} {r.overallStatus ?? r.status} {r.id.slice(0, 8)}
@@ -193,7 +238,7 @@ function ReviewInner() {
         </label>
         <label>
           Right{' '}
-          <select value={right} onChange={(e) => setRight(e.target.value)}>
+          <select aria-label="Right QA report for compare" value={right} onChange={(e) => setRight(e.target.value)}>
             <option value="">—</option>
             {reports.map((r) => (
               <option key={r.id} value={r.id}>
@@ -213,11 +258,12 @@ function ReviewInner() {
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="Override reason (required for OVERRIDE_BLOCK)"
+          aria-label="Decision reason"
           rows={3}
           style={{ width: '100%', maxWidth: 640 }}
         />
         <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-          <button type="button" onClick={() => void decide('APPROVE')}>
+          <button type="button" aria-label="Approve selected report" onClick={() => void decide('APPROVE')}>
             Approve
           </button>
           <button type="button" onClick={() => void decide('REJECT')}>
@@ -247,13 +293,13 @@ function ReviewInner() {
           {approvals.length === 0 && <li>None yet — QA PASS does not approve.</li>}
         </ul>
       </section>
-    </div>
+    </main>
   );
 }
 
 export default function ReviewPage() {
   return (
-    <Suspense fallback={<p>Loading review…</p>}>
+    <Suspense fallback={<p role="status">Loading review…</p>}>
       <ReviewInner />
     </Suspense>
   );

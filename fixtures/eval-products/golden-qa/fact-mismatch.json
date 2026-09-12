@@ -1,0 +1,15 @@
+{
+  "id": "fact-mismatch",
+  "fakeScenario": "FACT_MISMATCH",
+  "slot": "MAIN",
+  "expectedOverall": "BLOCK",
+  "expectedFailOrReviewRules": [
+    "PRODUCT.FACT_TEXT_MATCH"
+  ],
+  "rulePack": {
+    "key": "amazon-main-us-v1",
+    "version": 2
+  },
+  "phase": 1,
+  "notes": "Synthetic Fake golden \u2014 not a real SKU photo"
+}

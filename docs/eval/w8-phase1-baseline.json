@@ -1,0 +1,142 @@
+{
+  "generatedAt": "2026-09-12T14:21:54.849Z",
+  "skus": [
+    {
+      "sku": "SKU-SYN-001",
+      "name": "Synthetic Insulated Mug",
+      "briefSlots": [
+        "MAIN",
+        "FEATURE",
+        "LIFESTYLE"
+      ],
+      "candidateTotal": 6
+    },
+    {
+      "sku": "SKU-SYN-002",
+      "name": "Synthetic Water Bottle",
+      "briefSlots": [
+        "MAIN",
+        "FEATURE",
+        "LIFESTYLE"
+      ],
+      "candidateTotal": 6
+    },
+    {
+      "sku": "SKU-SYN-003",
+      "name": "Synthetic Earbud Case",
+      "briefSlots": [
+        "MAIN",
+        "FEATURE",
+        "LIFESTYLE"
+      ],
+      "candidateTotal": 6
+    }
+  ],
+  "golden": {
+    "rows": [
+      {
+        "id": "attachment-count",
+        "scenario": "ATTACHMENT_COUNT",
+        "expected": "REVIEW",
+        "actual": "REVIEW",
+        "ok": true,
+        "failRules": [
+          "MAIN.ONLY_SOLD_ITEMS:REVIEW",
+          "PRODUCT.IDENTITY:REVIEW"
+        ]
+      },
+      {
+        "id": "composition-drift",
+        "scenario": "COMPOSITION_DRIFT",
+        "expected": "REVIEW",
+        "actual": "REVIEW",
+        "ok": true,
+        "failRules": [
+          "PRODUCT.IDENTITY:REVIEW"
+        ]
+      },
+      {
+        "id": "fact-mismatch",
+        "scenario": "FACT_MISMATCH",
+        "expected": "BLOCK",
+        "actual": "BLOCK",
+        "ok": true,
+        "failRules": [
+          "PRODUCT.FACT_TEXT_MATCH:FAIL"
+        ]
+      },
+      {
+        "id": "identity-mismatch",
+        "scenario": "IDENTITY_MISMATCH",
+        "expected": "BLOCK",
+        "actual": "BLOCK",
+        "ok": true,
+        "failRules": [
+          "PRODUCT.IDENTITY:FAIL"
+        ]
+      },
+      {
+        "id": "logo-change",
+        "scenario": "LOGO_CHANGE",
+        "expected": "BLOCK",
+        "actual": "BLOCK",
+        "ok": true,
+        "failRules": [
+          "PRODUCT.IDENTITY:FAIL"
+        ]
+      },
+      {
+        "id": "low-confidence",
+        "scenario": "LOW_CONFIDENCE",
+        "expected": "REVIEW",
+        "actual": "REVIEW",
+        "ok": true,
+        "failRules": [
+          "MAIN.NO_OVERLAY_TEXT:REVIEW"
+        ]
+      },
+      {
+        "id": "overlay-text",
+        "scenario": "OVERLAY_TEXT",
+        "expected": "BLOCK",
+        "actual": "BLOCK",
+        "ok": true,
+        "failRules": [
+          "MAIN.NO_OVERLAY_TEXT:FAIL"
+        ]
+      },
+      {
+        "id": "pass",
+        "scenario": "SUCCESS",
+        "expected": "PASS",
+        "actual": "PASS",
+        "ok": true,
+        "failRules": []
+      },
+      {
+        "id": "structure-change",
+        "scenario": "STRUCTURE_CHANGE",
+        "expected": "BLOCK",
+        "actual": "BLOCK",
+        "ok": true,
+        "failRules": [
+          "PRODUCT.IDENTITY:FAIL"
+        ]
+      },
+      {
+        "id": "watermark",
+        "scenario": "WATERMARK",
+        "expected": "BLOCK",
+        "actual": "BLOCK",
+        "ok": true,
+        "failRules": [
+          "MAIN.NO_BORDER_OR_WATERMARK:FAIL"
+        ]
+      }
+    ],
+    "pass": 10,
+    "fail": 0,
+    "total": 10
+  },
+  "rulePackVersion": 2
+}

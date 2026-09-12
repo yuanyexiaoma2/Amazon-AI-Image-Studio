@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "key": "amazon-main-us-v1",
-  "version": 1,
+  "version": 2,
   "marketplaceCode": "US",
   "scope": {
     "type": "CATEGORY_PREFIX",
@@ -9,7 +9,7 @@
     "specificity": 0
   },
   "priority": 100,
-  "effectiveDate": "2026-09-11",
+  "effectiveDate": "2026-09-12",
   "rules": [
     {
       "ruleId": "FILE.DECODABLE",
@@ -61,7 +61,7 @@
       "severity": "HIGH",
       "nonWaivable": false,
       "params": {
-        "requiredExtent": 0.85,
+        "requiredExtent": 0.82,
         "hardDecisionMaskConfidence": 0.9
       }
     },
@@ -84,7 +84,7 @@
       "nonWaivable": false,
       "params": {
         "allowConfirmedProductPrint": true,
-        "failConfidence": 0.9
+        "failConfidence": 0.92
       }
     },
     {
@@ -134,7 +134,7 @@
       "params": {
         "thresholdProfile": "product-2k-v1",
         "failBelow": 40,
-        "reviewBelow": 90
+        "reviewBelow": 85
       }
     },
     {
