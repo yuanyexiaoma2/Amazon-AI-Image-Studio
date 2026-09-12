@@ -144,12 +144,13 @@ export class FakeShotPlanProvider implements ShotPlanProvider {
       must: [...t.must],
       mustNot: [...t.mustNot],
       qaPolicy: t.qaPolicy,
+      referencedAssetVersionIds: [],
     }));
 
     if (request.includePackage) {
       briefs.push({
         slot: 'PACKAGE',
-        purpose: 'Packaging / what's in the box',
+        purpose: "Packaging / what's in the box",
         orderIndex: briefs.length + 1,
         aspectRatio: '1:1',
         targetPixels: { width: 2000, height: 2000 },
@@ -157,6 +158,7 @@ export class FakeShotPlanProvider implements ShotPlanProvider {
         must: ['show only included pack contents'],
         mustNot: ['unincluded accessory'],
         qaPolicy: 'amazon-package-us-v1',
+        referencedAssetVersionIds: [],
       });
     }
 

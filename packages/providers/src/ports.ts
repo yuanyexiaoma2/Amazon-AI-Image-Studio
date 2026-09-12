@@ -73,6 +73,8 @@ export type PlannedShotBrief = {
   must: string[];
   mustNot: string[];
   qaPolicy: string;
+  /** W3-08 prep: optional asset version refs for later canvas materialize. */
+  referencedAssetVersionIds?: string[];
 };
 
 export type ShotPlanDraftResult = {

@@ -83,3 +83,15 @@ describe('shot plan gates', () => {
     expect(canRoleApproveShotPlan('OWNER')).toBe(true);
   });
 });
+
+describe('W3-08 canvas payload helpers', () => {
+  it('sortBriefsForCanvas orders by orderIndex', async () => {
+    const { sortBriefsForCanvas } = await import('../src/shot-plan.js');
+    const sorted = sortBriefsForCanvas([
+      { orderIndex: 3, slot: 'DETAIL' },
+      { orderIndex: 1, slot: 'MAIN' },
+      { orderIndex: 2, slot: 'FEATURE' },
+    ]);
+    expect(sorted.map((b) => b.orderIndex)).toEqual([1, 2, 3]);
+  });
+});

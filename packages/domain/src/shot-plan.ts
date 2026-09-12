@@ -199,3 +199,36 @@ export function canGenerateShotPlan(args: {
   }
   return { ok: true };
 }
+
+/**
+ * W3-08 prep: canvas-consumable Shot Plan contract (no xyflow here).
+ * Materialize (W3-B) will map this into workflow nodes; fields are stable.
+ */
+export type ShotBriefCanvasPayload = {
+  briefId: string;
+  slot: ShotBriefSlot;
+  purpose: string;
+  orderIndex: number;
+  aspectRatio: string;
+  targetPixels: { width: number; height: number };
+  copy: unknown[];
+  must: string[];
+  mustNot: string[];
+  qaPolicy: string;
+  /** Asset versions this brief should reference on the canvas (optional). */
+  referencedAssetVersionIds: string[];
+};
+
+export type ShotPlanCanvasPayload = {
+  planDocumentId: string;
+  planRevisionId: string;
+  projectId: string;
+  workspaceId: string;
+  /** Provenance: specific approved Truth Pack revision this plan was built from. */
+  truthRevisionId: string;
+  briefs: ShotBriefCanvasPayload[];
+};
+
+export function sortBriefsForCanvas<T extends { orderIndex: number }>(briefs: T[]): T[] {
+  return [...briefs].sort((a, b) => a.orderIndex - b.orderIndex);
+}
