@@ -3,7 +3,7 @@ export default function HomePage() {
     <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
       <h1>Amazon AI Image Studio</h1>
       <p>
-        MVP through W3-B1: register → project → Truth → Shot Plan → <strong>Studio canvas</strong> (autosave + graph validation).
+        MVP through W3-B2: register → project → Truth → Shot Plan → <strong>materialize</strong> → Studio (schemas + interactions). Fake only.
       </p>
       <ul>
         <li>

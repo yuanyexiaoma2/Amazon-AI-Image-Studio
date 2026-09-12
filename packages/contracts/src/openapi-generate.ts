@@ -28,6 +28,8 @@ import {
   PatchWorkflowRequestSchema,
   SnapshotWorkflowRequestSchema,
   WorkflowDraftSchema,
+  MaterializeShotPlanRequestSchema,
+  MaterializeShotPlanResponseSchema,
 } from './workflow.js';
 import YAML from 'yaml';
 
@@ -54,6 +56,8 @@ registry.register('CreateWorkflowRequest', CreateWorkflowRequestSchema);
 registry.register('PatchWorkflowRequest', PatchWorkflowRequestSchema);
 registry.register('SnapshotWorkflowRequest', SnapshotWorkflowRequestSchema);
 registry.register('WorkflowDraft', WorkflowDraftSchema);
+registry.register('MaterializeShotPlanRequest', MaterializeShotPlanRequestSchema);
+registry.register('MaterializeShotPlanResponse', MaterializeShotPlanResponseSchema);
 
 registry.registerPath({
   method: 'post',
@@ -194,6 +198,21 @@ registry.registerPath({
 
 registry.registerPath({
   method: 'post',
+  path: '/api/workspaces/{workspaceId}/projects/{projectId}/shot-plans/materialize',
+  summary: 'Materialize approved Shot Plan canvasPayload → workflow graph (W3-08)',
+  request: {
+    body: { content: { 'application/json': { schema: MaterializeShotPlanRequestSchema } } },
+  },
+  responses: {
+    201: {
+      description: 'Created workflow from plan',
+      content: { 'application/json': { schema: MaterializeShotPlanResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
   path: '/api/workspaces/{workspaceId}/projects/{projectId}/workflows',
   summary: 'Create empty workflow + draft (W3-B1)',
   request: {
@@ -256,8 +275,8 @@ const document = generator.generateDocument({
   openapi: '3.0.3',
   info: {
     title: 'Amazon AI Image Studio API',
-    version: '0.3.1',
-    description: 'OpenAPI from Zod contracts (W1 + W2 + W3-A Shot Plan + W3-B1 Workflow canvas).',
+    version: '0.3.2',
+    description: 'OpenAPI from Zod contracts (W1 + W2 + W3-A/B Shot Plan, canvas, materialize).',
   },
   servers: [{ url: 'http://localhost:3000' }],
 });

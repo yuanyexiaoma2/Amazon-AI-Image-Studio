@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { PatchWorkflowRequestSchema, makeApiError } from '@studio/contracts';
+import { PatchWorkflowRequestSchema, parseWorkflowGraphWithConfigs, makeApiError } from '@studio/contracts';
 import { WORKFLOW_WRITE_ROLES } from '@studio/domain';
 import {
   prisma,
@@ -69,13 +69,21 @@ export async function PATCH(request: Request, context: Ctx) {
     );
   }
 
+  const graphParsed = parseWorkflowGraphWithConfigs(parsed.data.graph);
+  if (!graphParsed.ok) {
+    return NextResponse.json(
+      makeApiError('VALIDATION_ERROR', 'Invalid node configs', requestId, graphParsed.issues),
+      { status: 400, headers: { 'x-request-id': requestId } },
+    );
+  }
+
   const workflows = new WorkflowRepository(prisma);
   try {
     const saved = await workflows.saveDraft({
       workspaceId,
       workflowId,
       ifRevision: parsed.data.ifRevision,
-      graph: parsed.data.graph,
+      graph: graphParsed.graph,
       updatedByUserId: access.session.userId,
       name: parsed.data.name,
     });

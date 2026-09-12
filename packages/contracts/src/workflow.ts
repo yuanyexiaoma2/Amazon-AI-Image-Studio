@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { validateGraphNodeConfigs } from './node-configs.js';
 
 export const WorkflowGraphNodeSchema = z.object({
   id: z.string().min(1).max(128),
@@ -58,6 +59,51 @@ export const WorkflowRevisionSchema = z.object({
   createdByUserId: z.string().uuid(),
 });
 
+/** W3-08: materialize approved Shot Plan → workflow draft. */
+export const MaterializeShotPlanRequestSchema = z.object({
+  /** Defaults to the project's approved Shot Plan revision. */
+  planRevisionId: z.string().uuid().optional(),
+  /** Optional workflow name; default derived from plan. */
+  name: z.string().min(1).max(128).optional(),
+});
+
+export const MaterializeShotPlanResponseSchema = z.object({
+  workflow: WorkflowDraftSchema,
+  briefCount: z.number().int().positive(),
+  planRevisionId: z.string().uuid(),
+  planDocumentId: z.string().uuid(),
+});
+
+/**
+ * After structural Zod parse, normalize each node config via W3-05 schemas.
+ * Returns issues when configs fail type-specific validation.
+ */
+export function parseWorkflowGraphWithConfigs(input: unknown):
+  | { ok: true; graph: z.infer<typeof WorkflowGraphSchema> }
+  | { ok: false; issues: string[] } {
+  const parsed = WorkflowGraphSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      issues: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
+    };
+  }
+  const cfg = validateGraphNodeConfigs(parsed.data.nodes);
+  if (!cfg.ok) return { ok: false, issues: cfg.issues };
+  const byId = new Map((cfg.normalized ?? []).map((n) => [n.id, n.config]));
+  return {
+    ok: true,
+    graph: {
+      ...parsed.data,
+      nodes: parsed.data.nodes.map((n) => ({
+        ...n,
+        config: byId.get(n.id) ?? n.config ?? { schemaVersion: 1 },
+      })),
+    },
+  };
+}
+
 export type WorkflowGraph = z.infer<typeof WorkflowGraphSchema>;
 export type PatchWorkflowRequest = z.infer<typeof PatchWorkflowRequestSchema>;
 export type CreateWorkflowRequest = z.infer<typeof CreateWorkflowRequestSchema>;
+export type MaterializeShotPlanRequest = z.infer<typeof MaterializeShotPlanRequestSchema>;

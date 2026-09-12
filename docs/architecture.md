@@ -66,9 +66,9 @@ GitHub Actions verifies Postgres, Redis, MinIO health; runs `prisma migrate depl
 unit + integration tests; build; real API E2E (`pnpm test:e2e`) including upload→Truth Pack when services are up.
 Triggers on `main`, `feat/**`, `feature/**`, `fix/**`.
 
-## Studio canvas (W3-B1)
+## Studio canvas (W3-B1 + W3-B2)
 
 - `@xyflow/react` three-pane Studio (node library / canvas / properties + task drawer stub).
 - Graph rules (ports, self-loop, duplicates, cross-layer back-edges, cycles) live in `@studio/domain` as pure functions; UI and API both call domain validation.
 - Drafts: `workflow_drafts.revision_number` optimistic concurrency via `ifRevision`; conflicts return **409 WORKFLOW_REVISION_CONFLICT** (no silent overwrite). Immutable snapshots in `workflow_revisions`.
-- W3-B2 (not in this milestone): Zod node config schemas, rich canvas interactions, Shot Plan → canvas materialize.
+- W3-B2: Zod node config schemas in `@studio/contracts` (11 palette + system `approval_selector`); canvas undo/redo, copy/paste, delete impact hint, fit view, `isValidConnection` preview; `POST .../shot-plans/materialize` consumes W3-A `canvasPayload` unchanged and app-validates `referencedAssetVersionIds` (no DB FK). Fake only — no real Provider execution.

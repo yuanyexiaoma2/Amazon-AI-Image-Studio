@@ -259,6 +259,30 @@ function ProjectDetailInner() {
     setMsg('Shot Plan APPROVED');
   }
 
+  async function materializeShotPlan() {
+    if (!workspaceId || !projectId) return;
+    if (!shotPlan?.approvedRevisionId) {
+      setMsg('Approve Shot Plan first');
+      return;
+    }
+    const res = await fetch(
+      `/api/workspaces/${workspaceId}/projects/${projectId}/shot-plans/materialize`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      },
+    );
+    const json = await res.json();
+    if (!res.ok) {
+      setMsg(json?.error?.message ?? 'materialize failed');
+      return;
+    }
+    setMsg(
+      `Materialized ${json.briefCount}-image workflow (${json.workflow?.graph?.nodes?.length ?? 0} nodes) → open Studio`,
+    );
+  }
+
   if (!workspaceId) {
     return <p>Missing workspaceId query param. Open from /projects.</p>;
   }
@@ -272,7 +296,7 @@ function ProjectDetailInner() {
       </div>
       <h1>Project assets + Truth Pack + Shot Plan</h1>
       <p style={{ opacity: 0.75 }}>
-        Upload → Truth Pack approve → generate 7-shot plan (Fake) → approve. Canvas is W3-B.
+        Upload → Truth Pack approve → generate 7-shot plan (Fake) → approve → one-click materialize (W3-B2). Fake only.
       </p>
       <p>
         <strong>{msg}</strong>
@@ -354,6 +378,13 @@ function ProjectDetailInner() {
           <button type="button" onClick={approveShotPlan} disabled={!shotPlan?.revision}>
             Approve Shot Plan
           </button>
+          <button
+            type="button"
+            onClick={materializeShotPlan}
+            disabled={!shotPlan?.approvedRevisionId}
+          >
+            Materialize → Studio
+          </button>
         </div>
         {shotPlan?.revision ? (
           <div>
@@ -373,7 +404,7 @@ function ProjectDetailInner() {
             </ul>
             {shotPlan.canvasPayload ? (
               <p style={{ opacity: 0.7 }}>
-                canvasPayload ready for W3-B ({shotPlan.canvasPayload.briefs.length} ordered briefs)
+                canvasPayload ready ({shotPlan.canvasPayload.briefs.length} ordered briefs) · materialize validates referencedAssetVersionIds
               </p>
             ) : null}
           </div>
