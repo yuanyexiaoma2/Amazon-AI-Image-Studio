@@ -258,7 +258,10 @@ One branch / one PR / one review each; merge unlocks the next segment.
 §19.5 real-Provider success cases: **挂起** (ADR-0003). Fake matrix required.
 
 **DONE evidence package (W5-A):**
-- Branch: `feature/w5a-executors` (see PR for HEAD SHA + CI)
+- Branch HEAD: `31370a4b3546739f2b366cdc469df37c93069e00`
+- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/12
+- CI (push): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34683667388
+- CI (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34683672732
 - Local: domain fingerprint/STALE unit tests; Fake REMOVE_BACKGROUND mask roles; webhook orphan 202; e2e generate+remove_background SUCCEEDED (`GENERATION_INLINE=1`)
 - Migration: `20260912040000_w5a_node_results`
 - Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge.
