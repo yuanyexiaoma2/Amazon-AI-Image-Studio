@@ -80,8 +80,20 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W3-01 | Shot Plan/Brief + 7-image template | IN_PROGRESS | W3-A on `feature/w3a-shot-plan` |
-| W3-02 | Plan generate + approve | IN_PROGRESS | W3-A; FakeShotPlanProvider only (W0-02 BLOCKED_EXTERNAL) |
+| W3-01 | Shot Plan/Brief + 7-image template | DONE | Domain `shot-plan.ts` §11.1 default 7 (no PACKAGE); Prisma `shot_plan_*` + `shot_briefs`; tenant UUIDv7; revision **FK `truth_revision_id` → approved Truth revision**; contracts + `canvasPayload` for W3-08; migration `20260912010000_w3a_shot_plan`. Fake only. |
+| W3-02 | Plan generate + approve | DONE | `POST .../shot-plans/generate` (FakeShotPlanProvider); PUT human edit; **atomic approve** (W2 Truth structure: FOR UPDATE + PENDING_REVIEW + row counts + audit_events); roles WRITE OWNER/ADMIN/MEMBER, APPROVE OWNER/ADMIN/REVIEWER; cannot generate/approve without approved Truth; unit + integration + e2e; no W3-B (no xyflow/canvas/materialize). |
+
+### W3-A commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm db:migrate:deploy` | Includes `20260912010000_w3a_shot_plan` |
+| `pnpm lint` / `typecheck` / `test` / `build` | Required green before PR |
+| `pnpm test:e2e` | Extends W2 chain with generate→edit→approve Shot Plan (`INSPECT_INLINE=1`) |
+| Provider | **FakeShotPlanProvider only** (W0-02 BLOCKED_EXTERNAL); no real keys |
+| Out of scope | W3-B canvas / xyflow / autosave / materialize / node registry |
+
+**DONE evidence package (W3-01…W3-02):** see milestone PR on `feature/w3a-shot-plan` (CI green; not merged; not self-VERIFIED).
 
 ### W3-B — Studio canvas + materialize (after W3-A)
 

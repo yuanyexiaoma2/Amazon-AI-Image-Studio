@@ -31,6 +31,28 @@ type TruthPack = {
   } | null;
 };
 
+type ShotBrief = {
+  id: string;
+  slot: string;
+  purpose: string;
+  orderIndex: number;
+  constraints: { aspectRatio: string; qaPolicy: string };
+};
+
+type ShotPlan = {
+  documentId: string;
+  currentRevisionId: string | null;
+  approvedRevisionId: string | null;
+  revision: {
+    id: string;
+    revision: number;
+    status: string;
+    truthRevisionId: string;
+    briefs: ShotBrief[];
+  } | null;
+  canvasPayload: { briefs: Array<{ orderIndex: number; slot: string }> } | null;
+};
+
 function ProjectDetailInner() {
   const params = useParams<{ projectId: string }>();
   const search = useSearchParams();
@@ -38,6 +60,7 @@ function ProjectDetailInner() {
   const projectId = params.projectId;
   const [assets, setAssets] = useState<Asset[]>([]);
   const [pack, setPack] = useState<TruthPack | null>(null);
+  const [shotPlan, setShotPlan] = useState<ShotPlan | null>(null);
   const [msg, setMsg] = useState<string>('');
   const [uploading, setUploading] = useState(false);
 
@@ -45,14 +68,17 @@ function ProjectDetailInner() {
 
   const refresh = useCallback(async () => {
     if (!workspaceId || !projectId) return;
-    const [aRes, tRes] = await Promise.all([
+    const [aRes, tRes, sRes] = await Promise.all([
       fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/assets`),
       fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/truth-pack`),
+      fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/shot-plans`),
     ]);
     const aJson = await aRes.json();
     const tJson = await tRes.json();
+    const sJson = await sRes.json();
     setAssets(aJson.items ?? []);
     setPack(tJson);
+    setShotPlan(sJson);
   }, [workspaceId, projectId]);
 
   useEffect(() => {
@@ -190,15 +216,58 @@ function ProjectDetailInner() {
     setMsg('Truth Pack APPROVED');
   }
 
+
+  async function generateShotPlan() {
+    if (!workspaceId || !projectId) return;
+    if (!pack?.approvedRevisionId) {
+      setMsg('Approve Truth Pack first');
+      return;
+    }
+    const res = await fetch(
+      `/api/workspaces/${workspaceId}/projects/${projectId}/shot-plans/generate`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      },
+    );
+    const json = await res.json();
+    if (!res.ok) {
+      setMsg(json?.error?.message ?? 'shot plan generate failed');
+      return;
+    }
+    setShotPlan(json.plan);
+    setMsg(`Shot Plan drafted via ${json.provider} (${json.plan?.revision?.briefs?.length ?? 0} briefs)`);
+  }
+
+  async function approveShotPlan() {
+    if (!workspaceId || !projectId || !shotPlan?.revision) return;
+    const res = await fetch(
+      `/api/workspaces/${workspaceId}/projects/${projectId}/shot-plans/approve`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ revisionId: shotPlan.revision.id }),
+      },
+    );
+    const json = await res.json();
+    if (!res.ok) {
+      setMsg(json?.error?.message ?? 'shot plan approve failed');
+      return;
+    }
+    setShotPlan(json);
+    setMsg('Shot Plan APPROVED');
+  }
+
   if (!workspaceId) {
     return <p>Missing workspaceId query param. Open from /projects.</p>;
   }
 
   return (
     <div>
-      <h1>Project assets + Truth Pack</h1>
+      <h1>Project assets + Truth Pack + Shot Plan</h1>
       <p style={{ opacity: 0.75 }}>
-        Upload PNG/JPEG/WebP → inspect/thumbnail → extract facts (Fake Vision) → confirm → approve.
+        Upload → Truth Pack approve → generate 7-shot plan (Fake) → approve. Canvas is W3-B.
       </p>
       <p>
         <strong>{msg}</strong>
@@ -270,6 +339,44 @@ function ProjectDetailInner() {
           <p>No revision yet — extract or save facts.</p>
         )}
       </section>
+
+      <section style={{ marginTop: 24 }}>
+        <h2>Shot Plan (W3-A)</h2>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button type="button" onClick={generateShotPlan} disabled={!pack?.approvedRevisionId}>
+            Generate 7-shot (Fake)
+          </button>
+          <button type="button" onClick={approveShotPlan} disabled={!shotPlan?.revision}>
+            Approve Shot Plan
+          </button>
+        </div>
+        {shotPlan?.revision ? (
+          <div>
+            <p>
+              Revision #{shotPlan.revision.revision} — <code>{shotPlan.revision.status}</code>
+              {shotPlan.approvedRevisionId ? ' · approved' : ''}
+              {' · truth '}
+              <code>{shotPlan.revision.truthRevisionId.slice(0, 8)}…</code>
+            </p>
+            <ul>
+              {shotPlan.revision.briefs.map((b) => (
+                <li key={b.id}>
+                  #{b.orderIndex} <strong>{b.slot}</strong>: {b.purpose}{' '}
+                  <code>{b.constraints.aspectRatio}</code>
+                </li>
+              ))}
+            </ul>
+            {shotPlan.canvasPayload ? (
+              <p style={{ opacity: 0.7 }}>
+                canvasPayload ready for W3-B ({shotPlan.canvasPayload.briefs.length} ordered briefs)
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p>No Shot Plan yet — approve Truth Pack, then generate.</p>
+        )}
+      </section>
+
     </div>
   );
 }
