@@ -11,6 +11,7 @@
  * Prefer GENERATION_INLINE=1 so runs settle without a separate worker.
  * 6) W4: model-registry → run → settle → budget gate → AUTH final → webhook → SSE
  * 7) W5-A: generate fingerprint/assets; remove_background+MASK; webhook orphan reconcile; STALE
+ * 8) W5-B: mask editor API (strokes+render) + replace_background + inpaint Fake
  */
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createHash } from 'node:crypto';
@@ -1089,8 +1090,210 @@ async function main() {
   if (!genItem || genItem.status !== 'SUCCEEDED') fail('W5-01 generate item', genItem);
   ok('W5-01/02 Fake generate + remove_background succeeded');
 
+  // ─── W5-B: mask strokes + render + replace_background + inpaint ───
+  const maskCreate = await fetch(
+    `${base}/api/workspaces/${wsW2}/asset-versions/${asset.currentVersionId}/masks`,
+    {
+      method: 'POST',
+      headers: {
+        cookie: jarW2.header(),
+        'content-type': 'application/json',
+        'x-request-id': `e2e-w5b-mask-${suffix}`,
+      },
+      body: JSON.stringify({
+        strokes: [
+          {
+            tool: 'brush',
+            size: 0.08,
+            points: [
+              { x: 480 / 512, y: 32 / 512 },
+              { x: 0.95, y: 0.08 },
+            ],
+          },
+        ],
+        metadata: { viewportVersion: 1, zoom: 1 },
+      }),
+    },
+  );
+  const maskJson = await maskCreate.json();
+  if (maskCreate.status !== 201) fail('W5-03 create mask', { status: maskCreate.status, maskJson });
+  const maskId = maskJson.id;
+  ok(`W5-03 mask created ${maskId.slice(0, 8)}…`);
+
+  const maskRender = await fetch(`${base}/api/workspaces/${wsW2}/masks/${maskId}/render`, {
+    method: 'POST',
+    headers: { cookie: jarW2.header(), 'x-request-id': `e2e-w5b-render-${suffix}` },
+  });
+  const renderJson = await maskRender.json();
+  if (maskRender.status !== 200) fail('W5-03 render mask', { status: maskRender.status, renderJson });
+  if (!renderJson.width || !renderJson.height) fail('W5-03 render dims', renderJson);
+  if (!renderJson.sha256) fail('W5-03 render sha', renderJson);
+  ok(`W5-03 mask rendered ${renderJson.width}x${renderJson.height}`);
+
+  const w5bGraph = {
+    schemaVersion: 1,
+    nodes: [
+      {
+        id: 'srcB',
+        type: 'source_image',
+        position: { x: 0, y: 0 },
+        config: { schemaVersion: 1, assetVersionId: asset.currentVersionId },
+      },
+      {
+        id: 'truthB',
+        type: 'product_truth',
+        position: { x: 0, y: 120 },
+        config: { schemaVersion: 1, truthRevisionId: approved.approvedRevisionId },
+      },
+      {
+        id: 'promptB',
+        type: 'prompt',
+        position: { x: 0, y: 240 },
+        config: { schemaVersion: 1, text: 'clean studio backdrop', negative: '' },
+      },
+      {
+        id: 'rbg1',
+        type: 'replace_background',
+        position: { x: 280, y: 0 },
+        config: {
+          schemaVersion: 1,
+          fidelity: 0.9,
+          lightBlend: 0.4,
+          maskId,
+        },
+      },
+      {
+        id: 'inp1',
+        type: 'inpaint',
+        position: { x: 280, y: 200 },
+        config: {
+          schemaVersion: 1,
+          strength: 0.7,
+          modelKey: 'primary-image-edit',
+          maskId,
+        },
+      },
+    ],
+    edges: [
+      {
+        id: 'e-src-rbg',
+        source: 'srcB',
+        target: 'rbg1',
+        sourceHandle: 'image',
+        targetHandle: 'image',
+      },
+      {
+        id: 'e-prompt-rbg',
+        source: 'promptB',
+        target: 'rbg1',
+        sourceHandle: 'prompt',
+        targetHandle: 'prompt',
+      },
+      {
+        id: 'e-truth-rbg',
+        source: 'truthB',
+        target: 'rbg1',
+        sourceHandle: 'truth',
+        targetHandle: 'truth',
+      },
+      {
+        id: 'e-src-inp',
+        source: 'srcB',
+        target: 'inp1',
+        sourceHandle: 'image',
+        targetHandle: 'image',
+      },
+      {
+        id: 'e-prompt-inp',
+        source: 'promptB',
+        target: 'inp1',
+        sourceHandle: 'prompt',
+        targetHandle: 'prompt',
+      },
+    ],
+  };
+
+  const w5bGet = await fetch(`${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}`, {
+    headers: { cookie: jarW2.header(), 'x-request-id': `e2e-w5b-get-${suffix}` },
+  });
+  const w5bGot = await w5bGet.json();
+  const w5bIfRev =
+    w5bGot.revisionNumber ??
+    w5bGot.draft?.revisionNumber ??
+    w5bGot.workflow?.draft?.revisionNumber;
+  const w5bPatch = await fetch(`${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}`, {
+    method: 'PATCH',
+    headers: {
+      cookie: jarW2.header(),
+      'content-type': 'application/json',
+      'x-request-id': `e2e-w5b-patch-${suffix}`,
+    },
+    body: JSON.stringify({ ifRevision: w5bIfRev, graph: w5bGraph }),
+  });
+  const w5bPatched = await w5bPatch.json();
+  if (w5bPatch.status !== 200) fail('W5-B graph patch', { status: w5bPatch.status, w5bPatched });
+  const w5bDraftRev =
+    w5bPatched.revisionNumber ??
+    w5bPatched.draft?.revisionNumber ??
+    w5bPatched.workflow?.draft?.revisionNumber;
+  const w5bSnap = await fetch(
+    `${base}/api/workspaces/${wsW2}/workflows/${wfCreated.workflowId}/snapshot`,
+    {
+      method: 'POST',
+      headers: {
+        cookie: jarW2.header(),
+        'content-type': 'application/json',
+        'x-request-id': `e2e-w5b-snap-${suffix}`,
+      },
+      body: JSON.stringify({ ifRevision: w5bDraftRev }),
+    },
+  );
+  const w5bSnapJson = await w5bSnap.json();
+  if (w5bSnap.status !== 201) fail('W5-B snapshot', { status: w5bSnap.status, w5bSnapJson });
+  const w5bRevisionId = w5bSnapJson.revision?.id;
+  ok('W5-B snapshot replace_background+inpaint graph');
+
+  const w5bRun = await fetch(
+    `${base}/api/workspaces/${wsW2}/workflow-revisions/${w5bRevisionId}/runs`,
+    {
+      method: 'POST',
+      headers: {
+        cookie: jarW2.header(),
+        'content-type': 'application/json',
+        'x-request-id': `e2e-w5b-run-${suffix}`,
+      },
+      body: JSON.stringify({
+        idempotencyKey: `e2e-w5b-run-${suffix}`,
+        scenario: 'SUCCESS',
+        reuseSucceededInputs: false,
+      }),
+    },
+  );
+  const w5bRunJson = await w5bRun.json();
+  if (w5bRun.status !== 201 && w5bRun.status !== 200) {
+    fail('W5-B create run', { status: w5bRun.status, w5bRunJson });
+  }
+  let w5bFinal = null;
+  for (let i = 0; i < 50; i++) {
+    const g = await fetch(`${base}/api/workspaces/${wsW2}/runs/${w5bRunJson.run.id}`, {
+      headers: { cookie: jarW2.header(), 'x-request-id': `e2e-w5b-poll-${suffix}-${i}` },
+    });
+    w5bFinal = await g.json();
+    const st = w5bFinal.status ?? w5bFinal.run?.status;
+    if (st === 'SUCCEEDED' || st === 'FAILED_FINAL' || st === 'FAILED_RETRYABLE') break;
+    await sleep(250);
+  }
+  const w5bStatus = w5bFinal?.status ?? w5bFinal?.run?.status;
+  if (w5bStatus !== 'SUCCEEDED') fail('W5-B run did not succeed', w5bFinal);
+  const w5bItems = w5bFinal.items || w5bFinal.run?.items || [];
+  const rbgItem = w5bItems.find((it) => it.nodeId === 'rbg1');
+  const inpItem = w5bItems.find((it) => it.nodeId === 'inp1');
+  if (!rbgItem || rbgItem.status !== 'SUCCEEDED') fail('W5-04 replace_background item', rbgItem);
+  if (!inpItem || inpItem.status !== 'SUCCEEDED') fail('W5-05 inpaint item', inpItem);
+  ok('W5-04/05 Fake replace_background + inpaint succeeded');
+
   console.log(
-    'E2E PASS: W2…W4 + W5-A generate/fingerprint/remove_background/webhook-orphan (Fake only)',
+    'E2E PASS: W2…W5-B mask editor + replace_background + inpaint (Fake only)',
   );
 }
 

@@ -132,3 +132,44 @@ describe('Fake REMOVE_BACKGROUND (W5-02)', () => {
     expect(maskBytes[0]).toBe(0x89); // PNG magic
   });
 });
+
+describe('Fake EDIT / INPAINT (W5-04/05)', () => {
+  it('EDIT replace_background demonstrates product-lock via fidelity stamp + mask echo', async () => {
+    resetFakeProviderState();
+    const a = new FakeImageProviderAdapter();
+    const sub = await a.submit({
+      operation: 'EDIT',
+      prompt: 'studio backdrop',
+      modelId: 'fake-v1',
+      idempotencyKey: 'edit-1',
+      width: 1024,
+      height: 1024,
+      scenario: 'SUCCESS',
+      clientMetadata: { productLock: true, fidelity: 0.9, lightBlend: 0.4, maskId: 'm1' },
+    });
+    const st = await a.getStatus(sub.externalJobId);
+    expect(st.status).toBe('SUCCEEDED');
+    expect(st.outputs?.[0]?.role).toBe('image');
+    expect(st.outputs?.[0]?.width).toBe(1024);
+    expect(st.outputs?.every((o) => o.role === 'image')).toBe(true);
+  });
+
+  it('INPAINT uses strength to vary output stamp', async () => {
+    resetFakeProviderState();
+    const a = new FakeImageProviderAdapter();
+    const sub = await a.submit({
+      operation: 'INPAINT',
+      prompt: 'fix scratch',
+      modelId: 'fake-v1',
+      idempotencyKey: 'inp-1',
+      width: 512,
+      height: 512,
+      strength: 0.75,
+      scenario: 'SUCCESS',
+    });
+    const st = await a.getStatus(sub.externalJobId);
+    expect(st.status).toBe('SUCCEEDED');
+    expect(st.outputs?.[0]?.role).toBe('image');
+    expect(st.outputs?.[0]?.width).toBe(512);
+  });
+});

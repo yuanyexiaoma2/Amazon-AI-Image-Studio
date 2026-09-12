@@ -8,3 +8,4 @@ export * from './shot-plan.js';
 export * from './workflow.js';
 export * from './node-configs.js';
 export * from './generation.js';
+export * from './masks.js';

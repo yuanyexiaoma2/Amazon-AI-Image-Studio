@@ -37,6 +37,12 @@ import {
   ModelRegistryResponseSchema,
   GenerationRunSchema,
 } from './generation.js';
+import {
+  CreateMaskRequestSchema,
+  UpdateMaskRequestSchema,
+  MaskResponseSchema,
+  RenderMaskResponseSchema,
+} from './masks.js';
 import YAML from 'yaml';
 
 extendZodWithOpenApi(z);
@@ -352,6 +358,75 @@ registry.registerPath({
   responses: { 200: { description: 'text/event-stream' } },
 });
 
+
+registry.register('CreateMaskRequest', CreateMaskRequestSchema);
+registry.register('UpdateMaskRequest', UpdateMaskRequestSchema);
+registry.register('MaskResponse', MaskResponseSchema);
+registry.register('RenderMaskResponse', RenderMaskResponseSchema);
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/workspaces/{workspaceId}/asset-versions/{versionId}/masks',
+  summary: 'List masks for an asset version',
+  responses: {
+    200: { description: 'OK' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/asset-versions/{versionId}/masks',
+  summary: 'Create mask (normalized strokes §10.4)',
+  request: {
+    body: { content: { 'application/json': { schema: CreateMaskRequestSchema } } },
+  },
+  responses: {
+    201: {
+      description: 'Created',
+      content: { 'application/json': { schema: MaskResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/workspaces/{workspaceId}/masks/{maskId}',
+  summary: 'Get mask',
+  responses: {
+    200: {
+      description: 'OK',
+      content: { 'application/json': { schema: MaskResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'put',
+  path: '/api/workspaces/{workspaceId}/masks/{maskId}',
+  summary: 'Update mask strokes',
+  request: {
+    body: { content: { 'application/json': { schema: UpdateMaskRequestSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'OK',
+      content: { 'application/json': { schema: MaskResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/masks/{maskId}/render',
+  summary: 'Render full-res grayscale mask PNG matching source WxH',
+  responses: {
+    200: {
+      description: 'OK',
+      content: { 'application/json': { schema: RenderMaskResponseSchema } },
+    },
+  },
+});
+
 registry.registerPath({
   method: 'post',
   path: '/api/v1/providers/{providerKey}/webhook',
@@ -364,8 +439,8 @@ const document = generator.generateDocument({
   openapi: '3.0.3',
   info: {
     title: 'Amazon AI Image Studio API',
-    version: '0.3.2',
-    description: 'OpenAPI from Zod contracts (W1 + W2 + W3-A/B Shot Plan, canvas, materialize).',
+    version: '0.3.3',
+    description: 'OpenAPI from Zod contracts (W1–W5-B masks / edit / inpaint).',
   },
   servers: [{ url: 'http://localhost:3000' }],
 });

@@ -128,3 +128,46 @@ export function resolutionToPixels(tier: string | undefined): { width: number; h
       return { width: 2048, height: 2048 };
   }
 }
+
+export function extractMaskId(
+  node: GraphNode,
+  inputs: ResolvedPortInput[],
+): string | null {
+  const maskIn = inputs.find((i) => i.portId === 'mask');
+  if (typeof maskIn?.sourceConfig.maskId === 'string') {
+    return maskIn.sourceConfig.maskId;
+  }
+  if (typeof node.config?.maskId === 'string') {
+    return node.config.maskId as string;
+  }
+  return null;
+}
+
+export function extractImageAssetVersionId(inputs: ResolvedPortInput[]): string | null {
+  const imageIn = inputs.find((i) => i.portId === 'image');
+  if (typeof imageIn?.sourceConfig.assetVersionId === 'string') {
+    return imageIn.sourceConfig.assetVersionId;
+  }
+  // fallback: first IMAGE-bearing upstream
+  for (const i of inputs) {
+    if (i.portId === 'image' || i.portId === 'references') {
+      if (typeof i.sourceConfig.assetVersionId === 'string') return i.sourceConfig.assetVersionId;
+    }
+  }
+  return null;
+}
+
+export type EditParams = {
+  fidelity?: number;
+  lightBlend?: number;
+  strength?: number;
+};
+
+export function extractEditParams(node: GraphNode): EditParams {
+  const cfg = (node.config ?? {}) as Record<string, unknown>;
+  return {
+    fidelity: typeof cfg.fidelity === 'number' ? cfg.fidelity : undefined,
+    lightBlend: typeof cfg.lightBlend === 'number' ? cfg.lightBlend : undefined,
+    strength: typeof cfg.strength === 'number' ? cfg.strength : undefined,
+  };
+}
