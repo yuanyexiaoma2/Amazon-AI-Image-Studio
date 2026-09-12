@@ -13,7 +13,7 @@ describe('W6-01 Market Rule Pack', () => {
     const v = validateMarketRulePack(AMAZON_MAIN_US_V1);
     expect(v.ok).toBe(true);
     expect(AMAZON_MAIN_US_V1.key).toBe('amazon-main-us-v1');
-    expect(AMAZON_MAIN_US_V1.version).toBe(1);
+    expect(AMAZON_MAIN_US_V1.version).toBe(2);
     expect(AMAZON_MAIN_US_V1.marketplaceCode).toBe('US');
     const ids = AMAZON_MAIN_US_V1.rules.map((r) => r.ruleId);
     expect(ids).toContain('FILE.DECODABLE');

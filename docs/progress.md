@@ -6,7 +6,7 @@
 
 **Repo type (W0-01):** GREENFIELD — empty public GitHub repo; no prior application code.
 
-**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 / W5-A / W5-B / W5-C / W6 work 2026-09-12 Asia/Shanghai (UTC+8).
+**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A / W3-B1 / W3-B2 / W4 / W5-A / W5-B / W5-C / W6 / W7 / W8 work 2026-09-12 Asia/Shanghai (UTC+8).
 
 ---
 
@@ -377,21 +377,21 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 ---
 
-## W7 — Variants / batch / QA / export / admin (DONE)
+## W7 — Variants / batch / QA / export / admin (VERIFIED)
 
 **Branch:** `feature/w7-variants` (from main `15f49796939b4cef2a42df3e6bd1dab788ce308b` = W6)  
 **Acceptance unit (one PR, one independent review):** W7-01…W7-07  
-**Fake only** (ADR-0003). No real keys. Do not start W8. Do not merge without 审稿.
+**Fake only** (ADR-0003). No real keys. W8 unlocked after this VERIFIED ratification.
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W7-01 | Variant entities, master selection, component color config | DONE | Prisma `variants` / `variant_components` / `variant_items` (+ `variant_runs`); migration `20260912060000_w7_variants`; domain validate + APIs POST/GET/PATCH. |
-| W7-02 | Batch-derive variant workflows from approved master | DONE | `POST .../variants/{id}/materialize` clones master graph with color overrides (no Approval inherit); `POST .../variant-runs` Fake 3×7 batch. |
-| W7-03 | Per-item status, partial retry, batch budget cap | DONE | Item RESERVE/SETTLE/REFUND; `BUDGET_EXCEEDED` unless confirmBudget; single AUTH fail → PARTIAL; `POST .../variant-items/{id}/retry`. |
-| W7-04 | Variant QA structure/logo/text/composition/attachment | DONE | Fake Vision scenarios STRUCTURE_CHANGE/LOGO_CHANGE/COMPOSITION_DRIFT/ATTACHMENT_COUNT; maps to QA_BLOCK/REVIEW via W6 Fake QA path. |
-| W7-05 | Filter failed; export only passing; variant manifest | DONE | `POST .../variant-runs/{id}/export` filters non-PASS; manifest + filteredOut; requires per-item Approval (master Approval not inherited). |
-| W7-06 | Admin Jobs + credit adjust + cost reconciliation | DONE | `/admin` + APIs under `.../admin/{jobs,credits,reconciliation}`; OWNER/ADMIN only; ADJUST audited. |
-| W7-07 | Ops notes + failure runbook | DONE | `docs/runbooks/variant-batch.md`, `credit-reconciliation.md`, `provider-outage-stuck-jobs.md`. |
+| W7-01 | Variant entities, master selection, component color config | VERIFIED | Prisma `variants` / `variant_components` / `variant_items` (+ `variant_runs`); migration `20260912060000_w7_variants`; domain validate + APIs POST/GET/PATCH. |
+| W7-02 | Batch-derive variant workflows from approved master | VERIFIED | `POST .../variants/{id}/materialize` clones master graph with color overrides (no Approval inherit); `POST .../variant-runs` Fake 3×7 batch. |
+| W7-03 | Per-item status, partial retry, batch budget cap | VERIFIED | Item RESERVE/SETTLE/REFUND; `BUDGET_EXCEEDED` unless confirmBudget; single AUTH fail → PARTIAL; `POST .../variant-items/{id}/retry`. |
+| W7-04 | Variant QA structure/logo/text/composition/attachment | VERIFIED | Fake Vision scenarios STRUCTURE_CHANGE/LOGO_CHANGE/COMPOSITION_DRIFT/ATTACHMENT_COUNT; maps to QA_BLOCK/REVIEW via W6 Fake QA path. |
+| W7-05 | Filter failed; export only passing; variant manifest | VERIFIED | `POST .../variant-runs/{id}/export` filters non-PASS; manifest + filteredOut; requires per-item Approval (master Approval not inherited). |
+| W7-06 | Admin Jobs + credit adjust + cost reconciliation | VERIFIED | `/admin` + APIs under `.../admin/{jobs,credits,reconciliation}`; OWNER/ADMIN only; ADJUST audited. |
+| W7-07 | Ops notes + failure runbook | VERIFIED | `docs/runbooks/variant-batch.md`, `credit-reconciliation.md`, `provider-outage-stuck-jobs.md`. |
 
 ### W7 commands / evidence (implementer)
 
@@ -402,12 +402,44 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | `pnpm openapi:generate` | Variant / admin paths |
 | `pnpm test:e2e` | Extends with 3×7 Fake batch, partial fail, ledger, structure/logo BLOCK, filtered export (`INSPECT_INLINE=1`) |
 | Provider | **Fake only** (ADR-0003); no real keys |
-| Out of scope | W8; W4-07 / W0-02 / W2-07; real Provider keys |
+| Out of scope | (at ship) W8; W4-07 / W0-02 / W2-07; real Provider keys — W8 now unlocked after VERIFIED |
 
-**DONE evidence package (W7-01…W7-07):**
-- Branch HEAD: `1187a32e0b7b8507f3ae937f725387b61036f73f`
-- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/17
-- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34697121685
-- Local e2e: 3×7 Fake batch PARTIAL (1 AUTH fail + 20 ok) → retry; structure/logo BLOCK; ledger drift=false; admin ADJUST; export filter (`INSPECT_INLINE=1`)
+**VERIFIED evidence package (W7-01…W7-07):**
+- Merge SHA: `21bd2e7fb26ad7617975e570d98b1555dc9a6003` (PR #17 squash into main)
+- Tip CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34697260457
+- 审稿 **APPROVED** + public comment: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/17#issuecomment-5646415995
+- Fake only (ADR-0003); OUT: W8 at merge time (now unlocked)
+- W8 unlocked after this VERIFIED ratification
+
+---
+
+## W8 — Hardening / eval / security / Production candidate (Phase 1 Fake)
+
+**Branch:** `feature/w8-hardening` (from main `21bd2e7fb26ad7617975e570d98b1555dc9a6003` = W7)  
+**Acceptance unit (one PR, one independent review):** W8-01…W8-07  
+**Fake only** (ADR-0003). No real keys. No Production deploy. Do not start W9. Do not merge without 审稿.
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| W8-01 | Expand visual eval set + baseline report | DONE | Phase 1 uses **3 synthetic SKUs** (W2-07 10 real hung); `eval-briefs.json` + `golden-qa/`; `pnpm test:eval` → `docs/eval/w8-phase1-baseline-report.md` |
+| W8-02 | Tune prompts/refs/QA thresholds vs Fake failures | DONE | `prompt-templates.ts` + MAIN template locks; rule pack **v2** (extent 0.82 / overlay 0.92 / blur review 85); `docs/eval/w8-02-prompt-qa-tuning.md` |
+| W8-03 | Concurrency / backpressure / 30-image stress | DONE | Worker `concurrency` + admit-time `QUEUE_BACKPRESSURE`; `pnpm test:stress-30` → `docs/eval/w8-03-load-report.md`; domain tests |
+| W8-04 | Security checklist tests | DONE | Authz / signed URL / SSRF / webhook sig / log redaction automated + `docs/security/w8-04-checklist.md` |
+| W8-05 | Backup/restore/rollback/user-delete drill | DONE | `docs/runbooks/backup-restore-rollback.md`, `user-delete-drill.md`; stub `scripts/backup-restore-drill.sh` |
+| W8-06 | A11y/empty/error/browser cheap fixes | DONE | Review + Studio landmarks/live regions/empty+error; `docs/eval/w8-06-a11y-browser-notes.md` |
+| W8-07 | Staging UAT + release + Prod candidate notes | DONE | `docs/release/w8-07-*.md` — no real Production keys; §18.4 Fake exception documented |
+
+### W8 commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm lint` / `typecheck` / `test` / `build` | Required green before PR |
+| `pnpm test:eval` | Fake baseline report under `docs/eval/` |
+| `pnpm test:stress-30` | 30-item Fake load report |
+| Provider | **Fake only** (ADR-0003); no real keys |
+| Out of scope | Real Provider Phase 2; W9; Production go-live; merge without 审稿 |
+
+**DONE evidence package (W8-01…W8-07):**
+- Branch: `feature/w8-hardening`
 - Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge
-- Do not merge; do not start W8.
+- Do not merge; do not start W9.

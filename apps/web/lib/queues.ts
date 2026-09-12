@@ -1,4 +1,9 @@
 import { Queue } from 'bullmq';
+import {
+  decideQueueAdmission,
+  resolveQueueMaxWaiting,
+  resolveWorkerConcurrency,
+} from '@studio/domain';
 import { prisma, OutboxRepository, inspectJobId, newId } from '@studio/db';
 import { inspectUploadedAsset, type InspectInput } from '@studio/imaging';
 import { ensureStorageReady } from './storage';
@@ -174,7 +179,17 @@ export async function publishGenerationOutbox(outbox: {
   }
 
   try {
-    await getGenerationQueue().add('generation-attempt', data, {
+    const queue = getGenerationQueue();
+    const waiting = await queue.getWaitingCount();
+    const concurrency = resolveWorkerConcurrency(process.env);
+    const maxWaiting = resolveQueueMaxWaiting(process.env);
+    const decision = decideQueueAdmission({ waiting, concurrency, maxWaiting });
+    if (!decision.admit) {
+      const msg = `QUEUE_BACKPRESSURE waiting=${waiting} max=${maxWaiting}`;
+      await outboxRepo.bumpAttempt(outbox.workspaceId, outbox.id, msg);
+      throw new Error(msg);
+    }
+    await queue.add('generation-attempt', data, {
       jobId: outbox.jobId,
       removeOnComplete: 100,
       removeOnFail: 50,
@@ -188,7 +203,9 @@ export async function publishGenerationOutbox(outbox: {
       await outboxRepo.markPublished(outbox.workspaceId, outbox.id);
       return;
     }
-    await outboxRepo.bumpAttempt(outbox.workspaceId, outbox.id, msg);
+    if (!/QUEUE_BACKPRESSURE/.test(msg)) {
+      await outboxRepo.bumpAttempt(outbox.workspaceId, outbox.id, msg);
+    }
     throw err;
   }
 }

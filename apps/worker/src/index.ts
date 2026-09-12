@@ -1,5 +1,10 @@
 import { Queue, Worker } from 'bullmq';
 import { createLogger } from '@studio/config';
+import {
+  decideQueueAdmission,
+  resolveQueueMaxWaiting,
+  resolveWorkerConcurrency,
+} from '@studio/domain';
 import { handleHealthJob, type HealthJobData } from './jobs/health.js';
 import {
   handleInspectJob,
@@ -33,35 +38,50 @@ export const QA_QUEUE = 'qa-evaluate';
 export const EXPORT_QUEUE = 'export-bundle';
 
 async function main() {
+  const concurrency = resolveWorkerConcurrency(process.env);
+  const maxWaiting = resolveQueueMaxWaiting(process.env);
+  log.info({ concurrency, maxWaiting }, 'worker concurrency / backpressure config');
+
   const healthQueue = new Queue<HealthJobData>(HEALTH_QUEUE, { connection });
-  const healthWorker = new Worker<HealthJobData>(HEALTH_QUEUE, handleHealthJob, { connection });
+  const healthWorker = new Worker<HealthJobData>(HEALTH_QUEUE, handleHealthJob, {
+    connection,
+    concurrency: 1,
+  });
 
   const inspectQueue = new Queue<InspectInput>(INSPECT_QUEUE, { connection });
   const inspectWorker = new Worker<InspectInput>(
     INSPECT_QUEUE,
     async (job) => handleInspectJob(job.data),
-    { connection },
+    { connection, concurrency },
   );
 
   const generationQueue = new Queue<GenerationAttemptJobData>(GENERATION_QUEUE, { connection });
   const generationWorker = new Worker<GenerationAttemptJobData>(
     GENERATION_QUEUE,
-    async (job) => handleGenerationAttemptJob(job.data),
-    { connection },
+    async (job) => {
+      const waiting = await generationQueue.getWaitingCount();
+      const decision = decideQueueAdmission({ waiting, concurrency, maxWaiting });
+      if (!decision.admit) {
+        // Job already dequeued — log pressure for ops; do not drop work.
+        log.warn(decision, 'generation queue depth above maxWaiting (processing anyway)');
+      }
+      return handleGenerationAttemptJob(job.data);
+    },
+    { connection, concurrency },
   );
 
   const qaQueue = new Queue<QaEvaluateJobData>(QA_QUEUE, { connection });
   const qaWorker = new Worker<QaEvaluateJobData>(
     QA_QUEUE,
     async (job) => handleQaEvaluateJob(job.data),
-    { connection },
+    { connection, concurrency },
   );
 
   const exportQueue = new Queue<ExportBundleJobData>(EXPORT_QUEUE, { connection });
   const exportWorker = new Worker<ExportBundleJobData>(
     EXPORT_QUEUE,
     async (job) => handleExportBundleJob(job.data),
-    { connection },
+    { connection, concurrency: Math.min(2, concurrency) },
   );
 
   healthWorker.on('completed', (job, result) => {
@@ -133,6 +153,8 @@ async function main() {
     {
       redisUrl: `${connection.host}:${connection.port}`,
       queues: [HEALTH_QUEUE, INSPECT_QUEUE, GENERATION_QUEUE, QA_QUEUE, EXPORT_QUEUE],
+      concurrency,
+      maxWaiting,
     },
     'worker started',
   );

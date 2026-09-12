@@ -643,18 +643,20 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
 
   if (narrow) {
     return (
-      <div style={{ padding: 24 }}>
-        <h1>Studio</h1>
-        <p>
+      <main style={{ padding: 24 }} role="main" aria-labelledby="studio-narrow-title">
+        <h1 id="studio-narrow-title">Studio</h1>
+        <p role="alert">
           Desktop-only canvas editor. Minimum width 1280px — full canvas editing is not supported on
-          this viewport.
+          this viewport. Rotate device or widen the browser window.
         </p>
-      </div>
+      </main>
     );
   }
 
   return (
     <div
+      role="application"
+      aria-label="Studio workflow canvas"
       style={{
         display: 'grid',
         gridTemplateColumns: '220px 1fr 300px',
@@ -665,8 +667,13 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
         color: '#e8eefc',
       }}
     >
-      <aside style={{ borderRight: '1px solid #1e2a44', padding: 12, overflow: 'auto' }}>
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Node library</div>
+      <aside
+        aria-label="Node library"
+        style={{ borderRight: '1px solid #1e2a44', padding: 12, overflow: 'auto' }}
+      >
+        <div style={{ fontWeight: 700, marginBottom: 8 }} id="node-library-heading">
+          Node library
+        </div>
         <div style={{ fontSize: 11, opacity: 0.65, marginBottom: 8 }}>
           11 MVP types · Zod configs (W3-05)
         </div>
@@ -726,7 +733,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
                 flexWrap: 'wrap',
               }}
             >
-              <span>{status}</span>
+              <span role="status" aria-live="polite">{status}</span>
               <button type="button" onClick={() => void reload()}>
                 Reload
               </button>
@@ -1090,7 +1097,7 @@ function TaskDrawer(props: {
       </div>
       <div style={{ display: 'grid', gap: 6, maxHeight: 160, overflow: 'auto' }}>
         {runs.length === 0 && (
-          <div style={{ opacity: 0.65 }}>No runs yet — queue / running / success / failed appear here.</div>
+          <div role="status" style={{ opacity: 0.65 }}>No runs yet — queue / running / success / failed appear here.</div>
         )}
         {runs.map((r) => (
           <div

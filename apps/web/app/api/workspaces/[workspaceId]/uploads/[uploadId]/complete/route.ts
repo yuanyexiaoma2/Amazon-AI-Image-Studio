@@ -3,6 +3,7 @@ import { CompleteUploadRequestSchema, makeApiError } from '@studio/contracts';
 import {
   isAnimatedOrDynamicWebp,
   normalizeContentType,
+  refuseExternalFetchUrl,
   sniffImageMime,
 } from '@studio/domain';
 import { prisma, UploadRepository, inspectJobId } from '@studio/db';
@@ -28,6 +29,22 @@ export async function POST(request: Request, context: Ctx) {
       status: 400,
       headers: { 'x-request-id': requestId },
     });
+  }
+
+  // W8-04: refuse any client-supplied remote fetch URL (SSRF). Upload is presigned PUT only.
+  if (body && typeof body === 'object') {
+    const maybe = body as Record<string, unknown>;
+    for (const key of ['sourceUrl', 'fetchUrl', 'url', 'remoteUrl']) {
+      if (key in maybe) {
+        const refused = refuseExternalFetchUrl(String(maybe[key] ?? ''));
+        if (!refused.ok) {
+          return NextResponse.json(
+            makeApiError('VALIDATION_ERROR', refused.reason, requestId, { code: refused.code }),
+            { status: 400, headers: { 'x-request-id': requestId } },
+          );
+        }
+      }
+    }
   }
 
   const parsed = CompleteUploadRequestSchema.safeParse(body);

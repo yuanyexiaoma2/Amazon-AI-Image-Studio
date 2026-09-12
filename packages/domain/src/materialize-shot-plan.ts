@@ -5,6 +5,7 @@
 import type { ShotPlanCanvasPayload, ShotBriefCanvasPayload } from './shot-plan.js';
 import type { GraphEdge, GraphNode, WorkflowGraph } from './workflow-graph.js';
 import { validateWorkflowGraph } from './workflow-graph.js';
+import { buildHardenedNegative, buildHardenedPromptText } from './prompt-templates.js';
 
 export type MaterializeResult =
   | { ok: true; graph: WorkflowGraph; briefCount: number }
@@ -22,9 +23,12 @@ export function collectReferencedAssetVersionIds(payload: ShotPlanCanvasPayload)
 }
 
 function buildPromptText(brief: ShotBriefCanvasPayload): string {
-  const must = brief.must?.length ? `Must: ${brief.must.join('; ')}` : '';
-  const mustNot = brief.mustNot?.length ? `Must not: ${brief.mustNot.join('; ')}` : '';
-  return [brief.purpose, must, mustNot].filter(Boolean).join('\n');
+  return buildHardenedPromptText({
+    slot: brief.slot,
+    purpose: brief.purpose,
+    must: brief.must,
+    mustNot: brief.mustNot,
+  });
 }
 
 /**
@@ -83,7 +87,7 @@ export function materializeShotPlanToGraph(payload: ShotPlanCanvasPayload): Mate
       config: {
         schemaVersion: 1,
         text: buildPromptText(brief),
-        negative: (brief.mustNot ?? []).join('; '),
+        negative: buildHardenedNegative(brief.mustNot, brief.slot),
         locale: 'en-US',
         shotBriefId: brief.briefId,
         slot: brief.slot,

@@ -1,6 +1,6 @@
 # amazon-main-us-v1 — Market Rule Pack
 
-- **Key / version:** `amazon-main-us-v1` @ 1
+- **Key / version:** `amazon-main-us-v1` @ 2
 - **Marketplace:** US (Amazon.com). First-ship only; other marketplaces are not activated.
 - **Scope:** `CATEGORY_PREFIX` / `GENERIC_NON_APPAREL` / specificity `0`.
 - **Effective date:** 2026-09-11
@@ -24,9 +24,9 @@ Category-specific packs, when added, merge by `scope.specificity` then `priority
 | FILE.DECODABLE | file.decodable.v1 | CRITICAL | yes | PNG/JPEG only |
 | FILE.MIN_SHORT_SIDE | image.minShortSide.v1 | HIGH | no | FAIL &lt;1000px; REVIEW 1000–1999; PASS ≥2000 |
 | MAIN.BACKGROUND_WHITE | amazon.backgroundWhite.v1 | HIGH | no | Mask complement minus 5px-@2k halo; FAIL &lt;0.98; REVIEW 0.98–0.995 |
-| MAIN.SUBJECT_FRAME_EXTENT | amazon.subjectExtent.v1 | HIGH | no | extent ≥0.85 when mask conf ≥0.90 else REVIEW |
+| MAIN.SUBJECT_FRAME_EXTENT | amazon.subjectExtent.v1 | HIGH | no | extent ≥0.82 when mask conf ≥0.90 else REVIEW (W8-02) |
 | MAIN.NOT_CROPPED | amazon.edgeMargin.v1 | HIGH | no | margin ≥1%; touch-edge FAIL if confident |
-| MAIN.NO_OVERLAY_TEXT | amazon.overlayText.v1 | HIGH | no | OCR ≥0.90 off-print FAIL |
+| MAIN.NO_OVERLAY_TEXT | amazon.overlayText.v1 | HIGH | no | OCR ≥0.92 off-print FAIL (W8-02) |
 | MAIN.NO_BORDER_OR_WATERMARK | amazon.borderWatermark.v1 | HIGH | no | Hybrid pixel + Fake Vision |
 | MAIN.ONLY_SOLD_ITEMS | amazon.soldItems.v1 | HIGH | no | REVIEW default; FAIL only with inventory+mask conflict |
 | PRODUCT.IDENTITY | product.identity.v1 | HIGH | no | geometry/logo/ports/controls/material/itemCount |
@@ -37,6 +37,7 @@ Category-specific packs, when added, merge by `scope.specificity` then `priority
 
 | Date (Asia/Shanghai) | Version | Change |
 |---|---|---|
+| 2026-09-12 | 2 | W8-02 Fake tuning: subjectExtent 0.85→0.82; overlay failConfidence 0.90→0.92; blur reviewBelow 90→85. |
 | 2026-09-12 | 1 | Initial pack for W6 Phase 1 (Fake Provider + 3 synthetic SKUs). |
 
 Phase 2 (real Provider / real SKU eval) is hung per ADR-0003 and will land as new CRs.

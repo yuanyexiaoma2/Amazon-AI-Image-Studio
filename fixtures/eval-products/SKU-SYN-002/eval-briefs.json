@@ -1,0 +1,22 @@
+{
+  "sku": "SKU-SYN-002",
+  "phase": 1,
+  "briefs": [
+    {
+      "slot": "MAIN",
+      "candidates": 2,
+      "qaPolicy": "amazon-main-us-v1"
+    },
+    {
+      "slot": "FEATURE",
+      "candidates": 2,
+      "qaPolicy": "amazon-feature-us-v1"
+    },
+    {
+      "slot": "LIFESTYLE",
+      "candidates": 2,
+      "qaPolicy": "amazon-lifestyle-us-v1"
+    }
+  ],
+  "notes": "W8-01 Phase 1: 3 slots \u00d7 2 candidates Fake-only; real 10-SKU expansion hung (W2-07)."
+}

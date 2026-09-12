@@ -4,11 +4,11 @@ import type { MarketRulePack } from '../qa-rule-pack.js';
 export const AMAZON_MAIN_US_V1: MarketRulePack = {
   schemaVersion: 1,
   key: 'amazon-main-us-v1',
-  version: 1,
+  version: 2,
   marketplaceCode: 'US',
   scope: { type: 'CATEGORY_PREFIX', value: 'GENERIC_NON_APPAREL', specificity: 0 },
   priority: 100,
-  effectiveDate: '2026-09-11',
+  effectiveDate: '2026-09-12',
   rules: [
     {
       ruleId: 'FILE.DECODABLE',
@@ -46,7 +46,7 @@ export const AMAZON_MAIN_US_V1: MarketRulePack = {
       type: 'DETERMINISTIC_WITH_SEGMENTATION',
       severity: 'HIGH',
       nonWaivable: false,
-      params: { requiredExtent: 0.85, hardDecisionMaskConfidence: 0.9 },
+      params: { requiredExtent: 0.82, hardDecisionMaskConfidence: 0.9 },
     },
     {
       ruleId: 'MAIN.NOT_CROPPED',
@@ -62,7 +62,7 @@ export const AMAZON_MAIN_US_V1: MarketRulePack = {
       type: 'OCR',
       severity: 'HIGH',
       nonWaivable: false,
-      params: { allowConfirmedProductPrint: true, failConfidence: 0.9 },
+      params: { allowConfirmedProductPrint: true, failConfidence: 0.92 },
     },
     {
       ruleId: 'MAIN.NO_BORDER_OR_WATERMARK',
@@ -94,7 +94,7 @@ export const AMAZON_MAIN_US_V1: MarketRulePack = {
       type: 'DETERMINISTIC',
       severity: 'MEDIUM',
       nonWaivable: false,
-      params: { thresholdProfile: 'product-2k-v1', failBelow: 40, reviewBelow: 90 },
+      params: { thresholdProfile: 'product-2k-v1', failBelow: 40, reviewBelow: 85 },
     },
     {
       ruleId: 'PRODUCT.FACT_TEXT_MATCH',

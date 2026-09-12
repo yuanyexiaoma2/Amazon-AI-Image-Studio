@@ -1,0 +1,15 @@
+{
+  "id": "watermark",
+  "fakeScenario": "WATERMARK",
+  "slot": "MAIN",
+  "expectedOverall": "BLOCK",
+  "expectedFailOrReviewRules": [
+    "MAIN.NO_BORDER_OR_WATERMARK"
+  ],
+  "rulePack": {
+    "key": "amazon-main-us-v1",
+    "version": 2
+  },
+  "phase": 1,
+  "notes": "Synthetic Fake golden \u2014 not a real SKU photo"
+}
