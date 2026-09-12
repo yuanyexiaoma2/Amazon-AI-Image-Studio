@@ -144,10 +144,11 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | Out of scope | W3-B2 node schemas UI / rich interactions / materialize |
 
 **DONE evidence package (W3-03 / W3-04 / W3-06):**
-- Branch: `feature/w3b1-canvas-foundation`
-- Milestone PR (open, **not merged**): _pending_
-- CI: _pending_
-- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge
+- Branch HEAD: `23019c6bfec1c9d50be30b779035a08e7209a2ce`
+- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/9
+- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34664833213
+- Local e2e: create empty workflow → save positions → 409 conflict → cycle reject → refresh keeps graph → snapshot (Fake only)
+- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #9 before merge
 
 ---
 
