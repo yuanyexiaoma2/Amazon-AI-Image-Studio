@@ -359,7 +359,7 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | Command | Result |
 |---|---|
 | `pnpm db:migrate:deploy` | Includes `20260912050000_w6_qa_export` |
-| `pnpm lint` / `typecheck` / `test` / `build` | Required green before PR |
+| `pnpm lint` / `typecheck` / `test` / `build` | Local green 2026-09-12 Asia/Shanghai |
 | `pnpm openapi:generate` | QA / approval / export paths (v0.4.0) |
 | `pnpm test:e2e` | Extends with QA→approve→ZIP and MAIN BLOCK export gate (`INSPECT_INLINE` also inlines QA/export) |
 | Provider | **Fake OCR + Fake Vision QA + Fake Image only** (ADR-0003); no real keys |
@@ -368,6 +368,10 @@ One branch / one PR / one review each; merge unlocks the next segment.
 `qa_gate` PASS is never human Approval. Phase 2 real-Provider / real-SKU eval remains 挂起 (ADR-0003).
 
 **DONE evidence package (W6-01…W6-08):**
-- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED before merge.
+- Branch HEAD: `c307c5473014d03cf417977ae04f6ffeeac139fe`
+- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/16
+- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34693668812
+- Local e2e: new-project → QA PASS → no-approval 409 → APPROVE → ZIP; MAIN BLOCK 409; OVERRIDE then ZIP; Fake OCR/Vision; tenant 403 (`INSPECT_INLINE=1`)
+- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #16 before merge
 - Do not merge; do not start W7.
 
