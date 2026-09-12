@@ -4,6 +4,7 @@
  * 1) register → login → create project → cross-workspace denied
  * 2) sessionVersion: old cookie 401 after password change / disable; password swap
  * 3) W2: upload → inspect → extract → confirm → approve Truth Pack
+ * 4) W3-A: generate 7-shot Shot Plan (Fake) → human edit → approve
  * Expects a running Next.js server at APP_URL (default http://127.0.0.1:3000).
  * Prefer INSPECT_INLINE=1 so complete() finishes inspect without a separate worker.
  */
@@ -485,7 +486,104 @@ async function main() {
   if (!approved.approvedRevisionId) fail('missing approvedRevisionId', approved);
   ok('W2 Truth Pack APPROVED');
 
-  console.log('E2E PASS: W2 upload → inspect → thumbnail → extract → confirm → approve');
+  // W3-A: generate Shot Plan (Fake) → approve (requires approved Truth)
+  const genDenied = await fetch(
+    `${base}/api/workspaces/${wsW2}/projects/${projectId}/shot-plans/generate`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarB.header(),
+        'x-request-id': `e2e-sp-x-${suffix}`,
+      },
+      body: JSON.stringify({}),
+    },
+  );
+  if (genDenied.status !== 403) fail('expected cross-workspace shot-plan generate 403', { status: genDenied.status });
+  ok('W3-A cross-workspace shot-plan generate denied');
+
+  const genRes = await fetch(
+    `${base}/api/workspaces/${wsW2}/projects/${projectId}/shot-plans/generate`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-sp-gen-${suffix}`,
+      },
+      body: JSON.stringify({}),
+    },
+  );
+  const generated = await genRes.json();
+  if (genRes.status !== 201) fail('shot-plan generate', { status: genRes.status, generated });
+  if (generated.provider !== 'fake-shot-plan') fail('expected fake-shot-plan', generated);
+  const plan = generated.plan;
+  if (!plan?.revision?.briefs || plan.revision.briefs.length !== 7) {
+    fail('expected 7 briefs', plan?.revision?.briefs?.length);
+  }
+  if (plan.revision.briefs.some((b) => b.slot === 'PACKAGE')) fail('PACKAGE in default template', plan);
+  if (plan.revision.truthRevisionId !== approved.approvedRevisionId) {
+    fail('plan must FK approved truth revision', {
+      planTruth: plan.revision.truthRevisionId,
+      approvedTruth: approved.approvedRevisionId,
+    });
+  }
+  if (!plan.canvasPayload?.briefs?.length) fail('missing canvasPayload for W3-08', plan.canvasPayload);
+  if (plan.revision.status !== 'PENDING_REVIEW') fail('expected PENDING_REVIEW after generate', plan.revision.status);
+  ok(`W3-A generate briefs=7 truthFK=${plan.revision.truthRevisionId.slice(0, 8)}…`);
+
+  // Human edit: PUT same briefs (readyForReview) then approve
+  const spPutRes = await fetch(
+    `${base}/api/workspaces/${wsW2}/projects/${projectId}/shot-plans`,
+    {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-sp-put-${suffix}`,
+      },
+      body: JSON.stringify({
+        briefs: plan.revision.briefs.map((b) => ({
+          slot: b.slot,
+          purpose: b.purpose + ' (edited)',
+          orderIndex: b.orderIndex,
+          copy: b.copy,
+          must: b.constraints.must,
+          mustNot: b.constraints.mustNot,
+          qaPolicy: b.constraints.qaPolicy,
+          aspectRatio: b.constraints.aspectRatio,
+          targetPixels: b.constraints.targetPixels,
+          referencedAssetVersionIds: b.constraints.referencedAssetVersionIds ?? [],
+        })),
+      }),
+    },
+  );
+  const spPutJson = await spPutRes.json();
+  if (spPutRes.status !== 200) fail('shot-plan PUT', { status: spPutRes.status, spPutJson });
+  if (spPutJson.revision?.status !== 'PENDING_REVIEW') fail('PUT not PENDING_REVIEW', spPutJson);
+  ok('W3-A human edit PUT');
+
+  const spApprove = await fetch(
+    `${base}/api/workspaces/${wsW2}/projects/${projectId}/shot-plans/approve`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-sp-approve-${suffix}`,
+      },
+      body: JSON.stringify({ revisionId: spPutJson.revision.id }),
+    },
+  );
+  const spApproved = await spApprove.json();
+  if (spApprove.status !== 200) fail('shot-plan approve', { status: spApprove.status, spApproved });
+  if (spApproved.revision?.status !== 'APPROVED') fail('shot plan not APPROVED', spApproved);
+  if (!spApproved.approvedRevisionId) fail('missing approvedRevisionId', spApproved);
+  ok('W3-A Shot Plan APPROVED');
+
+  console.log(
+    'E2E PASS: W2 upload→Truth approve + W3-A generate→edit→approve Shot Plan (Fake only, no canvas)',
+  );
 }
 
 main().catch((err) => {

@@ -1,4 +1,4 @@
-// Amazon AI Image Studio — W1+W2 Prisma schema
+// Amazon AI Image Studio — W1+W2+W3-A Prisma schema
 // IDs: UUIDv7 generated in application code; DB type uuid.
 // Times: timestamptz via Prisma DateTime (@db.Timestamptz)
 // Tenancy: workspace_id on all tenant tables; composite FK (workspace_id, parent_id).
@@ -89,6 +89,22 @@ enum OutboxStatus {
   FAILED
 }
 
+enum ShotPlanRevisionStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  SUPERSEDED
+}
+
+enum ShotBriefSlot {
+  MAIN
+  FEATURE
+  DETAIL
+  DIMENSION
+  LIFESTYLE
+  PACKAGE
+}
+
 model User {
   id             String     @id @db.Uuid
   email          String     @unique
@@ -173,6 +189,10 @@ model Workspace {
   productFacts        ProductFact[]
   productConstraints  ProductConstraint[]
   outboxMessages      OutboxMessage[]
+  shotPlanDocuments   ShotPlanDocument[]
+  shotPlanRevisions   ShotPlanRevision[]
+  shotBriefs          ShotBrief[]
+  auditEvents         AuditEvent[]
 
   @@index([ownerUserId])
   @@unique([id]) // enables composite FK targets (workspace_id, id)
@@ -210,10 +230,11 @@ model Project {
   updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt   DateTime?     @map("deleted_at") @db.Timestamptz
 
-  workspace      Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  uploadSessions UploadSession[]
-  assets         Asset[]
-  truthDocument  ProductTruthDocument?
+  workspace        Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploadSessions   UploadSession[]
+  assets           Asset[]
+  truthDocument    ProductTruthDocument?
+  shotPlanDocument ShotPlanDocument?
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, sku])
@@ -383,6 +404,7 @@ model ProductTruthRevision {
   approvedFor ProductTruthDocument[] @relation("TruthApprovedRevision")
   facts       ProductFact[]
   constraints ProductConstraint[]
+  shotPlans   ShotPlanRevision[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, documentId, revision])
@@ -449,4 +471,91 @@ model OutboxMessage {
   @@unique([workspaceId, id])
   @@index([status, createdAt])
   @@map("outbox_messages")
+}
+
+model ShotPlanDocument {
+  id                 String   @id @db.Uuid
+  workspaceId        String   @map("workspace_id") @db.Uuid
+  projectId          String   @map("project_id") @db.Uuid
+  currentRevisionId  String?  @map("current_revision_id") @db.Uuid
+  approvedRevisionId String?  @map("approved_revision_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace        Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  project          Project            @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
+  currentRevision  ShotPlanRevision?  @relation("ShotPlanCurrentRevision", fields: [workspaceId, currentRevisionId], references: [workspaceId, id], onDelete: SetNull)
+  approvedRevision ShotPlanRevision?  @relation("ShotPlanApprovedRevision", fields: [workspaceId, approvedRevisionId], references: [workspaceId, id], onDelete: SetNull)
+  revisions        ShotPlanRevision[] @relation("ShotPlanDocumentRevisions")
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, projectId])
+  @@map("shot_plan_documents")
+}
+
+model ShotPlanRevision {
+  id               String                 @id @db.Uuid
+  workspaceId      String                 @map("workspace_id") @db.Uuid
+  documentId       String                 @map("document_id") @db.Uuid
+  revision         Int
+  status           ShotPlanRevisionStatus @default(DRAFT)
+  /// FK to the specific approved Truth Pack revision this plan is based on (MSG-003).
+  truthRevisionId  String                 @map("truth_revision_id") @db.Uuid
+  schemaVersion    Int                    @default(1) @map("schema_version")
+  provider         String?
+  modelId          String?                @map("model_id")
+  approvedByUserId String?                @map("approved_by_user_id") @db.Uuid
+  approvedAt       DateTime?              @map("approved_at") @db.Timestamptz
+  createdByUserId  String                 @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace     Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  document      ShotPlanDocument     @relation("ShotPlanDocumentRevisions", fields: [workspaceId, documentId], references: [workspaceId, id], onDelete: Restrict)
+  currentFor    ShotPlanDocument[]   @relation("ShotPlanCurrentRevision")
+  approvedFor   ShotPlanDocument[]   @relation("ShotPlanApprovedRevision")
+  truthRevision ProductTruthRevision @relation(fields: [workspaceId, truthRevisionId], references: [workspaceId, id], onDelete: Restrict)
+  briefs        ShotBrief[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, documentId, revision])
+  @@index([workspaceId, truthRevisionId])
+  @@map("shot_plan_revisions")
+}
+
+model ShotBrief {
+  id                 String        @id @db.Uuid
+  workspaceId        String        @map("workspace_id") @db.Uuid
+  shotPlanRevisionId String        @map("shot_plan_revision_id") @db.Uuid
+  slot               ShotBriefSlot
+  purpose            String
+  orderIndex         Int           @map("order_index")
+  copyJson           Json          @default("[]") @map("copy_json")
+  /// Constraints + W3-08 canvas fields: must/mustNot/qaPolicy/aspectRatio/targetPixels/referencedAssetVersionIds
+  constraintsJson    Json          @map("constraints_json")
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  revision  ShotPlanRevision @relation(fields: [workspaceId, shotPlanRevisionId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, shotPlanRevisionId, orderIndex])
+  @@index([workspaceId, shotPlanRevisionId])
+  @@map("shot_briefs")
+}
+
+/// Lightweight audit trail (approve/generate). Mirrors Truth approve actor fields + explicit events.
+model AuditEvent {
+  id          String   @id @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String
+  subjectType String   @map("subject_type")
+  subjectId   String   @map("subject_id") @db.Uuid
+  metadataJson Json    @default("{}") @map("metadata_json")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, createdAt])
+  @@map("audit_events")
 }

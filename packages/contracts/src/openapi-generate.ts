@@ -17,6 +17,12 @@ import {
   CompleteUploadResponseSchema,
 } from './uploads.js';
 import { TruthPackResponseSchema, SaveTruthPackRequestSchema } from './truth.js';
+import {
+  ShotPlanResponseSchema,
+  GenerateShotPlanRequestSchema,
+  SaveShotPlanRequestSchema,
+  ApproveShotPlanRequestSchema,
+} from './shot-plan.js';
 import YAML from 'yaml';
 
 extendZodWithOpenApi(z);
@@ -34,6 +40,10 @@ registry.register('CompleteUploadRequest', CompleteUploadRequestSchema);
 registry.register('CompleteUploadResponse', CompleteUploadResponseSchema);
 registry.register('TruthPackResponse', TruthPackResponseSchema);
 registry.register('SaveTruthPackRequest', SaveTruthPackRequestSchema);
+registry.register('ShotPlanResponse', ShotPlanResponseSchema);
+registry.register('GenerateShotPlanRequest', GenerateShotPlanRequestSchema);
+registry.register('SaveShotPlanRequest', SaveShotPlanRequestSchema);
+registry.register('ApproveShotPlanRequest', ApproveShotPlanRequestSchema);
 
 registry.registerPath({
   method: 'post',
@@ -115,13 +125,70 @@ registry.registerPath({
   },
 });
 
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/projects/{projectId}/shot-plans/generate',
+  summary: 'Generate Shot Plan draft (FakeShotPlanProvider; requires approved Truth revision)',
+  request: {
+    body: { content: { 'application/json': { schema: GenerateShotPlanRequestSchema } } },
+  },
+  responses: {
+    201: {
+      description: 'Created',
+      content: { 'application/json': { schema: ShotPlanResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/workspaces/{workspaceId}/projects/{projectId}/shot-plans',
+  summary: 'Get current Shot Plan + canvasPayload (W3-08 prep)',
+  responses: {
+    200: {
+      description: 'OK',
+      content: { 'application/json': { schema: ShotPlanResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'put',
+  path: '/api/workspaces/{workspaceId}/projects/{projectId}/shot-plans',
+  summary: 'Human-edit Shot Plan (new revision; default PENDING_REVIEW)',
+  request: {
+    body: { content: { 'application/json': { schema: SaveShotPlanRequestSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Saved',
+      content: { 'application/json': { schema: ShotPlanResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/projects/{projectId}/shot-plans/approve',
+  summary: 'Atomically approve Shot Plan revision (W2 Truth approve structure)',
+  request: {
+    body: { content: { 'application/json': { schema: ApproveShotPlanRequestSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Approved',
+      content: { 'application/json': { schema: ShotPlanResponseSchema } },
+    },
+  },
+});
+
 const generator = new OpenApiGeneratorV3(registry.definitions);
 const document = generator.generateDocument({
   openapi: '3.0.3',
   info: {
     title: 'Amazon AI Image Studio API',
-    version: '0.2.0',
-    description: 'OpenAPI generated from Zod contracts (W1 + W2 upload / Truth Pack).',
+    version: '0.3.0',
+    description: 'OpenAPI from Zod contracts (W1 + W2 Truth Pack + W3-A Shot Plan).',
   },
   servers: [{ url: 'http://localhost:3000' }],
 });

@@ -5,7 +5,11 @@ import type {
   VisionExtractRequest,
   VisionExtractResult,
   VisionProvider,
+  ShotPlanDraftRequest,
+  ShotPlanDraftResult,
+  ShotPlanProvider,
 } from './ports.js';
+import { DEFAULT_SEVEN_IMAGE_TEMPLATE } from '@studio/domain';
 
 /**
  * Fake Provider — default until real API keys are authorized (W0-02 / ADR-0001).
@@ -103,6 +107,65 @@ export class FakeVisionProvider implements VisionProvider {
         'number of included items',
       ],
       allowedChanges: ['background', 'surface', 'ambient lighting'],
+      latencyMs: Date.now() - started,
+    };
+  }
+}
+
+
+/**
+ * Fake Shot Plan Provider — deterministic 7-image draft from §11.1 template.
+ * Never calls external APIs / never reads API keys (W0-02 BLOCKED_EXTERNAL).
+ */
+export class FakeShotPlanProvider implements ShotPlanProvider {
+  readonly name = 'fake-shot-plan';
+
+  async draftPlan(request: ShotPlanDraftRequest): Promise<ShotPlanDraftResult> {
+    const started = Date.now();
+    const sku = request.sku ?? 'UNKNOWN-SKU';
+    const brandFact = request.confirmedFacts?.find((f) => f.key === 'brand');
+    const brand =
+      typeof brandFact?.value === 'string' && brandFact.value.trim()
+        ? brandFact.value.trim()
+        : sku.split('-')[0] || 'Acme';
+
+    const briefs = DEFAULT_SEVEN_IMAGE_TEMPLATE.map((t) => ({
+      slot: t.slot,
+      purpose: t.purpose,
+      orderIndex: t.orderIndex,
+      aspectRatio: t.aspectRatio,
+      targetPixels: { ...t.targetPixels },
+      copy:
+        t.slot === 'FEATURE'
+          ? [{ text: `${brand} highlight`, source: 'fake-planner' }]
+          : t.slot === 'DIMENSION'
+            ? [{ text: 'Use confirmed dimensions only', source: 'fake-planner' }]
+            : [],
+      must: [...t.must],
+      mustNot: [...t.mustNot],
+      qaPolicy: t.qaPolicy,
+      referencedAssetVersionIds: [],
+    }));
+
+    if (request.includePackage) {
+      briefs.push({
+        slot: 'PACKAGE',
+        purpose: "Packaging / what's in the box",
+        orderIndex: briefs.length + 1,
+        aspectRatio: '1:1',
+        targetPixels: { width: 2000, height: 2000 },
+        copy: [],
+        must: ['show only included pack contents'],
+        mustNot: ['unincluded accessory'],
+        qaPolicy: 'amazon-package-us-v1',
+        referencedAssetVersionIds: [],
+      });
+    }
+
+    return {
+      provider: this.name,
+      modelId: 'fake-shot-plan-v1',
+      briefs,
       latencyMs: Date.now() - started,
     };
   }

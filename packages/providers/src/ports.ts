@@ -52,3 +52,40 @@ export interface VisionProvider {
   readonly name: string;
   extractFacts(request: VisionExtractRequest): Promise<VisionExtractResult>;
 }
+
+export type ShotPlanDraftRequest = {
+  sku?: string;
+  category?: string;
+  marketplace?: string;
+  /** Confirmed truth facts used to flavor copy / constraints. */
+  confirmedFacts?: Array<{ key: string; value: unknown }>;
+  /** Include PACKAGE slot (not in default 7). */
+  includePackage?: boolean;
+};
+
+export type PlannedShotBrief = {
+  slot: 'MAIN' | 'FEATURE' | 'DETAIL' | 'DIMENSION' | 'LIFESTYLE' | 'PACKAGE';
+  purpose: string;
+  orderIndex: number;
+  aspectRatio: string;
+  targetPixels: { width: number; height: number };
+  copy: unknown[];
+  must: string[];
+  mustNot: string[];
+  qaPolicy: string;
+  /** W3-08 prep: optional asset version refs for later canvas materialize. */
+  referencedAssetVersionIds?: string[];
+};
+
+export type ShotPlanDraftResult = {
+  provider: string;
+  modelId: string;
+  briefs: PlannedShotBrief[];
+  latencyMs: number;
+};
+
+/** Shot Plan planner port (W3-02). */
+export interface ShotPlanProvider {
+  readonly name: string;
+  draftPlan(request: ShotPlanDraftRequest): Promise<ShotPlanDraftResult>;
+}

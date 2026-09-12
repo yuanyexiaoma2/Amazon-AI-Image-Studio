@@ -6,7 +6,7 @@
 
 **Repo type (W0-01):** GREENFIELD — empty public GitHub repo; no prior application code.
 
-**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8).
+**Timezone note:** W2 milestone work 2026-09-11 Asia/Shanghai (UTC+8). W3-A work 2026-09-12 Asia/Shanghai (UTC+8).
 
 ---
 
@@ -55,11 +55,11 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | `pnpm test:e2e` | Extends to upload→inspect→extract→confirm→approve (with MinIO + `INSPECT_INLINE=1`) |
 | Secrets | No real provider keys in repo / `.env.example` / commits |
 
-**VERIFIED evidence package (W2-01…W2-06) — for 审稿 ratification:**
+**VERIFIED evidence package (W2-01…W2-06):**
 - Merge SHA: `79996ac9cd0f3e824bc1c0a608c4aa9d75fbcaa6` (PR #3 squash into main)
 - Main CI green: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34586631130
-- PR #3 review record: multi-round independent review ending APPROVED (Outbox/idempotency, Truth atomic approve, roles, failure-injection, concurrency); final HEAD before merge `322ba52de47a3c00be2c20422f26933ef7022ef8`
-- Process note: ledger rows were written in docs PR #4 before 审稿 bot ratification; **this PR asks 审稿 to APPROVE keeping W2-01…W2-06 as VERIFIED**. Implementer must not self-merge VERIFIED docs.
+- 审稿 **APPROVED** on PR #6 (ratification of merge `79996ac` + CI `34586631130`)
+- PR #3 final HEAD before merge: `322ba52de47a3c00be2c20422f26933ef7022ef8`
 
 **W2-07** remains BLOCKED_EXTERNAL：素材由项目所有者按 fixtures 现有格式提供，QA 周前到位。
 
@@ -80,8 +80,25 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
-| W3-01 | Shot Plan/Brief + 7-image template | TODO | W3-A |
-| W3-02 | Plan generate + approve | TODO | W3-A; Fake planner until W0-02 unblocked |
+| W3-01 | Shot Plan/Brief + 7-image template | DONE | Domain `shot-plan.ts` §11.1 default 7 (no PACKAGE); Prisma `shot_plan_*` + `shot_briefs`; tenant UUIDv7; revision **FK `truth_revision_id` → approved Truth revision**; contracts + `canvasPayload` for W3-08; migration `20260912010000_w3a_shot_plan`. Fake only. |
+| W3-02 | Plan generate + approve | DONE | `POST .../shot-plans/generate` (FakeShotPlanProvider); PUT human edit; **atomic approve** (W2 Truth structure: FOR UPDATE + PENDING_REVIEW + row counts + audit_events); roles WRITE OWNER/ADMIN/MEMBER, APPROVE OWNER/ADMIN/REVIEWER; cannot generate/approve without approved Truth; unit + integration + e2e; no W3-B (no xyflow/canvas/materialize). |
+
+### W3-A commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm db:migrate:deploy` | Includes `20260912010000_w3a_shot_plan` |
+| `pnpm lint` / `typecheck` / `test` / `build` | Required green before PR |
+| `pnpm test:e2e` | Extends W2 chain with generate→edit→approve Shot Plan (`INSPECT_INLINE=1`) |
+| Provider | **FakeShotPlanProvider only** (W0-02 BLOCKED_EXTERNAL); no real keys |
+| Out of scope | W3-B canvas / xyflow / autosave / materialize / node registry |
+
+**DONE evidence package (W3-01…W3-02):**
+- Branch HEAD: `5ec70d53dd53575f1db03e8ded3a6bc90602db11`
+- Milestone PR (open, **not merged**): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/8
+- CI green (pull_request): https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34662767687
+- Local e2e: W2 Truth approve → Fake generate 7 briefs → PUT edit → Shot Plan approve
+- Implementer marks **DONE** only — **VERIFIED** requires 审稿 public APPROVED on PR #8 before merge
 
 ### W3-B — Studio canvas + materialize (after W3-A)
 
