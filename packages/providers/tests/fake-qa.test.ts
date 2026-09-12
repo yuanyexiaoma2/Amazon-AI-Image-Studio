@@ -33,3 +33,14 @@ describe('Fake OCR / Vision QA', () => {
     expect(sold.soldItems.segmentationConflict).toBe(true);
   });
 });
+
+describe('FakeVisionQaProvider W7 lock scenarios', () => {
+  it('STRUCTURE_CHANGE / LOGO_CHANGE fail identity', async () => {
+    const { FakeVisionQaProvider } = await import('../src/fake.js');
+    const v = new FakeVisionQaProvider();
+    const s = await v.inspectProduct({ assetVersionId: 'av', scenario: 'STRUCTURE_CHANGE' });
+    expect(s.identity.geometry).toBe('FAIL');
+    const l = await v.inspectProduct({ assetVersionId: 'av', scenario: 'LOGO_CHANGE' });
+    expect(l.identity.logo).toBe('FAIL');
+  });
+});

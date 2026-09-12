@@ -268,7 +268,60 @@ export class FakeVisionQaProvider implements VisionQaProvider {
 
   async inspectProduct(request: VisionQaRequest): Promise<VisionQaResult> {
     const scenario = (request.scenario ?? 'SUCCESS').toUpperCase();
+    if (scenario === 'STRUCTURE_CHANGE') {
+      return {
+        provider: this.name,
+        modelId: 'fake-vision-qa-v1',
+        identity: {
+          ...matchIdentity(),
+          geometry: 'FAIL',
+          overall: 'FAIL',
+          message: 'Fake Vision: product structure/geometry drifted from master locks',
+        },
+        soldItems: { status: 'PASS', inventoryConflict: false, segmentationConflict: false, regions: [] },
+      };
+    }
+    if (scenario === 'LOGO_CHANGE') {
+      return {
+        provider: this.name,
+        modelId: 'fake-vision-qa-v1',
+        identity: {
+          ...matchIdentity(),
+          logo: 'FAIL',
+          overall: 'FAIL',
+          message: 'Fake Vision: logo changed vs locked master',
+        },
+        soldItems: { status: 'PASS', inventoryConflict: false, segmentationConflict: false, regions: [] },
+      };
+    }
+    if (scenario === 'COMPOSITION_DRIFT') {
+      return {
+        provider: this.name,
+        modelId: 'fake-vision-qa-v1',
+        identity: {
+          ...matchIdentity(),
+          overall: 'REVIEW',
+          message: 'Fake Vision: composition drift needs review',
+          regions: [{ x: 0.1, y: 0.1, width: 0.8, height: 0.8 }],
+        },
+        soldItems: { status: 'PASS', inventoryConflict: false, segmentationConflict: false, regions: [] },
+      };
+    }
+    if (scenario === 'ATTACHMENT_COUNT') {
+      return {
+        provider: this.name,
+        modelId: 'fake-vision-qa-v1',
+        identity: {
+          ...matchIdentity(),
+          itemCount: 'REVIEW',
+          overall: 'REVIEW',
+          message: 'Fake Vision: attachment/item count uncertain vs master',
+        },
+        soldItems: { status: 'REVIEW', inventoryConflict: false, segmentationConflict: false, regions: [], message: 'item count review' },
+      };
+    }
     if (scenario === 'IDENTITY_MISMATCH') {
+
       return {
         provider: this.name,
         modelId: 'fake-vision-qa-v1',

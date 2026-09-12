@@ -211,6 +211,11 @@ model Workspace {
   approvals           Approval[]
   exportBundles       ExportBundle[]
   exportBundleItems   ExportBundleItem[]
+  variants            Variant[]
+  variantComponents   VariantComponent[]
+  variantRuns         VariantRun[]
+  variantRunMembers   VariantRunMember[]
+  variantItems        VariantItem[]
 
   @@index([ownerUserId])
   @@unique([id]) // enables composite FK targets (workspace_id, id)
@@ -259,6 +264,8 @@ model Project {
   qaReports        QaReport[]
   approvals        Approval[]
   exportBundles    ExportBundle[]
+  variants         Variant[]
+  variantRuns      VariantRun[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, sku])
@@ -1213,4 +1220,154 @@ model ExportBundleItem {
   @@unique([workspaceId, id])
   @@index([workspaceId, bundleId])
   @@map("export_bundle_items")
+}
+
+// ─── W7: Variants / batch runs ───────────────────────────────────────────────
+
+enum VariantStatus {
+  DRAFT
+  READY
+  ARCHIVED
+}
+
+enum VariantItemStatus {
+  PENDING
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED_RETRYABLE
+  FAILED_FINAL
+  SKIPPED
+  QA_PASS
+  QA_REVIEW
+  QA_BLOCK
+}
+
+enum VariantRunStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+  CANCELED
+}
+
+model Variant {
+  id               String        @id @db.Uuid
+  workspaceId      String        @map("workspace_id") @db.Uuid
+  projectId        String        @map("project_id") @db.Uuid
+  code             String
+  displayName      String        @map("display_name")
+  masterVariantId  String?       @map("master_variant_id") @db.Uuid
+  status           VariantStatus @default(DRAFT)
+  workflowId       String?       @map("workflow_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  project      Project            @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
+  master       Variant?           @relation("VariantMaster", fields: [workspaceId, masterVariantId], references: [workspaceId, id], onDelete: Restrict)
+  children     Variant[]          @relation("VariantMaster")
+  components   VariantComponent[]
+  items        VariantItem[]
+  runsAsMaster VariantRun[]       @relation("VariantRunMaster")
+  runMembers   VariantRunMember[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, projectId, code])
+  @@index([workspaceId, projectId])
+  @@map("variants")
+}
+
+model VariantComponent {
+  id                 String   @id @db.Uuid
+  workspaceId        String   @map("workspace_id") @db.Uuid
+  variantId          String   @map("variant_id") @db.Uuid
+  componentKey       String   @map("component_key")
+  colorHex           String?  @map("color_hex")
+  colorDescription   String?  @map("color_description")
+  material           String?
+  locksJson          Json     @default("[]") @map("locks_json")
+  allowedChangesJson Json     @default("[]") @map("allowed_changes_json")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  variant   Variant   @relation(fields: [workspaceId, variantId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, variantId, componentKey])
+  @@index([workspaceId, variantId])
+  @@map("variant_components")
+}
+
+model VariantRun {
+  id                String           @id @db.Uuid
+  workspaceId       String           @map("workspace_id") @db.Uuid
+  projectId         String           @map("project_id") @db.Uuid
+  masterVariantId   String           @map("master_variant_id") @db.Uuid
+  status            VariantRunStatus @default(QUEUED)
+  budgetLimitJson   Json?            @map("budget_limit_json")
+  estimateMicrounits Int             @default(0) @map("estimate_microunits")
+  currency          String           @default("USD")
+  confirmBudget     Boolean          @default(false) @map("confirm_budget")
+  idempotencyKey    String           @map("idempotency_key")
+  requestedByUserId String           @map("requested_by_user_id") @db.Uuid
+  scenarioJson      Json?            @map("scenario_json")
+  errorJson         Json?            @map("error_json")
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  completedAt       DateTime?        @map("completed_at") @db.Timestamptz
+
+  workspace     Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  project       Project            @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
+  masterVariant Variant            @relation("VariantRunMaster", fields: [workspaceId, masterVariantId], references: [workspaceId, id], onDelete: Restrict)
+  members       VariantRunMember[]
+  items         VariantItem[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, projectId, createdAt])
+  @@map("variant_runs")
+}
+
+model VariantRunMember {
+  id          String @id @db.Uuid
+  workspaceId String @map("workspace_id") @db.Uuid
+  runId       String @map("run_id") @db.Uuid
+  variantId   String @map("variant_id") @db.Uuid
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  run       VariantRun @relation(fields: [workspaceId, runId], references: [workspaceId, id], onDelete: Restrict)
+  variant   Variant    @relation(fields: [workspaceId, variantId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, runId, variantId])
+  @@map("variant_run_members")
+}
+
+model VariantItem {
+  id                     String            @id @db.Uuid
+  workspaceId            String            @map("workspace_id") @db.Uuid
+  variantId              String            @map("variant_id") @db.Uuid
+  variantRunId           String?           @map("variant_run_id") @db.Uuid
+  shotBriefId            String?           @map("shot_brief_id") @db.Uuid
+  generationItemId       String?           @map("generation_item_id") @db.Uuid
+  selectedAssetVersionId String?           @map("selected_asset_version_id") @db.Uuid
+  qaReportId             String?           @map("qa_report_id") @db.Uuid
+  slot                   String
+  outputIndex            Int               @default(0) @map("output_index")
+  status                 VariantItemStatus @default(PENDING)
+  errorClass             String?           @map("error_class")
+  errorMessage           String?           @map("error_message") @db.Text
+  createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  variant   Variant    @relation(fields: [workspaceId, variantId], references: [workspaceId, id], onDelete: Restrict)
+  run       VariantRun? @relation(fields: [workspaceId, variantRunId], references: [workspaceId, id], onDelete: SetNull)
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, variantId, slot])
+  @@index([workspaceId, variantRunId])
+  @@map("variant_items")
 }

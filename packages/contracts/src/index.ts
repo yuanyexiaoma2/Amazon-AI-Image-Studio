@@ -11,3 +11,4 @@ export * from './generation.js';
 export * from './masks.js';
 export * from './qa.js';
 export * from './export.js';
+export * from './variants.js';

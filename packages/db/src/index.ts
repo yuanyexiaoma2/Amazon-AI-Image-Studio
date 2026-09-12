@@ -88,3 +88,12 @@ export {
   ExportNotFoundError,
   type CreateExportItemInput,
 } from './repositories/export.js';
+
+export {
+  VariantRepository,
+  VariantValidationError,
+  VariantNotFoundError,
+  VariantBudgetGateError,
+  type VariantDetail,
+  type VariantRunDetail,
+} from './repositories/variants.js';
