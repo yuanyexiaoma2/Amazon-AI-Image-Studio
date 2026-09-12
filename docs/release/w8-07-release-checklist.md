@@ -17,3 +17,5 @@ Fake Phase 1 candidate — **not** Production go-live authorization (see W9-02 /
 | CHANGELOG / progress ledger DONE | | `docs/progress.md` |
 
 **Release candidate tag (suggested):** `rc-w8-phase1` (do not promote to Production without W9 auth).
+
+W9 superseding decision: `docs/release/go-no-go.md` (**CONDITIONAL GO** Fake/Phase 1; **NO-GO** Production).

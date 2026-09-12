@@ -32,7 +32,8 @@
 13. **W5 split:** W5-A = W5-01/08/02 (+ webhook orphan); W5-B = 03/04/05; W5-C = 06/07. Fake only per ADR-0003.
 14. **W6 Phase 1:** W6-01…08 one milestone PR (rules/findings/review/export/e2e). Fake OCR/Vision only; `qa_gate` PASS ≠ Approval. **VERIFIED** on main merge `15f4979` + 审稿 APPROVED on PR #16.
 15. **W7:** W7-01…07 one milestone PR (variants/batch/QA/export/admin/runbooks). Fake only (ADR-0003). **VERIFIED** on main merge `21bd2e7` + tip CI `34697260457` + 审稿 APPROVED on PR #17.
-16. **W8 Phase 1:** W8-01…07 one milestone PR (eval/hardening/security/UAT docs). Fake only / 3 synthetic SKUs (ADR-0003). DONE not VERIFIED. Do not start W9.
+16. **W8 Phase 1:** W8-01…07 one milestone PR (eval/hardening/security/UAT docs). Fake only / 3 synthetic SKUs (ADR-0003). **VERIFIED** on main merge `c57e316` + tip CI `34699179820` + 审稿 APPROVED on PR #18.
+17. **W9 buffer + release:** docs only (`docs/release/go-no-go.md`, `backlog.md`, `monitoring.md`). **CONDITIONAL GO** for Fake/Phase 1; **NO-GO** real Production. W9-01 DONE (not self-VERIFIED). W9-02 `BLOCKED_EXTERNAL` — do not claim Production smoke passed. No new product modules (§19.9). No real keys.
 
 ## Standard commands
 

@@ -22,3 +22,8 @@ Copy `TEMPLATE.md` when adding a new runbook (incident, restore, deploy, etc.).
 
 - `backup-restore-rollback.md` — backup / restore / app rollback drill
 - `user-delete-drill.md` — account disable / project soft-delete drill
+
+## W9 release (docs)
+
+Living pack under `docs/release/`: `go-no-go.md`, `backlog.md`, `monitoring.md`.
+Alert receivers are **placeholders** until the owner fills them. Production is **NO-GO**.
