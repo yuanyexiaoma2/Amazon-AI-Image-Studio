@@ -43,6 +43,12 @@ import {
   MaskResponseSchema,
   RenderMaskResponseSchema,
 } from './masks.js';
+import {
+  DispatchQaRequestSchema,
+  CreateApprovalRequestSchema,
+  QaReportSchema,
+} from './qa.js';
+import { CreateExportRequestSchema, ExportBundleSchema } from './export.js';
 import YAML from 'yaml';
 
 extendZodWithOpenApi(z);
@@ -434,13 +440,79 @@ registry.registerPath({
   responses: { 200: { description: 'Accepted / duplicate' } },
 });
 
+
+registry.register('DispatchQaRequest', DispatchQaRequestSchema);
+registry.register('CreateApprovalRequest', CreateApprovalRequestSchema);
+registry.register('QaReport', QaReportSchema);
+registry.register('CreateExportRequest', CreateExportRequestSchema);
+registry.register('ExportBundle', ExportBundleSchema);
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/asset-versions/{versionId}/qa',
+  summary: 'Dispatch Market Rule Pack QA (Fake OCR/Vision)',
+  request: { body: { content: { 'application/json': { schema: DispatchQaRequestSchema } } } },
+  responses: { 201: { description: 'Queued / completed report', content: { 'application/json': { schema: QaReportSchema } } } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/workspaces/{workspaceId}/qa-reports/{reportId}',
+  summary: 'Get QA report + findings + evidence regions',
+  responses: { 200: { description: 'OK', content: { 'application/json': { schema: QaReportSchema } } } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/workspaces/{workspaceId}/projects/{projectId}/qa-reports',
+  summary: 'List project QA reports (Review)',
+  responses: { 200: { description: 'OK' } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/asset-versions/{versionId}/approvals',
+  summary: 'Approve, reject, override BLOCK, or revoke',
+  request: { body: { content: { 'application/json': { schema: CreateApprovalRequestSchema } } } },
+  responses: { 201: { description: 'Append-only approval' } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/workspaces/{workspaceId}/asset-versions/{versionId}/approvals',
+  summary: 'List approvals for an asset version',
+  responses: { 200: { description: 'OK' } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/projects/{projectId}/exports',
+  summary: 'Create fixed-manifest export bundle',
+  request: { body: { content: { 'application/json': { schema: CreateExportRequestSchema } } } },
+  responses: { 201: { description: 'Created', content: { 'application/json': { schema: ExportBundleSchema } } } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/workspaces/{workspaceId}/exports/{bundleId}',
+  summary: 'Export bundle status',
+  responses: { 200: { description: 'OK', content: { 'application/json': { schema: ExportBundleSchema } } } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/workspaces/{workspaceId}/exports/{bundleId}/download-url',
+  summary: 'Short-lived ZIP download URL',
+  responses: { 200: { description: 'OK' } },
+});
+
 const generator = new OpenApiGeneratorV3(registry.definitions);
 const document = generator.generateDocument({
   openapi: '3.0.3',
   info: {
     title: 'Amazon AI Image Studio API',
-    version: '0.3.4',
-    description: 'OpenAPI from Zod contracts (W1–W5-C outpaint / upscale).',
+    version: '0.4.0',
+    description: 'OpenAPI from Zod contracts (W1–W6 QA / Review / Export).',
   },
   servers: [{ url: 'http://localhost:3000' }],
 });

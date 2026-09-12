@@ -89,3 +89,13 @@ export function inspectJobId(uploadId: string): string {
 export function generationAttemptJobId(attemptId: string): string {
   return `gen-attempt-${attemptId}`;
 }
+
+/** Stable BullMQ job id for QA evaluate. */
+export function qaEvaluateJobId(reportId: string): string {
+  return `qa-evaluate-${reportId}`;
+}
+
+/** Stable BullMQ job id for export bundle. */
+export function exportBundleJobId(bundleId: string): string {
+  return `export-bundle-${bundleId}`;
+}

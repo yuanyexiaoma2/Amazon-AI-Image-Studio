@@ -20,6 +20,8 @@ export {
   OutboxRepository,
   inspectJobId,
   generationAttemptJobId,
+  qaEvaluateJobId,
+  exportBundleJobId,
   type EnqueueOutboxInput,
 } from './repositories/outbox.js';
 
@@ -71,3 +73,18 @@ export {
   MaskRepository,
   type UpsertMaskInput,
 } from './repositories/masks.js';
+
+export {
+  QaRepository,
+  QaValidationError,
+  QaNotFoundError,
+  QaConflictError,
+  type CreateQaReportInput,
+} from './repositories/qa.js';
+
+export {
+  ExportRepository,
+  ExportValidationError,
+  ExportNotFoundError,
+  type CreateExportItemInput,
+} from './repositories/export.js';

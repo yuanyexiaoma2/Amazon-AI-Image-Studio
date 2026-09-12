@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: Amazon AI Image Studio API
-  version: 0.3.4
-  description: OpenAPI from Zod contracts (W1–W5-C outpaint / upscale).
+  version: 0.4.0
+  description: OpenAPI from Zod contracts (W1–W6 QA / Review / Export).
 servers:
   - url: http://localhost:3000
 components:
@@ -1630,6 +1630,266 @@ components:
         - sha256
         - byteSize
         - storageKey
+    DispatchQaRequest:
+      type: object
+      properties:
+        policyKey:
+          type: string
+          minLength: 1
+          maxLength: 80
+          default: amazon-main-us-v1
+        slot:
+          type: string
+          enum: &a14
+            - MAIN
+            - FEATURE
+            - DETAIL
+            - DIMENSION
+            - LIFESTYLE
+            - PACKAGE
+        shotBriefId:
+          type: string
+          format: uuid
+        truthRevisionId:
+          type: string
+          format: uuid
+        workflowRevisionId:
+          type: string
+          format: uuid
+        ocrScenario:
+          type: string
+          maxLength: 40
+        visionScenario:
+          type: string
+          maxLength: 40
+    CreateApprovalRequest:
+      type: object
+      properties:
+        qaReportId:
+          type: string
+          format: uuid
+        decision:
+          type: string
+          enum: &a17
+            - APPROVE
+            - REJECT
+            - OVERRIDE_BLOCK
+            - REVOKE
+        reason:
+          type: string
+          maxLength: 2000
+        shotBriefRevisionId:
+          type: string
+          format: uuid
+        workflowRevisionId:
+          type: string
+          format: uuid
+      required:
+        - qaReportId
+        - decision
+    QaReport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        assetVersionId:
+          type: string
+          format: uuid
+        slot:
+          type: string
+          nullable: true
+        status:
+          type: string
+        overallStatus:
+          type: string
+          nullable: true
+          enum: &a15
+            - PASS
+            - REVIEW
+            - BLOCK
+        rulePackKey:
+          type: string
+        rulePackVersion:
+          type: integer
+        rulePackSha256:
+          type: string
+        inputFingerprint:
+          type: string
+          nullable: true
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              ruleId:
+                type: string
+              ruleVersion:
+                type: integer
+              evaluator:
+                type: string
+              status:
+                type: string
+                enum: &a16
+                  - PASS
+                  - REVIEW
+                  - FAIL
+              severity:
+                type: string
+              nonWaivable:
+                type: boolean
+              score:
+                type: number
+                nullable: true
+              message:
+                type: string
+              evidence:
+                type: object
+                additionalProperties:
+                  nullable: true
+              suggestedAction:
+                type: string
+                nullable: true
+            required:
+              - ruleId
+              - ruleVersion
+              - evaluator
+              - status
+              - severity
+              - nonWaivable
+              - message
+              - evidence
+        disclaimer:
+          type: string
+      required:
+        - id
+        - projectId
+        - assetVersionId
+        - slot
+        - status
+        - overallStatus
+        - rulePackKey
+        - rulePackVersion
+        - rulePackSha256
+        - findings
+    CreateExportRequest:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              assetVersionId:
+                type: string
+                format: uuid
+              slot:
+                type: string
+                enum: &a18
+                  - MAIN
+                  - FEATURE
+                  - DETAIL
+                  - DIMENSION
+                  - LIFESTYLE
+                  - PACKAGE
+              variantCode:
+                type: string
+                maxLength: 40
+              qaReportId:
+                type: string
+                format: uuid
+            required:
+              - assetVersionId
+          minItems: 1
+          maxItems: 30
+        marketplaceCode:
+          type: string
+          enum: &a19
+            - US
+            - CA
+            - MX
+            - UK
+            - DE
+            - FR
+            - IT
+            - ES
+            - JP
+            - AU
+      required:
+        - items
+    ExportBundle:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        sku:
+          type: string
+        marketplaceCode:
+          type: string
+        rulePackKey:
+          type: string
+        rulePackVersion:
+          type: integer
+        manifestSha256:
+          type: string
+          nullable: true
+        zipSha256:
+          type: string
+          nullable: true
+        zipBytes:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              assetVersionId:
+                type: string
+                format: uuid
+              qaReportId:
+                type: string
+                format: uuid
+              approvalId:
+                type: string
+                format: uuid
+              slot:
+                type: string
+              variantCode:
+                type: string
+              path:
+                type: string
+            required:
+              - assetVersionId
+              - qaReportId
+              - approvalId
+              - slot
+              - variantCode
+              - path
+      required:
+        - id
+        - projectId
+        - status
+        - sku
+        - marketplaceCode
+        - rulePackKey
+        - rulePackVersion
+        - createdAt
+        - items
   parameters: {}
 paths:
   /api/register:
@@ -4789,3 +5049,447 @@ paths:
       responses:
         "200":
           description: Accepted / duplicate
+  /api/workspaces/{workspaceId}/asset-versions/{versionId}/qa:
+    post:
+      summary: Dispatch Market Rule Pack QA (Fake OCR/Vision)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                policyKey:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                  default: amazon-main-us-v1
+                slot:
+                  type: string
+                  enum: *a14
+                shotBriefId:
+                  type: string
+                  format: uuid
+                truthRevisionId:
+                  type: string
+                  format: uuid
+                workflowRevisionId:
+                  type: string
+                  format: uuid
+                ocrScenario:
+                  type: string
+                  maxLength: 40
+                visionScenario:
+                  type: string
+                  maxLength: 40
+      responses:
+        "201":
+          description: Queued / completed report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  assetVersionId:
+                    type: string
+                    format: uuid
+                  slot:
+                    type: string
+                    nullable: true
+                  status:
+                    type: string
+                  overallStatus:
+                    type: string
+                    nullable: true
+                    enum: *a15
+                  rulePackKey:
+                    type: string
+                  rulePackVersion:
+                    type: integer
+                  rulePackSha256:
+                    type: string
+                  inputFingerprint:
+                    type: string
+                    nullable: true
+                  findings:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        ruleId:
+                          type: string
+                        ruleVersion:
+                          type: integer
+                        evaluator:
+                          type: string
+                        status:
+                          type: string
+                          enum: *a16
+                        severity:
+                          type: string
+                        nonWaivable:
+                          type: boolean
+                        score:
+                          type: number
+                          nullable: true
+                        message:
+                          type: string
+                        evidence:
+                          type: object
+                          additionalProperties:
+                            nullable: true
+                        suggestedAction:
+                          type: string
+                          nullable: true
+                      required:
+                        - ruleId
+                        - ruleVersion
+                        - evaluator
+                        - status
+                        - severity
+                        - nonWaivable
+                        - message
+                        - evidence
+                  disclaimer:
+                    type: string
+                required:
+                  - id
+                  - projectId
+                  - assetVersionId
+                  - slot
+                  - status
+                  - overallStatus
+                  - rulePackKey
+                  - rulePackVersion
+                  - rulePackSha256
+                  - findings
+  /api/workspaces/{workspaceId}/qa-reports/{reportId}:
+    get:
+      summary: Get QA report + findings + evidence regions
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  assetVersionId:
+                    type: string
+                    format: uuid
+                  slot:
+                    type: string
+                    nullable: true
+                  status:
+                    type: string
+                  overallStatus:
+                    type: string
+                    nullable: true
+                    enum: *a15
+                  rulePackKey:
+                    type: string
+                  rulePackVersion:
+                    type: integer
+                  rulePackSha256:
+                    type: string
+                  inputFingerprint:
+                    type: string
+                    nullable: true
+                  findings:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        ruleId:
+                          type: string
+                        ruleVersion:
+                          type: integer
+                        evaluator:
+                          type: string
+                        status:
+                          type: string
+                          enum: *a16
+                        severity:
+                          type: string
+                        nonWaivable:
+                          type: boolean
+                        score:
+                          type: number
+                          nullable: true
+                        message:
+                          type: string
+                        evidence:
+                          type: object
+                          additionalProperties:
+                            nullable: true
+                        suggestedAction:
+                          type: string
+                          nullable: true
+                      required:
+                        - ruleId
+                        - ruleVersion
+                        - evaluator
+                        - status
+                        - severity
+                        - nonWaivable
+                        - message
+                        - evidence
+                  disclaimer:
+                    type: string
+                required:
+                  - id
+                  - projectId
+                  - assetVersionId
+                  - slot
+                  - status
+                  - overallStatus
+                  - rulePackKey
+                  - rulePackVersion
+                  - rulePackSha256
+                  - findings
+  /api/workspaces/{workspaceId}/projects/{projectId}/qa-reports:
+    get:
+      summary: List project QA reports (Review)
+      responses:
+        "200":
+          description: OK
+  /api/workspaces/{workspaceId}/asset-versions/{versionId}/approvals:
+    post:
+      summary: Approve, reject, override BLOCK, or revoke
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                qaReportId:
+                  type: string
+                  format: uuid
+                decision:
+                  type: string
+                  enum: *a17
+                reason:
+                  type: string
+                  maxLength: 2000
+                shotBriefRevisionId:
+                  type: string
+                  format: uuid
+                workflowRevisionId:
+                  type: string
+                  format: uuid
+              required:
+                - qaReportId
+                - decision
+      responses:
+        "201":
+          description: Append-only approval
+    get:
+      summary: List approvals for an asset version
+      responses:
+        "200":
+          description: OK
+  /api/workspaces/{workspaceId}/projects/{projectId}/exports:
+    post:
+      summary: Create fixed-manifest export bundle
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      assetVersionId:
+                        type: string
+                        format: uuid
+                      slot:
+                        type: string
+                        enum: *a18
+                      variantCode:
+                        type: string
+                        maxLength: 40
+                      qaReportId:
+                        type: string
+                        format: uuid
+                    required:
+                      - assetVersionId
+                  minItems: 1
+                  maxItems: 30
+                marketplaceCode:
+                  type: string
+                  enum: *a19
+              required:
+                - items
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                  sku:
+                    type: string
+                  marketplaceCode:
+                    type: string
+                  rulePackKey:
+                    type: string
+                  rulePackVersion:
+                    type: integer
+                  manifestSha256:
+                    type: string
+                    nullable: true
+                  zipSha256:
+                    type: string
+                    nullable: true
+                  zipBytes:
+                    type: integer
+                    nullable: true
+                  createdAt:
+                    type: string
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        assetVersionId:
+                          type: string
+                          format: uuid
+                        qaReportId:
+                          type: string
+                          format: uuid
+                        approvalId:
+                          type: string
+                          format: uuid
+                        slot:
+                          type: string
+                        variantCode:
+                          type: string
+                        path:
+                          type: string
+                      required:
+                        - assetVersionId
+                        - qaReportId
+                        - approvalId
+                        - slot
+                        - variantCode
+                        - path
+                required:
+                  - id
+                  - projectId
+                  - status
+                  - sku
+                  - marketplaceCode
+                  - rulePackKey
+                  - rulePackVersion
+                  - createdAt
+                  - items
+  /api/workspaces/{workspaceId}/exports/{bundleId}:
+    get:
+      summary: Export bundle status
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                  sku:
+                    type: string
+                  marketplaceCode:
+                    type: string
+                  rulePackKey:
+                    type: string
+                  rulePackVersion:
+                    type: integer
+                  manifestSha256:
+                    type: string
+                    nullable: true
+                  zipSha256:
+                    type: string
+                    nullable: true
+                  zipBytes:
+                    type: integer
+                    nullable: true
+                  createdAt:
+                    type: string
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        assetVersionId:
+                          type: string
+                          format: uuid
+                        qaReportId:
+                          type: string
+                          format: uuid
+                        approvalId:
+                          type: string
+                          format: uuid
+                        slot:
+                          type: string
+                        variantCode:
+                          type: string
+                        path:
+                          type: string
+                      required:
+                        - assetVersionId
+                        - qaReportId
+                        - approvalId
+                        - slot
+                        - variantCode
+                        - path
+                required:
+                  - id
+                  - projectId
+                  - status
+                  - sku
+                  - marketplaceCode
+                  - rulePackKey
+                  - rulePackVersion
+                  - createdAt
+                  - items
+  /api/workspaces/{workspaceId}/exports/{bundleId}/download-url:
+    get:
+      summary: Short-lived ZIP download URL
+      responses:
+        "200":
+          description: OK

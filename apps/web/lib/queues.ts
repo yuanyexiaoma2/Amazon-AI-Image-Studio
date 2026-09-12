@@ -222,3 +222,144 @@ export async function relayPendingGenerationOutbox(limit = 50): Promise<number> 
   }
   return published;
 }
+
+export const QA_QUEUE = 'qa-evaluate';
+export const EXPORT_QUEUE = 'export-bundle';
+
+export type QaEvaluateJobData = { workspaceId: string; reportId: string };
+export type ExportBundleJobData = { workspaceId: string; bundleId: string };
+
+function inlineQa(): boolean {
+  return (
+    process.env.QA_INLINE === '1' ||
+    process.env.QA_INLINE === 'true' ||
+    process.env.INSPECT_INLINE === '1' ||
+    process.env.INSPECT_INLINE === 'true'
+  );
+}
+
+function inlineExport(): boolean {
+  return (
+    process.env.EXPORT_INLINE === '1' ||
+    process.env.EXPORT_INLINE === 'true' ||
+    process.env.INSPECT_INLINE === '1' ||
+    process.env.INSPECT_INLINE === 'true'
+  );
+}
+
+let qaQueue: Queue<QaEvaluateJobData> | null = null;
+let exportQueue: Queue<ExportBundleJobData> | null = null;
+
+export function getQaQueue(): Queue<QaEvaluateJobData> {
+  if (!qaQueue) {
+    const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
+    qaQueue = new Queue<QaEvaluateJobData>(QA_QUEUE, { connection: connectionFromUrl(redisUrl) });
+  }
+  return qaQueue;
+}
+
+export function getExportQueue(): Queue<ExportBundleJobData> {
+  if (!exportQueue) {
+    const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
+    exportQueue = new Queue<ExportBundleJobData>(EXPORT_QUEUE, {
+      connection: connectionFromUrl(redisUrl),
+    });
+  }
+  return exportQueue;
+}
+
+export async function publishQaOutbox(outbox: {
+  id: string;
+  workspaceId: string;
+  jobId: string;
+  payload: unknown;
+}): Promise<void> {
+  const outboxRepo = new OutboxRepository(prisma);
+  const data = outbox.payload as QaEvaluateJobData;
+  if (inlineQa()) {
+    const { runQaEvaluationInline } = await import('./run-qa-inline');
+    await runQaEvaluationInline(data);
+    await outboxRepo.markPublished(outbox.workspaceId, outbox.id);
+    return;
+  }
+  try {
+    await getQaQueue().add('qa-evaluate', data, {
+      jobId: outbox.jobId,
+      removeOnComplete: 100,
+      removeOnFail: 50,
+      attempts: 5,
+      backoff: { type: 'exponential', delay: 2000 },
+    });
+    await outboxRepo.markPublished(outbox.workspaceId, outbox.id);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/job.+already exists|exists/i.test(msg)) {
+      await outboxRepo.markPublished(outbox.workspaceId, outbox.id);
+      return;
+    }
+    await outboxRepo.bumpAttempt(outbox.workspaceId, outbox.id, msg);
+    throw err;
+  }
+}
+
+export async function enqueueQaFromOutbox(outbox: {
+  id: string;
+  workspaceId: string;
+  jobId: string;
+  payload: unknown;
+}): Promise<{ published: boolean }> {
+  try {
+    await publishQaOutbox(outbox);
+    return { published: true };
+  } catch {
+    return { published: false };
+  }
+}
+
+export async function publishExportOutbox(outbox: {
+  id: string;
+  workspaceId: string;
+  jobId: string;
+  payload: unknown;
+}): Promise<void> {
+  const outboxRepo = new OutboxRepository(prisma);
+  const data = outbox.payload as ExportBundleJobData;
+  if (inlineExport()) {
+    const { runExportBundleInline } = await import('./run-export-inline');
+    await runExportBundleInline(data);
+    await outboxRepo.markPublished(outbox.workspaceId, outbox.id);
+    return;
+  }
+  try {
+    await getExportQueue().add('export-bundle', data, {
+      jobId: outbox.jobId,
+      removeOnComplete: 100,
+      removeOnFail: 50,
+      attempts: 5,
+      backoff: { type: 'exponential', delay: 2000 },
+    });
+    await outboxRepo.markPublished(outbox.workspaceId, outbox.id);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/job.+already exists|exists/i.test(msg)) {
+      await outboxRepo.markPublished(outbox.workspaceId, outbox.id);
+      return;
+    }
+    await outboxRepo.bumpAttempt(outbox.workspaceId, outbox.id, msg);
+    throw err;
+  }
+}
+
+export async function enqueueExportFromOutbox(outbox: {
+  id: string;
+  workspaceId: string;
+  jobId: string;
+  payload: unknown;
+}): Promise<{ published: boolean }> {
+  try {
+    await publishExportOutbox(outbox);
+    return { published: true };
+  } catch {
+    return { published: false };
+  }
+}
