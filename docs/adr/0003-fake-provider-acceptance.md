@@ -1,6 +1,6 @@
 # ADR-0003: Fake-provider acceptance while external deps deferred
 
-- Status: Accepted
+- Status: Accepted (amended P2-A / MSG-035 — formal eval recovery narrowed)
 - Date: 2026-09-12
 - Deciders: Project owner (裁决 via Kimi MSG-016) + implementing agent (马奇)
 - Related: ADR-0001 (Fake Provider default), Kimi MSG-016 on issue #7
@@ -45,6 +45,14 @@ The project owner decided (2026-09-12) that **real Provider key selection** and 
 1. Owner supplies Provider credentials via approved secret path + budget.
 2. Owner supplies ≥10 rights-cleared SKUs in existing `fixtures/eval-products/` format (or documented successor).
 3. Open CR(s) for Phase 2 smoke/eval; update progress rows to DONE/VERIFIED with evidence; do **not** rewrite Phase 1 history.
+
+### Recovery condition — formal eval / UAT (MSG-035 / MSG-036)
+
+Product is currently **owner self-use** (not public release). Acceptance for the P2-A kie.ai plug-and-play gateway is **owner real trial**, not a formal eval / UAT gate.
+
+**Revive formal eval / §18.4 baseline / multi-reviewer UAT only if** the product becomes **multi-user or company formal use**. Until then, do not block self-use delivery on W2-07 / W4-07 / §18.4 / W9-02 formal artifacts.
+
+P2-A (`IMAGE_PROVIDER=kie`, `KieImageProviderAdapter`) may ship while those ledger rows stay non-VERIFIED / BLOCKED_EXTERNAL with MSG-035 wording.
 
 ## Alternatives considered
 

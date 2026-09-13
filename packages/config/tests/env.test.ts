@@ -36,3 +36,14 @@ describe('loadEnv', () => {
     ).toThrow(/Invalid environment/);
   });
 });
+
+  it('accepts IMAGE_PROVIDER=kie for P2-A', () => {
+    const env = loadEnv({
+      NODE_ENV: 'development',
+      DATABASE_URL: 'postgresql://studio:studio@localhost:5432/studio',
+      IMAGE_PROVIDER: 'kie',
+      KIE_BASE_URL: 'https://api.kie.ai',
+    });
+    expect(env.IMAGE_PROVIDER).toBe('kie');
+  });
+

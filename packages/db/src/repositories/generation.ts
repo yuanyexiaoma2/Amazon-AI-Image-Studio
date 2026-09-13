@@ -24,6 +24,7 @@ import {
   extractTruthRevisionId,
   extractUpscaleParams,
   getModelByKey,
+  resolveModelRegistry,
   isDeterministicNodeType,
   operationForNodeType,
   resolutionToPixels,
@@ -189,7 +190,13 @@ export class GenerationRepository {
       throw new GenerationValidationError('No executable nodes in scope');
     }
 
-    const model = getModelByKey(input.modelKey ?? FAKE_PRIMARY_MODEL.key) ?? FAKE_PRIMARY_MODEL;
+    const registry = resolveModelRegistry(process.env.IMAGE_PROVIDER);
+    const provider = (process.env.IMAGE_PROVIDER ?? 'fake').trim().toLowerCase();
+    const defaultKey =
+      provider === 'kie' || provider === 'kie.ai' || provider === 'kieai'
+        ? 'kie-seedream-5-pro-generate'
+        : FAKE_PRIMARY_MODEL.key;
+    const model = getModelByKey(input.modelKey ?? defaultKey, registry) ?? getModelByKey(defaultKey, registry) ?? FAKE_PRIMARY_MODEL;
     const unitMicro = amountToMicrounits(model.pricing.estimatedUnitCost);
     const estimateMicrounits = unitMicro * nodes.length;
     const currency = model.pricing.currency;
@@ -274,7 +281,8 @@ export class GenerationRepository {
             (typeof node.config?.modelKey === 'string' ? node.config.modelKey : undefined) ??
               upscaleParamsEarly?.engineKey ??
               input.modelKey ??
-              FAKE_PRIMARY_MODEL.key,
+              defaultKey,
+            registry,
           ) ?? model;
         const op = operationForNodeType(node.type) ?? 'GENERATE';
         const inputs = resolvePortInputs(fullGraph, node.id);

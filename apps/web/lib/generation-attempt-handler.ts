@@ -18,7 +18,9 @@ import {
   type GenerationItemStatus,
 } from '@studio/domain';
 import {
-  FakeImageProviderAdapter,
+  createImageAdapter,
+  resolveProviderPollIntervalMs,
+  resolveProviderMaxPolls,
   ProviderAdapterError,
   type NormalizedImageRequest,
 } from '@studio/providers';
@@ -41,7 +43,7 @@ export type GenerationAttemptJobData = {
 };
 
 function adapter() {
-  return new FakeImageProviderAdapter();
+  return createImageAdapter();
 }
 
 async function emitProgress(
@@ -216,7 +218,7 @@ export async function handleGenerationAttemptJob(data: GenerationAttemptJobData)
     let polls = 0;
     while (
       (status.status === 'QUEUED' || status.status === 'RUNNING') &&
-      polls < 40
+      polls < resolveProviderMaxPolls(process.env)
     ) {
       // Check cancel
       const latest = await prisma.generationAttempt.findFirst({
@@ -258,7 +260,7 @@ export async function handleGenerationAttemptJob(data: GenerationAttemptJobData)
         await a.cancel?.(subResult.externalJobId);
         break;
       }
-      await new Promise((r) => setTimeout(r, 25));
+      await new Promise((r) => setTimeout(r, resolveProviderPollIntervalMs(process.env)));
       status = await a.getStatus(subResult.externalJobId);
       polls += 1;
       await prisma.generationAttempt.update({

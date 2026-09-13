@@ -44,7 +44,7 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | W2-04 | Product Truth Pack form, fact status, evidence refs | VERIFIED | Truth document/revision/facts/constraints; GET/PUT truth-pack; UI form actions. Independent review APPROVED on PR #3; merged to main as `79996ac9cd0f3e824bc1c0a608c4aa9d75fbcaa6`; main CI green https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34586631130. |
 | W2-05 | Vision Provider Adapter + structured extract | VERIFIED | `VisionProvider` + **FakeVisionProvider** only (W0-02 still BLOCKED_EXTERNAL). `POST .../truth-pack/extract`. Independent review APPROVED on PR #3; merged to main as `79996ac9cd0f3e824bc1c0a608c4aa9d75fbcaa6`; main CI green https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34586631130. |
 | W2-06 | Fact confirm / lock-allow / approve gate | VERIFIED | confirm + approve APIs; domain `canApproveTruthRevision`; UI buttons. Independent review APPROVED on PR #3; merged to main as `79996ac9cd0f3e824bc1c0a608c4aa9d75fbcaa6`; main CI green https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34586631130. |
-| W2-07 | Fixture baseline (10 real SKUs) | BLOCKED_EXTERNAL | Only **3 synthetic SKUs** in `fixtures/eval-products/`. **所有者裁决：推迟至开发全部完成后决定（密钥选型 + 素材收集）**（原「QA 周前到位」作废）。见 ADR-0003。Does not block core merge; must **not** be VERIFIED. |
+| W2-07 | Fixture baseline (10 real SKUs) | BLOCKED_EXTERNAL | Only **3 synthetic SKUs** in `fixtures/eval-products/`. **MSG-035：产品为所有者自用（非公开发布）；不要求正式评测/UAT，验收=所有者真实试用。** ≥10 真实 SKU / §18.4 正式基线仅在转为多人/公司正式使用时重启（ADR-0003）。P2-A kie 接入不依赖本行 VERIFIED。 |
 
 ### W2 commands / evidence (implementer)
 
@@ -199,7 +199,7 @@ See `AGENTS.md` and `docs/architecture.md`: same-week related work → one miles
 | W4-04 | Webhook verify, poll, idempotent event id, late results | VERIFIED | `POST /api/v1/providers/{providerKey}/webhook` raw-body HMAC; `provider_events` unique (provider, external_event_id); unknown job → 202 warning; late-after-cancel disposition. |
 | W4-05 | SSE progress + task drawer | VERIFIED | `GET .../events?projectId=` SSE; Studio task drawer (run/cancel/retry + SSE); list runs API. |
 | W4-06 | Fake Provider full failure matrix | VERIFIED | AUTH/VALIDATION/POLICY/QUOTA no auto-retry; RATE_LIMIT/TRANSIENT backoff; TIMEOUT max 2; UNKNOWN once; unit tests in `fake-adapter.test.ts` + domain retry policy tests. |
-| W4-07 | Staging real generate/edit smoke | BLOCKED_EXTERNAL | **所有者裁决：推迟至开发全部完成后决定（密钥选型 + 素材收集）**。见 ADR-0003。Fake only until Phase 2. |
+| W4-07 | Staging real generate/edit smoke | BLOCKED_EXTERNAL | **MSG-035：自用场景不要求正式 Staging UAT。** 所有者本机真实 smoke（kie key 到位后）即可；正式 Staging smoke / 多人评测仅在产品转向多人/公司正式使用时恢复。见 ADR-0003 + P2-A。 |
 
 ### W4 commands / evidence (implementer)
 
@@ -461,7 +461,7 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | ID | Task | Status | Evidence / notes |
 |---|---|---|---|
 | W9-01 | 发布缓冲（issue closure / release docs） | VERIFIED | `docs/release/go-no-go.md`, `docs/release/backlog.md`, `docs/release/monitoring.md`. Allowed §19.9 notes are explicit Backlog rows — not hidden flags. Independent review APPROVED on PR #19; merged to main as `659d96037d89dc178f312f122cbf80ad5948da52`; tip CI green https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34699543761. Fake Phase 1 **CONDITIONAL GO** only — not Production. |
-| W9-02 | Production 发布 | BLOCKED_EXTERNAL | **NO-GO** for real Production. Missing §32.15 artifacts (signed GO, Production target/domain, real Provider budget, staffed monitors, rollback owner) + hung W0-02 / W2-07 / W4-07 + Phase 2. **Production smoke was not run and is not claimed passed.** |
+| W9-02 | Production 发布 | BLOCKED_EXTERNAL | **MSG-035：自用 ≠ 公开发布 Production。** 保持 **NO-GO** for public/company Production until §32.15 + formal eval recovery. Owner self-use with `IMAGE_PROVIDER=kie` is out of band of W9-02. **Production smoke was not run and is not claimed passed.** |
 
 ### W9-01 VERIFIED deliverables (not Production GO)
 
@@ -488,3 +488,32 @@ One branch / one PR / one review each; merge unlocks the next segment.
 - 审稿 **APPROVED** + public archive: https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/19#issuecomment-5646543987
 - Fake only (ADR-0003); no Production deploy; no real keys
 - W9-02 remains **BLOCKED_EXTERNAL** / Production **NO-GO** — Production smoke not run; until W0-02 / W2-07 / W4-07 + Phase 2 + signed §32.15
+
+---
+
+## P2-A — kie.ai plug-and-play image gateway (DONE)
+
+**Branch:** `feature/p2a-kie-gateway` (from latest `main`)  
+**Acceptance unit (one PR, one independent review):** sole Phase 2 milestone (MSG-035 / MSG-036). **Do not merge without 审稿 public APPROVED.**  
+**Provider:** kie.ai third-party API gateway (`IMAGE_PROVIDER=kie`). Secrets never in repo.  
+**Product mode:** owner **self-use** — acceptance = owner real trial (no formal eval/UAT gate).
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| P2-A-01 | `KieImageProviderAdapter` (createTask / recordInfo / webhook / credits) | DONE | `packages/providers/src/kie-adapter.ts`; Bearer auth; env base URL + model IDs + key; mocked HTTP contract tests |
+| P2-A-02 | Immediate MinIO persist of gateway media | DONE | `getStatus` downloads allowlisted result URLs → `bytesBase64`; existing `ingestProviderOutputs` → MinIO (14-day gateway retention) |
+| P2-A-03 | Rate limit awareness (~20 creates / 10s) | DONE | In-process `CreateRateLimiter` + `KIE_WORKER_CONCURRENCY_CAP`; 429 → `RATE_LIMIT` retry matrix |
+| P2-A-04 | Retry / failure matrix on real path (W4-06 style) | DONE | AUTH/VALIDATION/POLICY/QUOTA no auto-retry; RATE_LIMIT/TRANSIENT/TIMEOUT/UNKNOWN via `normalizeError` + existing worker `shouldAutoRetry` |
+| P2-A-05 | `.env.example` placeholders + self-serve runbook | DONE | `.env.example`; `docs/runbooks/self-serve-setup.md` |
+| P2-A-06 | Ledger + ADR recovery (MSG-035) | DONE | W2-07 / W4-07 / W9-02 notes; ADR-0003 formal-eval recovery only if multi-user/company formal use; ADR-0001 kie amendment |
+
+### P2-A commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm lint` / `typecheck` / `test` / `build` | Required green before PR (CI must pass **without** real keys) |
+| Provider select | `IMAGE_PROVIDER=kie` + `KIE_API_KEY` → `createImageAdapter()` returns `KieImageProviderAdapter` |
+| Credits path | Documented `GET /api/v1/chat/credit` (not invented `/user/credits`) |
+| Out of scope | Merging without 审稿; committing real keys; claiming §18.4 / W9-02 Production GO |
+
+**Status:** **DONE** (not VERIFIED). VERIFIED only after independent 审稿 APPROVED on the PR.

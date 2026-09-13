@@ -21,7 +21,19 @@ const envSchema = z.object({
     .optional()
     .transform((v) => v !== 'false' && v !== '0')
     .default('true'),
-  IMAGE_PROVIDER: z.enum(['fake', 'openai', 'google']).default('fake'),
+  IMAGE_PROVIDER: z.enum(['fake', 'kie', 'openai', 'google']).default('fake'),
+  // kie.ai (P2-A) — placeholders only in .env.example; never commit real keys
+  KIE_BASE_URL: z.string().url().optional(),
+  KIE_API_KEY: z.string().optional(),
+  KIE_MODEL_GENERATE: z.string().optional(),
+  KIE_MODEL_EDIT: z.string().optional(),
+  KIE_WEBHOOK_HMAC_KEY: z.string().optional(),
+  KIE_ESTIMATED_CREDITS_PER_IMAGE: z.string().optional(),
+  KIE_USD_PER_CREDIT: z.string().optional(),
+  KIE_CREATE_RATE_MAX: z.string().optional(),
+  KIE_CREATE_RATE_WINDOW_MS: z.string().optional(),
+  KIE_WORKER_CONCURRENCY_CAP: z.string().optional(),
+  PROVIDER_POLL_INTERVAL_MS: z.string().optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

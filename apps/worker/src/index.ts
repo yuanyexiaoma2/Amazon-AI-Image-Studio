@@ -5,6 +5,7 @@ import {
   resolveQueueMaxWaiting,
   resolveWorkerConcurrency,
 } from '@studio/domain';
+import { resolveKieAwareWorkerConcurrency } from '@studio/providers';
 import { handleHealthJob, type HealthJobData } from './jobs/health.js';
 import {
   handleInspectJob,
@@ -38,7 +39,10 @@ export const QA_QUEUE = 'qa-evaluate';
 export const EXPORT_QUEUE = 'export-bundle';
 
 async function main() {
-  const concurrency = resolveWorkerConcurrency(process.env);
+  const concurrency = resolveKieAwareWorkerConcurrency(
+    process.env,
+    resolveWorkerConcurrency(process.env),
+  );
   const maxWaiting = resolveQueueMaxWaiting(process.env);
   log.info({ concurrency, maxWaiting }, 'worker concurrency / backpressure config');
 
