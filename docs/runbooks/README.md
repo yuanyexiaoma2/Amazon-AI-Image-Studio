@@ -27,3 +27,8 @@ Copy `TEMPLATE.md` when adding a new runbook (incident, restore, deploy, etc.).
 
 Living pack under `docs/release/`: `go-no-go.md`, `backlog.md`, `monitoring.md`.
 Alert receivers are **placeholders** until the owner fills them. Production is **NO-GO**.
+
+## P2-A self-use
+
+- [self-serve-setup.md](./self-serve-setup.md) — clone → env → run → export (kie.ai plug-and-play)
+

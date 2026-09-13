@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { DEFAULT_MODEL_REGISTRY, listEnabledModels } from '@studio/domain';
+import { resolveModelRegistry, listEnabledModels } from '@studio/domain';
 import { prisma, CreditRepository } from '@studio/db';
 import { getOrCreateRequestId } from '@/lib/request-id';
 import { requireWorkspaceMember } from '@/lib/workspace-access';
@@ -15,7 +15,7 @@ export async function GET(request: Request, context: Ctx) {
   const url = new URL(request.url);
   const operation = url.searchParams.get('operation') ?? undefined;
   const models = listEnabledModels(
-    DEFAULT_MODEL_REGISTRY,
+    resolveModelRegistry(process.env.IMAGE_PROVIDER),
     operation as never,
   );
 

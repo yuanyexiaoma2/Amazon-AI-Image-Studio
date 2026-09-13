@@ -31,3 +31,18 @@ Real provider API keys and spend authorization are not yet available from the pr
 
 1. Hard-code a single cloud SDK in the worker — rejected (violates replaceable-provider rule).
 2. Block all generation work until keys arrive — rejected (slows W1–W5).
+
+
+## Amendment (P2-A / 2026-09-13)
+
+Authorized third-party gateway for owner self-use: **kie.ai** (`IMAGE_PROVIDER=kie`).
+
+- Adapter: `KieImageProviderAdapter` in `packages/providers`
+- Auth: `Authorization: Bearer <KIE_API_KEY>`
+- Jobs: `POST /api/v1/jobs/createTask`, poll `GET /api/v1/jobs/recordInfo?taskId=`
+- Credits: documented `GET /api/v1/chat/credit`
+- Default Market models (override via env with real docs IDs only):
+  - Generate: `seedream/5-pro-text-to-image`
+  - Edit: `seedream/5-pro-image-to-image`
+- Estimate: ~7 credits × $0.005/credit (docs callback example + kie billing UI) — not an invented SKU price list
+- Secrets remain env / secret-store only; never in repo

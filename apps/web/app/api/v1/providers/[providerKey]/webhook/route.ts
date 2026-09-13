@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma, newId, reconcileOrphanProviderEvents } from '@studio/db';
-import { FakeImageProviderAdapter, ProviderAdapterError } from '@studio/providers';
+import { createImageAdapter, ProviderAdapterError } from '@studio/providers';
 import { getOrCreateRequestId } from '@/lib/request-id';
 import { makeApiError } from '@studio/contracts';
 
@@ -16,7 +16,7 @@ export async function POST(request: Request, context: Ctx) {
   const requestId = getOrCreateRequestId(request.headers.get('x-request-id'));
   const { providerKey } = await context.params;
 
-  if (providerKey !== 'fake') {
+  if (providerKey !== 'fake' && providerKey !== 'kie') {
     return NextResponse.json(
       makeApiError('NOT_FOUND', `Unknown provider ${providerKey}`, requestId),
       { status: 404, headers: { 'x-request-id': requestId } },
@@ -24,11 +24,19 @@ export async function POST(request: Request, context: Ctx) {
   }
 
   const raw = new Uint8Array(await request.arrayBuffer());
-  const adapter = new FakeImageProviderAdapter();
+  const adapter = createImageAdapter({
+    env: { ...process.env, IMAGE_PROVIDER: providerKey },
+  });
+  if (!adapter.verifyWebhook) {
+    return NextResponse.json(
+      makeApiError('VALIDATION', `Provider ${providerKey} does not support webhooks`, requestId),
+      { status: 400, headers: { 'x-request-id': requestId } },
+    );
+  }
 
   let verified;
   try {
-    verified = await adapter.verifyWebhook!(request.headers, raw);
+    verified = await adapter.verifyWebhook(request.headers, raw);
   } catch (err) {
     if (err instanceof ProviderAdapterError) {
       const status = err.errorClass === 'AUTH' ? 401 : 400;
