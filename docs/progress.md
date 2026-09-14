@@ -542,7 +542,9 @@ One branch / one PR / one review each; merge unlocks the next segment.
 |---|---|
 | `pnpm db:generate` / `openapi:generate` | Client regenerated; `docs/api/openapi.yaml` updated (intent/autoApprove) |
 | `pnpm lint` / `typecheck` / `test` / `build` | Local green 2026-09-14 Asia/Shanghai (47/47 providers tests incl. 14 new planner tests) |
-| `pnpm test:e2e` | **Not run locally** — Docker not available in this shell; relies on PR CI (chain unchanged: intent/autoApprove are optional fields) |
+| `pnpm test:e2e` | **PASS locally 2026-09-14** (web on :3100, `INSPECT_INLINE=1 GENERATION_INLINE=1`) — full W2…W7 chain incl. variants batch/QA/export/admin; V2-A changes non-breaking |
+| `pnpm db:migrate` | Applied locally — 11 migrations up to date |
+| Real kie planner smoke | **BLOCKED on owner**: `KIE_API_KEY` not yet in local `.env`. Script ready: `PLANNER_PROVIDER=kie node …/tsx packages/providers/smoke-kie.mts` |
 | Provider | **Fake default**; kie planner only with `PLANNER_PROVIDER=kie` + local `KIE_API_KEY`; no keys in repo |
 | Migration | `20260914010000_v2_auto_approve_gates` (additive, default false — safe) |
 | Out of scope | UI 设计系统重构（V2 PR-1）；画布命令层 / 自由画布（PR-2）；聊天 Agent 面板（PR-4）；真实 kie planner 冒烟（owner 本机自验） |
