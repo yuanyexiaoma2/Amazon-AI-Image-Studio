@@ -10,9 +10,11 @@
 
 ---
 
-## Review policy (documented W2)
+## Review policy (documented W2; **amended V2 2026-09-14**)
 
-See `AGENTS.md` and `docs/architecture.md`: same-week related work → one milestone PR; continuous commits OK; DONE by implementer; VERIFIED at weekly/high-risk review; W2 acceptance = full upload→Truth Pack chain. W3 is split into W3-A / W3-B1 / W3-B2; W5 into W5-A / W5-B / W5-C (Kimi MSG-016); W6 Phase 1 is one milestone PR (W6-01…08). W8 is one milestone PR (W8-01…07). W9 is docs-only buffer + release (no new product modules). Each is one independent review.
+See `AGENTS.md` and `docs/architecture.md`: same-week related work → one milestone PR; continuous commits OK; DONE by implementer; W2 acceptance = full upload→Truth Pack chain. W3 is split into W3-A / W3-B1 / W3-B2; W5 into W5-A / W5-B / W5-C (Kimi MSG-016); W6 Phase 1 is one milestone PR (W6-01…08). W8 is one milestone PR (W8-01…07). W9 is docs-only buffer + release (no new product modules). Each is one independent review.
+
+**V2 amendment (owner ruling 2026-09-14):** 外部审稿 bot（grok）额度用尽停用。VERIFIED 改由 **全新上下文 AI 复审**（新会话、与实现无共享上下文、重跑验收检查 + PR 留言）授予；**合并由所有者执行或明确指示**；高风险项需所有者明确点头。历史 VERIFIED（≤ PR #19 审稿 APPROVED）不受影响。V2 愿景与路线见 `docs/specs/v2-vision.md`。
 
 ---
 
@@ -523,8 +525,8 @@ One branch / one PR / one review each; merge unlocks the next segment.
 ## V2-A — Planner Agent：kie LLM 规划 + 意图向导 + 自动门禁开关 (DONE)
 
 **Branch:** `feat/v2-planner-agent` (from main `b4d247e`)  
-**Acceptance unit (one PR, one independent review):** V2-A-01…V2-A-06. **Do not merge without 审稿 public APPROVED.**  
-**Background:** Owner vision (2026-09-14): 流程化（向导）+ 自由画布并存，Agent 先规划卖点/场景。单 KIE_API_KEY 同时驱动生图与规划 LLM（kie.ai OpenAI-compatible `/api/v1/chat/completions`，model in body）。  
+**Acceptance unit (one PR, one review per V2 amended policy):** V2-A-01…V2-A-06. 合并由所有者执行（见 V2 review policy）。  
+**Background:** Owner vision (2026-09-14): 流程化（向导）+ 自由画布并存，Agent 先规划卖点/场景。单 KIE_API_KEY 同时驱动生图与规划 LLM。⚠️ kie LLM 端点实为**路径含模型 slug** `POST {base}/{model}/v1/chat/completions`（统一 `/api/v1/chat/completions` 对 LLM 返回 "feature not supported"；详见 `docs/specs/v2-vision.md` §5）。  
 **Scope note:** PR-3 of the agreed V2 sequence (UI 重构 / 画布命令层 暂未做)。Fake 仍为默认；真实 LLM 规划走 `PLANNER_PROVIDER=kie`。
 
 | ID | Task | Status | Evidence / notes |
@@ -541,12 +543,12 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | Command | Result |
 |---|---|
 | `pnpm db:generate` / `openapi:generate` | Client regenerated; `docs/api/openapi.yaml` updated (intent/autoApprove) |
-| `pnpm lint` / `typecheck` / `test` / `build` | Local green 2026-09-14 Asia/Shanghai (47/47 providers tests incl. 14 new planner tests) |
+| `pnpm lint` / `typecheck` / `test` / `build` | Local green 2026-09-14 Asia/Shanghai (49/49 providers tests incl. 16 planner tests) |
 | `pnpm test:e2e` | **PASS locally 2026-09-14** (web on :3100, `INSPECT_INLINE=1 GENERATION_INLINE=1`) — full W2…W7 chain incl. variants batch/QA/export/admin; V2-A changes non-breaking |
 | `pnpm db:migrate` | Applied locally — 11 migrations up to date |
-| Real kie planner smoke | **BLOCKED on owner**: `KIE_API_KEY` not yet in local `.env`. Script ready: `PLANNER_PROVIDER=kie node …/tsx packages/providers/smoke-kie.mts` |
+| Real kie planner smoke | **PASS 2026-09-14** — `gemini-3-flash`, 18.8s, 7 briefs honoring intent (18h 保温/450ml/办公/车载) + confirmed facts only; endpoint fix commit `b0d4cb1` (model slug in path + kie 200-envelope error mapping) |
 | Provider | **Fake default**; kie planner only with `PLANNER_PROVIDER=kie` + local `KIE_API_KEY`; no keys in repo |
 | Migration | `20260914010000_v2_auto_approve_gates` (additive, default false — safe) |
-| Out of scope | UI 设计系统重构（V2 PR-1）；画布命令层 / 自由画布（PR-2）；聊天 Agent 面板（PR-4）；真实 kie planner 冒烟（owner 本机自验） |
+| Out of scope | UI 设计系统重构（V2 PR-1）；画布命令层 / 自由画布（PR-2）；聊天 Agent 面板（PR-4） |
 
-**Status:** **DONE** (not VERIFIED). VERIFIED only after independent 审稿 APPROVED on the PR.
+**Status:** **DONE** (not VERIFIED). VERIFIED per V2 amended policy: fresh-context review PASS + owner merge + main CI green.

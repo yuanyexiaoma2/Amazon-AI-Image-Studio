@@ -75,6 +75,12 @@ MinIO console: http://localhost:9001 (user/pass from `.env.example`).
 5. Upload a PNG/JPEG/WebP (≤20MB). Wait until asset status is `READY`.
 6. Click **Extract (Fake Vision)** → **Confirm all EXTRACTED** → **Approve revision**.
 
+## V2: 意图向导 + 真实 AI（owner self-use）
+
+- 项目页点 **意图向导**：一句话意图 → AI 规划 7 张图的卖点/场景 → 批准 → 物化到 Studio 画布。
+- 真实 AI 需要 `.env` 里 `PLANNER_PROVIDER=kie` + `IMAGE_PROVIDER=kie` + `KIE_API_KEY`（单 key 双用途；kie LLM 端点细节见 `docs/specs/v2-vision.md` §5）。
+- 愿景与路线图：`docs/specs/v2-vision.md`。当前 PR 序列：V2-A(planner) → PR-2 画布命令层 → PR-1 UI 重构 → PR-4 聊天 Agent。
+
 Object storage is MinIO (`S3_*` in `.env`). Never add real AI provider API keys — Fake Provider only until W0-02 is unblocked.
 
 Synthetic eval fixtures: `pnpm fixtures:synth` → `fixtures/eval-products/`.
