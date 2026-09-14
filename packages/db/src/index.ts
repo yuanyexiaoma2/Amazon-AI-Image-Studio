@@ -40,6 +40,8 @@ export {
   WorkflowConflictError,
   WorkflowValidationError,
   WorkflowNotFoundError,
+  WorkflowUndoError,
+  type WorkflowUndoReason,
   type WorkflowWithDraft,
 } from './repositories/workflow.js';
 
