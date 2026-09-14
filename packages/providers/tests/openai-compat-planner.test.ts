@@ -86,14 +86,15 @@ describe('OpenAiCompatShotPlanProvider', () => {
       intent: '大容量 450ml；18 小时保温；办公场景',
     });
 
-    expect(seen!.url).toBe('https://api.kie.ai/api/v1/chat/completions');
+    expect(seen!.url).toBe('https://api.kie.ai/gemini-3-flash/v1/chat/completions');
     const headers = seen!.init.headers as Record<string, string>;
     expect(headers.authorization).toBe(`Bearer ${KEY}`);
     const body = JSON.parse(String(seen!.init.body));
-    expect(body.model).toBe('gemini/gemini-2.5-flash');
+    expect(body.model).toBe('gemini-3-flash');
     expect(body.response_format).toEqual({ type: 'json_object' });
-    expect(body.messages[1].content).toContain('大容量 450ml');
-    expect(body.messages[1].content).toContain('Acme');
+    const userParts = body.messages[1].content;
+    expect(userParts[0].text).toContain('大容量 450ml');
+    expect(userParts[0].text).toContain('Acme');
 
     // Skeleton always from template: 7 briefs, order/ratio/qaPolicy intact
     expect(result.briefs).toHaveLength(7);
@@ -143,6 +144,7 @@ describe('OpenAiCompatShotPlanProvider', () => {
       [401, 'AUTH'],
       [403, 'AUTH'],
       [400, 'VALIDATION'],
+      [404, 'VALIDATION'],
       [429, 'RATE_LIMIT'],
       [500, 'TRANSIENT'],
       [502, 'TRANSIENT'],
@@ -155,6 +157,32 @@ describe('OpenAiCompatShotPlanProvider', () => {
       });
       await expect(p.draftPlan({ sku: 'X' })).rejects.toMatchObject({ errorClass: klass });
     }
+  });
+
+  it('maps kie HTTP-200 error envelopes ({code,msg}) to error classes', async () => {
+    const cases: Array<[number, string]> = [
+      [404, 'VALIDATION'], // "This feature is currently not supported"
+      [500, 'TRANSIENT'], // "Network error, please try again later"
+      [401, 'AUTH'],
+    ];
+    for (const [code, klass] of cases) {
+      const p = new OpenAiCompatShotPlanProvider({
+        apiKey: KEY,
+        fetchImpl: okFetch({ code, msg: 'kie error', data: null }),
+      });
+      await expect(p.draftPlan({ sku: 'X' })).rejects.toMatchObject({ errorClass: klass });
+    }
+  });
+
+  it('accepts array-of-parts message content', async () => {
+    const p = new OpenAiCompatShotPlanProvider({
+      apiKey: KEY,
+      fetchImpl: okFetch({
+        choices: [{ message: { content: [{ type: 'text', text: GOOD_LLM_PLAN }] } }],
+      }),
+    });
+    const result = await p.draftPlan({ sku: 'X' });
+    expect(result.briefs).toHaveLength(7);
   });
 
   it('maps network failure to TRANSIENT and abort to TIMEOUT', async () => {

@@ -6,7 +6,6 @@
 
 import {
   KIE_DEFAULT_BASE_URL,
-  KIE_DEFAULT_CHAT_PATH,
   KIE_DEFAULT_PLANNER_MODEL,
   OpenAiCompatShotPlanProvider,
   PlannerProviderError,
@@ -47,7 +46,9 @@ export function createShotPlanProvider(
     return new OpenAiCompatShotPlanProvider({
       apiKey,
       baseUrl: env.KIE_BASE_URL?.trim() || KIE_DEFAULT_BASE_URL,
-      chatPath: KIE_DEFAULT_CHAT_PATH,
+      // chatPath derived from model slug (/{model}/v1/chat/completions);
+      // KIE_LLM_CHAT_PATH overrides for custom gateways.
+      chatPath: env.KIE_LLM_CHAT_PATH?.trim() || undefined,
       model: env.KIE_LLM_MODEL?.trim() || KIE_DEFAULT_PLANNER_MODEL,
       providerName: 'kie-llm-shot-plan',
       ...options.kieOverrides,

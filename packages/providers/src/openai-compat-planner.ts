@@ -59,9 +59,19 @@ export type OpenAiCompatPlannerConfig = {
 };
 
 export const KIE_DEFAULT_BASE_URL = 'https://api.kie.ai';
-export const KIE_DEFAULT_CHAT_PATH = '/api/v1/chat/completions';
-export const KIE_DEFAULT_PLANNER_MODEL = 'gemini/gemini-2.5-flash';
+export const KIE_DEFAULT_PLANNER_MODEL = 'gemini-3-flash';
 const DEFAULT_TIMEOUT_MS = 60_000;
+
+/**
+ * kie.ai LLM chat endpoint shape (docs.kie.ai/market/gemini/*):
+ * POST {baseUrl}/{model-slug}/v1/chat/completions — model in the PATH,
+ * OpenAI-compatible body. NOT the unified /api/v1/chat/completions
+ * (returns "feature not supported" for LLMs).
+ */
+export function kieChatPathForModel(model: string): string {
+  const slug = model.trim().replace(/^\/+|\/+$/g, '');
+  return `/${slug}/v1/chat/completions`;
+}
 
 /** Creative fields the LLM is allowed to fill, per slot+orderIndex. */
 const LlmBriefSchema = z.object({
@@ -143,10 +153,10 @@ function normalizeHttpError(status: number, bodyText: string): PlannerProviderEr
   if (status === 429) {
     return new PlannerProviderError('RATE_LIMIT', 'Planner LLM rate limited (429)', status);
   }
-  if (status === 400) {
+  if (status === 400 || status === 404) {
     return new PlannerProviderError(
       'VALIDATION',
-      `Planner LLM rejected request (400): ${bodyText.slice(0, 200)}`,
+      `Planner LLM rejected request (${status}): ${bodyText.slice(0, 200)}`,
       status,
     );
   }
@@ -171,11 +181,12 @@ export class OpenAiCompatShotPlanProvider implements ShotPlanProvider {
     if (!config.apiKey?.trim()) {
       throw new PlannerProviderError('AUTH', 'An API key is required for a real planner provider');
     }
+    const model = config.model ?? KIE_DEFAULT_PLANNER_MODEL;
     this.config = {
       apiKey: config.apiKey,
       baseUrl: (config.baseUrl ?? KIE_DEFAULT_BASE_URL).replace(/\/+$/, ''),
-      chatPath: config.chatPath ?? KIE_DEFAULT_CHAT_PATH,
-      model: config.model ?? KIE_DEFAULT_PLANNER_MODEL,
+      chatPath: config.chatPath ?? kieChatPathForModel(model),
+      model,
       timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       fetchImpl: config.fetchImpl ?? fetch,
     };
@@ -212,8 +223,11 @@ export class OpenAiCompatShotPlanProvider implements ShotPlanProvider {
         body: JSON.stringify({
           model: this.config.model,
           messages: [
-            { role: 'system', content: PLANNER_SYSTEM_PROMPT },
-            { role: 'user', content: buildPlannerPrompt(request, template) },
+            { role: 'system', content: [{ type: 'text', text: PLANNER_SYSTEM_PROMPT }] },
+            {
+              role: 'user',
+              content: [{ type: 'text', text: buildPlannerPrompt(request, template) }],
+            },
           ],
           temperature: 0.7,
           response_format: { type: 'json_object' },
@@ -241,9 +255,18 @@ export class OpenAiCompatShotPlanProvider implements ShotPlanProvider {
     }
 
     const payload = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      // kie returns HTTP 200 with an error envelope on failures: {code, msg}
+      code?: number;
+      msg?: string;
+      choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }>;
     };
-    const text = payload.choices?.[0]?.message?.content;
+    if (typeof payload.code === 'number' && payload.code >= 400) {
+      throw normalizeHttpError(payload.code, payload.msg ?? '');
+    }
+    const rawContent = payload.choices?.[0]?.message?.content;
+    const text = Array.isArray(rawContent)
+      ? rawContent.map((p) => p.text ?? '').join('')
+      : rawContent;
     if (!text) {
       throw new PlannerProviderError('VALIDATION', 'Planner LLM returned empty content');
     }
