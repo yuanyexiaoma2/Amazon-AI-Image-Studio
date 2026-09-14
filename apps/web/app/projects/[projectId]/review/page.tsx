@@ -56,7 +56,7 @@ function ReviewInner() {
       const res = await fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/qa-reports`);
       const json = await res.json();
       if (!res.ok) {
-        setLoadError(json?.error?.message ?? `Failed to load reports (${res.status})`);
+        setLoadError(json?.error?.message ?? `加载报告失败（${res.status}）`);
         setReports([]);
         setApprovals([]);
         return;
@@ -66,7 +66,7 @@ function ReviewInner() {
       if (!left && json.items?.[0]?.id) setLeft(json.items[0].id);
       if (!right && json.items?.[1]?.id) setRight(json.items[1].id);
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : 'Network error loading reports');
+      setLoadError(e instanceof Error ? e.message : '加载报告时网络错误');
     } finally {
       setLoading(false);
     }
@@ -91,10 +91,10 @@ function ReviewInner() {
     );
     const json = await res.json();
     if (!res.ok) {
-      setMsg(json?.error?.message ?? 'decision failed');
+      setMsg(json?.error?.message ?? '决策失败');
       return;
     }
-    setMsg(`${decision} recorded`);
+    setMsg(`已记录 ${decision}`);
     await refresh();
   }
 
@@ -109,11 +109,11 @@ function ReviewInner() {
     });
     const json = await res.json();
     if (!res.ok) {
-      setMsg(json?.error?.message ?? 'export blocked');
+      setMsg(json?.error?.message ?? '导出被阻止');
       return;
     }
     setBundleId(json.id);
-    setMsg(`Export ${json.status} ${json.id.slice(0, 8)}… zip=${json.zipSha256?.slice(0, 12) ?? 'pending'}`);
+    setMsg(`导出 ${json.status} ${json.id.slice(0, 8)}… zip=${json.zipSha256?.slice(0, 12) ?? '处理中'}`);
   }
 
   async function download() {
@@ -121,7 +121,7 @@ function ReviewInner() {
     const res = await fetch(`/api/workspaces/${workspaceId}/exports/${bundleId}/download-url`);
     const json = await res.json();
     if (!res.ok) {
-      setMsg(json?.error?.message ?? 'download not ready');
+      setMsg(json?.error?.message ?? '下载尚未就绪');
       return;
     }
     window.open(json.url, '_blank');
@@ -131,7 +131,7 @@ function ReviewInner() {
     if (!report)
       return (
         <p role="status" style={{ opacity: 0.75, padding: 16, border: '1px dashed #666', borderRadius: 8 }}>
-          No QA report selected. Run Fake QA from Studio or wait for evaluate jobs — empty state is expected on new projects.
+          尚未选择 QA 报告。请从 Studio 运行 Fake QA，或等待 evaluate 任务 — 新项目出现空状态是正常的。
         </p>
       );
     const tone =
@@ -142,7 +142,7 @@ function ReviewInner() {
           {title} · <span style={{ color: tone }}>{report.overallStatus ?? report.status}</span>
         </h3>
         <p style={{ fontSize: 12, opacity: 0.75 }}>
-          version {report.assetVersionId.slice(0, 8)}… · slot {report.slot ?? '—'}
+          版本 {report.assetVersionId.slice(0, 8)}… · 槽位 {report.slot ?? '—'}
         </p>
         <div
           style={{
@@ -176,7 +176,7 @@ function ReviewInner() {
           {report.findings.map((f) => (
             <li key={f.id}>
               <code>{f.ruleId}</code> <strong>{f.status}</strong> {f.severity}
-              {f.nonWaivable ? ' · nonWaivable' : ''} — {f.message}
+              {f.nonWaivable ? ' · 不可豁免' : ''} — {f.message}
             </li>
           ))}
         </ul>
@@ -187,48 +187,48 @@ function ReviewInner() {
   if (!workspaceId)
     return (
       <main style={{ padding: 24 }} role="main">
-        <h1>Review</h1>
-        <p role="alert">Missing workspaceId query param. Open Review from a project page.</p>
+        <h1>审核</h1>
+        <p role="alert">缺少 workspaceId 查询参数。请从项目页打开审核。</p>
       </main>
     );
 
   return (
     <main style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }} role="main" aria-labelledby="review-title">
       <p>
-        <a href={`/projects/${projectId}?workspaceId=${workspaceId}`}>← Project</a>
+        <a href={`/projects/${projectId}?workspaceId=${workspaceId}`}>← 项目</a>
         {' · '}
         <a href={`/projects/${projectId}/studio?workspaceId=${workspaceId}`}>Studio</a>
       </p>
-      <h1 id="review-title">Review — QA findings, compare, approve</h1>
+      <h1 id="review-title">审核 — QA 发现、对比、批准</h1>
       <p style={{ opacity: 0.75, maxWidth: 720 }}>
         {leftReport?.disclaimer ??
-          'Automatic QA is a pre-publish assistant. qa_gate PASS is not human Approval. MAIN BLOCK blocks default export.'}
+          '自动 QA 是发布前助手。qa_gate PASS 不等于人工批准。MAIN BLOCK 会阻止默认导出。'}
       </p>
       <p aria-live="polite" role="status">
         <strong>{msg}</strong>
       </p>
       {loading && (
         <p role="status" style={{ opacity: 0.8 }}>
-          Loading QA reports…
+          正在加载 QA 报告…
         </p>
       )}
       {loadError && (
         <p role="alert" style={{ color: '#c0392b', border: '1px solid #c0392b', padding: 12, borderRadius: 8 }}>
           {loadError}{' '}
           <button type="button" onClick={() => void refresh()}>
-            Retry
+            重试
           </button>
         </p>
       )}
       {!loading && !loadError && reports.length === 0 && (
         <p role="status" style={{ opacity: 0.8, border: '1px dashed #888', padding: 16, borderRadius: 8 }}>
-          No QA reports yet for this project. Generate candidates in Studio (Fake), then return here to review findings.
+          此项目尚无 QA 报告。请先在 Studio 生成候选图（Fake），再回到这里查看发现。
         </p>
       )}
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <label>
-          Left{' '}
-          <select aria-label="Left QA report" value={left} onChange={(e) => setLeft(e.target.value)}>
+          左侧{' '}
+          <select aria-label="左侧 QA 报告" value={left} onChange={(e) => setLeft(e.target.value)}>
             {reports.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.slot} {r.overallStatus ?? r.status} {r.id.slice(0, 8)}
@@ -237,8 +237,8 @@ function ReviewInner() {
           </select>
         </label>
         <label>
-          Right{' '}
-          <select aria-label="Right QA report for compare" value={right} onChange={(e) => setRight(e.target.value)}>
+          右侧{' '}
+          <select aria-label="右侧对比 QA 报告" value={right} onChange={(e) => setRight(e.target.value)}>
             <option value="">—</option>
             {reports.map((r) => (
               <option key={r.id} value={r.id}>
@@ -249,48 +249,48 @@ function ReviewInner() {
         </label>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-        {panel(leftReport, 'Selected')}
-        {panel(rightReport, 'Compare')}
+        {panel(leftReport, '已选')}
+        {panel(rightReport, '对比')}
       </div>
       <section style={{ marginTop: 24 }}>
-        <h2>Decision (append-only)</h2>
+        <h2>决策（只追加）</h2>
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Override reason (required for OVERRIDE_BLOCK)"
-          aria-label="Decision reason"
+          placeholder="覆盖原因（OVERRIDE_BLOCK 必填）"
+          aria-label="决策原因"
           rows={3}
           style={{ width: '100%', maxWidth: 640 }}
         />
         <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-          <button type="button" aria-label="Approve selected report" onClick={() => void decide('APPROVE')}>
-            Approve
+          <button type="button" aria-label="通过所选报告" onClick={() => void decide('APPROVE')}>
+            通过
           </button>
           <button type="button" onClick={() => void decide('REJECT')}>
-            Reject
+            驳回
           </button>
           <button type="button" onClick={() => void decide('OVERRIDE_BLOCK')}>
-            Override BLOCK
+            覆盖 BLOCK
           </button>
           <button type="button" onClick={() => void decide('REVOKE')}>
-            Revoke
+            撤销
           </button>
           <button type="button" onClick={() => void exportLeft()}>
-            Export selected
+            导出所选
           </button>
           <button type="button" onClick={() => void download()} disabled={!bundleId}>
-            Download ZIP
+            下载 ZIP
           </button>
         </div>
-        <h3>Approvals</h3>
+        <h3>审批记录</h3>
         <ul>
           {approvals.map((a) => (
             <li key={a.id}>
-              {a.decision} by {a.actorRole} · {a.decidedAt}
+              {a.decision} · {a.actorRole} · {a.decidedAt}
               {a.reason ? ` — ${a.reason}` : ''}
             </li>
           ))}
-          {approvals.length === 0 && <li>None yet — QA PASS does not approve.</li>}
+          {approvals.length === 0 && <li>暂无 — QA PASS 并不等于批准。</li>}
         </ul>
       </section>
     </main>
@@ -299,7 +299,7 @@ function ReviewInner() {
 
 export default function ReviewPage() {
   return (
-    <Suspense fallback={<p role="status">Loading review…</p>}>
+    <Suspense fallback={<p role="status">正在加载审核…</p>}>
       <ReviewInner />
     </Suspense>
   );

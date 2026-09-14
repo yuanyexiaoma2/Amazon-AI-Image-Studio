@@ -93,7 +93,7 @@ function ProjectDetailInner() {
   async function onFile(file: File) {
     if (!workspaceId || !projectId) return;
     setUploading(true);
-    setMsg('Presigning…');
+    setMsg('正在预签名…');
     try {
       const mimeType =
         file.type === 'image/png' || file.type === 'image/jpeg' || file.type === 'image/webp'
@@ -110,17 +110,17 @@ function ProjectDetailInner() {
         }),
       });
       const pJson = await presign.json();
-      if (!presign.ok) throw new Error(pJson?.error?.message ?? 'presign failed');
+      if (!presign.ok) throw new Error(pJson?.error?.message ?? '预签名失败');
 
-      setMsg('Uploading to object storage…');
+      setMsg('正在上传到对象存储…');
       const put = await fetch(pJson.uploadUrl, {
         method: 'PUT',
         headers: pJson.headers ?? { 'Content-Type': mimeType },
         body: file,
       });
-      if (!put.ok) throw new Error(`S3 PUT failed: ${put.status}`);
+      if (!put.ok) throw new Error(`S3 PUT 失败：${put.status}`);
 
-      setMsg('Completing + inspect…');
+      setMsg('正在完成并检查…');
       const complete = await fetch(
         `/api/workspaces/${workspaceId}/uploads/${pJson.uploadId}/complete`,
         {
@@ -130,13 +130,13 @@ function ProjectDetailInner() {
         },
       );
       const cJson = await complete.json();
-      if (!complete.ok) throw new Error(cJson?.error?.message ?? 'complete failed');
+      if (!complete.ok) throw new Error(cJson?.error?.message ?? '完成失败');
 
       for (let i = 0; i < 30; i++) {
         const res = await fetch(`/api/workspaces/${workspaceId}/assets/${pJson.assetId}`);
         const asset = await res.json();
         if (asset.status === 'READY' || asset.status === 'REJECTED') {
-          setMsg(`Asset ${asset.status}`);
+          setMsg(`素材 ${asset.status}`);
           break;
         }
         await new Promise((r) => setTimeout(r, 500));
@@ -151,7 +151,7 @@ function ProjectDetailInner() {
 
   async function extract() {
     if (!workspaceId || !projectId || versionIds.length === 0) {
-      setMsg('Upload a READY asset first');
+      setMsg('请先上传一份 READY 素材');
       return;
     }
     const res = await fetch(
@@ -164,11 +164,11 @@ function ProjectDetailInner() {
     );
     const json = await res.json();
     if (!res.ok) {
-      setMsg(json?.error?.message ?? 'extract failed');
+      setMsg(json?.error?.message ?? '抽取失败');
       return;
     }
     setPack(json.pack);
-    setMsg(`Extracted via ${json.provider}`);
+    setMsg(`已通过 ${json.provider} 抽取`);
   }
 
   async function confirmAll() {
@@ -177,7 +177,7 @@ function ProjectDetailInner() {
       .filter((f) => f.status === 'EXTRACTED')
       .map((f) => ({ factId: f.id, status: 'CONFIRMED' as const }));
     if (updates.length === 0) {
-      setMsg('Nothing to confirm');
+      setMsg('没有可确认的条目');
       return;
     }
     const res = await fetch(
@@ -190,11 +190,11 @@ function ProjectDetailInner() {
     );
     const json = await res.json();
     if (!res.ok) {
-      setMsg(json?.error?.message ?? 'confirm failed');
+      setMsg(json?.error?.message ?? '确认失败');
       return;
     }
     setPack(json);
-    setMsg('Facts confirmed');
+    setMsg('事实已确认');
   }
 
   async function approve() {
@@ -209,18 +209,18 @@ function ProjectDetailInner() {
     );
     const json = await res.json();
     if (!res.ok) {
-      setMsg(json?.error?.message ?? 'approve failed');
+      setMsg(json?.error?.message ?? '审批失败');
       return;
     }
     setPack(json);
-    setMsg('Truth Pack APPROVED');
+    setMsg('Truth Pack 已批准');
   }
 
 
   async function generateShotPlan() {
     if (!workspaceId || !projectId) return;
     if (!pack?.approvedRevisionId) {
-      setMsg('Approve Truth Pack first');
+      setMsg('请先批准 Truth Pack');
       return;
     }
     const res = await fetch(
@@ -233,11 +233,11 @@ function ProjectDetailInner() {
     );
     const json = await res.json();
     if (!res.ok) {
-      setMsg(json?.error?.message ?? 'shot plan generate failed');
+      setMsg(json?.error?.message ?? 'Shot Plan 生成失败');
       return;
     }
     setShotPlan(json.plan);
-    setMsg(`Shot Plan drafted via ${json.provider} (${json.plan?.revision?.briefs?.length ?? 0} briefs)`);
+    setMsg(`已通过 ${json.provider} 起草 Shot Plan（${json.plan?.revision?.briefs?.length ?? 0} 条简报）`);
   }
 
   async function approveShotPlan() {
@@ -252,17 +252,17 @@ function ProjectDetailInner() {
     );
     const json = await res.json();
     if (!res.ok) {
-      setMsg(json?.error?.message ?? 'shot plan approve failed');
+      setMsg(json?.error?.message ?? 'Shot Plan 审批失败');
       return;
     }
     setShotPlan(json);
-    setMsg('Shot Plan APPROVED');
+    setMsg('Shot Plan 已批准');
   }
 
   async function materializeShotPlan() {
     if (!workspaceId || !projectId) return;
     if (!shotPlan?.approvedRevisionId) {
-      setMsg('Approve Shot Plan first');
+      setMsg('请先批准 Shot Plan');
       return;
     }
     const res = await fetch(
@@ -275,39 +275,39 @@ function ProjectDetailInner() {
     );
     const json = await res.json();
     if (!res.ok) {
-      setMsg(json?.error?.message ?? 'materialize failed');
+      setMsg(json?.error?.message ?? '物化失败');
       return;
     }
     setMsg(
-      `Materialized ${json.briefCount}-image workflow (${json.workflow?.graph?.nodes?.length ?? 0} nodes) → open Studio`,
+      `已物化 ${json.briefCount} 图工作流（${json.workflow?.graph?.nodes?.length ?? 0} 个节点）→ 打开 Studio`,
     );
   }
 
   if (!workspaceId) {
-    return <p>Missing workspaceId query param. Open from /projects.</p>;
+    return <p>缺少 workspaceId 查询参数。请从 /projects 打开。</p>;
   }
 
   return (
     <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
       <div style={{ marginBottom: 12 }}>
         <a href={`/projects/${projectId}/studio?workspaceId=${workspaceId}`} style={{ color: '#9db7ff' }}>
-          Open Studio canvas →
+          打开 Studio 画布 →
         </a>
         {' · '}
         <a href={`/projects/${projectId}/review?workspaceId=${workspaceId}`} style={{ color: '#9db7ff' }}>
-          Review / QA / Export →
+          审核 / QA / 导出 →
         </a>
       </div>
-      <h1>Project assets + Truth Pack + Shot Plan</h1>
+      <h1>项目素材 + Truth Pack（产品真相包） + Shot Plan（拍摄计划）</h1>
       <p style={{ opacity: 0.75 }}>
-        Upload → Truth Pack approve → generate 7-shot plan (Fake) → approve → one-click materialize (W3-B2). Fake only.
+        上传 → 批准 Truth Pack → 生成 7 镜计划（Fake） → 批准 → 一键物化（W3-B2）。当前仅 Fake 模式。
       </p>
       <p>
         <strong>{msg}</strong>
       </p>
 
       <section style={{ marginBottom: 24 }}>
-        <h2>Upload</h2>
+        <h2>上传</h2>
         <input
           type="file"
           accept="image/png,image/jpeg,image/webp"
@@ -320,36 +320,36 @@ function ProjectDetailInner() {
       </section>
 
       <section style={{ marginBottom: 24 }}>
-        <h2>Asset library</h2>
+        <h2>素材库</h2>
         <ul>
           {assets.map((a) => (
             <li key={a.id}>
               {a.originalFilename ?? a.id} — <code>{a.status}</code>
-              {a.currentVersionId ? ` · version ${a.currentVersionId.slice(0, 8)}…` : ''}
+              {a.currentVersionId ? ` · 版本 ${a.currentVersionId.slice(0, 8)}…` : ''}
             </li>
           ))}
-          {assets.length === 0 && <li>No assets yet</li>}
+          {assets.length === 0 && <li>暂无素材</li>}
         </ul>
       </section>
 
       <section>
-        <h2>Truth Pack</h2>
+        <h2>Truth Pack（产品真相包）</h2>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <button type="button" onClick={extract}>
-            Extract (Fake Vision)
+            抽取（Fake Vision）
           </button>
           <button type="button" onClick={confirmAll}>
-            Confirm all EXTRACTED
+            确认全部 EXTRACTED
           </button>
           <button type="button" onClick={approve}>
-            Approve revision
+            批准此修订
           </button>
         </div>
         {pack?.revision ? (
           <div>
             <p>
-              Revision #{pack.revision.revision} — <code>{pack.revision.status}</code>
-              {pack.approvedRevisionId ? ' · approved' : ''}
+              修订 #{pack.revision.revision} — <code>{pack.revision.status}</code>
+              {pack.approvedRevisionId ? ' · 已批准' : ''}
             </p>
             <ul>
               {pack.revision.facts.map((f) => (
@@ -359,7 +359,7 @@ function ProjectDetailInner() {
                 </li>
               ))}
             </ul>
-            <h3>Constraints</h3>
+            <h3>约束</h3>
             <ul>
               {pack.revision.constraints.map((c, i) => (
                 <li key={`${c.kind}-${c.path}-${i}`}>
@@ -369,33 +369,33 @@ function ProjectDetailInner() {
             </ul>
           </div>
         ) : (
-          <p>No revision yet — extract or save facts.</p>
+          <p>尚无修订 — 请抽取或保存事实。</p>
         )}
       </section>
 
       <section style={{ marginTop: 24 }}>
-        <h2>Shot Plan (W3-A)</h2>
+        <h2>Shot Plan（拍摄计划）（W3-A）</h2>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <button type="button" onClick={generateShotPlan} disabled={!pack?.approvedRevisionId}>
-            Generate 7-shot (Fake)
+            生成 7 镜（Fake）
           </button>
           <button type="button" onClick={approveShotPlan} disabled={!shotPlan?.revision}>
-            Approve Shot Plan
+            批准 Shot Plan
           </button>
           <button
             type="button"
             onClick={materializeShotPlan}
             disabled={!shotPlan?.approvedRevisionId}
           >
-            Materialize → Studio
+            物化 → Studio
           </button>
         </div>
         {shotPlan?.revision ? (
           <div>
             <p>
-              Revision #{shotPlan.revision.revision} — <code>{shotPlan.revision.status}</code>
-              {shotPlan.approvedRevisionId ? ' · approved' : ''}
-              {' · truth '}
+              修订 #{shotPlan.revision.revision} — <code>{shotPlan.revision.status}</code>
+              {shotPlan.approvedRevisionId ? ' · 已批准' : ''}
+              {' · 真相 '}
               <code>{shotPlan.revision.truthRevisionId.slice(0, 8)}…</code>
             </p>
             <ul>
@@ -408,12 +408,12 @@ function ProjectDetailInner() {
             </ul>
             {shotPlan.canvasPayload ? (
               <p style={{ opacity: 0.7 }}>
-                canvasPayload ready ({shotPlan.canvasPayload.briefs.length} ordered briefs) · materialize validates referencedAssetVersionIds
+                canvasPayload 已就绪（{shotPlan.canvasPayload.briefs.length} 条有序简报） · 物化会校验 referencedAssetVersionIds
               </p>
             ) : null}
           </div>
         ) : (
-          <p>No Shot Plan yet — approve Truth Pack, then generate.</p>
+          <p>尚无 Shot Plan — 请先批准 Truth Pack，再生成。</p>
         )}
       </section>
 
@@ -423,7 +423,7 @@ function ProjectDetailInner() {
 
 export default function ProjectDetailPage() {
   return (
-    <Suspense fallback={<p>Loading…</p>}>
+    <Suspense fallback={<p>加载中…</p>}>
       <ProjectDetailInner />
     </Suspense>
   );

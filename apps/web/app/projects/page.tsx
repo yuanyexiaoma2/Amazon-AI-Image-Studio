@@ -11,19 +11,19 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [sku, setSku] = useState('MUG-BLK-450');
-  const [name, setName] = useState('Demo Mug');
+  const [name, setName] = useState('演示马克杯');
 
   useEffect(() => {
     (async () => {
       const me = await fetch('/api/me');
       if (!me.ok) {
-        setError('Please log in first');
+        setError('请先登录');
         return;
       }
       const json = await me.json();
       const ws: Workspace | undefined = json.workspaces?.[0];
       if (!ws) {
-        setError('No workspace');
+        setError('暂无工作空间');
         return;
       }
       setWorkspaceId(ws.id);
@@ -42,7 +42,7 @@ export default function ProjectsPage() {
     });
     const json = await res.json();
     if (!res.ok) {
-      setError(json?.error?.message ?? 'Create failed');
+      setError(json?.error?.message ?? '创建失败');
       return;
     }
     setProjects((p) => [json, ...p]);
@@ -50,14 +50,14 @@ export default function ProjectsPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
-      <h1>Projects</h1>
-      <p style={{ opacity: 0.75 }}>W2 asset library + Truth Pack entry.</p>
+      <h1>项目</h1>
+      <p style={{ opacity: 0.75 }}>W2 素材库 + Truth Pack（产品真相包）入口。</p>
       {error && <p style={{ color: '#f88' }}>{error}</p>}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="SKU" />
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="名称" />
         <button type="button" onClick={createProject}>
-          Create project
+          创建项目
         </button>
       </div>
       <ul>

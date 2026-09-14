@@ -3,32 +3,33 @@ export default function HomePage() {
     <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
       <h1>Amazon AI Image Studio</h1>
       <p>
-        MVP through W3-B2: register → project → Truth → Shot Plan → <strong>materialize</strong> → Studio (schemas + interactions). Fake only.
+        MVP 已覆盖 W3-B2：注册 → 项目 → Truth Pack（产品真相包） → Shot Plan（拍摄计划） →{' '}
+        <strong>物化</strong> → Studio（画布）（含节点配置与交互）。当前仅 Fake 模式。
       </p>
       <ul>
         <li>
           <a href="/register" style={{ color: '#9db7ff' }}>
-            Register
+            注册
           </a>
         </li>
         <li>
           <a href="/login" style={{ color: '#9db7ff' }}>
-            Login
+            登录
           </a>
         </li>
         <li>
           <a href="/projects" style={{ color: '#9db7ff' }}>
-            Projects / assets / Truth Pack
+            项目 / 素材 / Truth Pack（产品真相包）
           </a>
         </li>
         <li>
           <a href="/projects" style={{ color: '#9db7ff' }}>
-            Studio canvas (open a project → Studio)
+            Studio 画布（打开项目后进入 Studio）
           </a>
         </li>
       </ul>
       <p style={{ opacity: 0.7, fontSize: 14 }}>
-        Spec: <code>docs/specs/amazon-ai-image-studio-v1.1.md</code> · Progress:{' '}
+        规格：<code>docs/specs/amazon-ai-image-studio-v1.1.md</code> · 进度：{' '}
         <code>docs/progress.md</code>
       </p>
     </div>

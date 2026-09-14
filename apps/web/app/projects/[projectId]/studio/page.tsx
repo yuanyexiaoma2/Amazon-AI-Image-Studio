@@ -13,8 +13,8 @@ function StudioInner() {
   if (!workspaceId || !projectId) {
     return (
       <main style={{ padding: 24 }} role="main">
-        <h1>Studio</h1>
-        <p role="alert">Missing workspaceId query param. Open from a project page.</p>
+        <h1>Studio（画布）</h1>
+        <p role="alert">缺少 workspaceId 查询参数。请从项目页打开。</p>
       </main>
     );
   }
@@ -24,7 +24,7 @@ function StudioInner() {
 
 export default function ProjectStudioPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 24 }} role="status">Loading studio…</div>}>
+    <Suspense fallback={<div style={{ padding: 24 }} role="status">正在加载画布…</div>}>
       <StudioInner />
     </Suspense>
   );
