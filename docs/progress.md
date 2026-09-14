@@ -517,3 +517,34 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | Out of scope | Merging without 审稿; committing real keys; claiming §18.4 / W9-02 Production GO |
 
 **Status:** **DONE** (not VERIFIED). VERIFIED only after independent 审稿 APPROVED on the PR.
+
+---
+
+## V2-A — Planner Agent：kie LLM 规划 + 意图向导 + 自动门禁开关 (DONE)
+
+**Branch:** `feat/v2-planner-agent` (from main `b4d247e`)  
+**Acceptance unit (one PR, one independent review):** V2-A-01…V2-A-06. **Do not merge without 审稿 public APPROVED.**  
+**Background:** Owner vision (2026-09-14): 流程化（向导）+ 自由画布并存，Agent 先规划卖点/场景。单 KIE_API_KEY 同时驱动生图与规划 LLM（kie.ai OpenAI-compatible `/api/v1/chat/completions`，model in body）。  
+**Scope note:** PR-3 of the agreed V2 sequence (UI 重构 / 画布命令层 暂未做)。Fake 仍为默认；真实 LLM 规划走 `PLANNER_PROVIDER=kie`。
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| V2-A-01 | Pluggable planner port + `intent` field | DONE | `ShotPlanDraftRequest.intent`; factory `createShotPlanProvider()` (`PLANNER_PROVIDER=fake\|kie`) |
+| V2-A-02 | `OpenAiCompatShotPlanProvider` (kie chat completions) | DONE | `packages/providers/src/openai-compat-planner.ts`; Bearer KIE_API_KEY; `response_format: json_object`; Zod-validated; **template skeleton (slot/order/ratio/pixels/qaPolicy) always wins over LLM output**; error classes AUTH/VALIDATION/RATE_LIMIT/TRANSIENT/TIMEOUT/UNKNOWN |
+| V2-A-03 | Fake planner intent weaving | DONE | Intent segments → FEATURE copy (source `intent`), LIFESTYLE scene flavor; deterministic; offline default unchanged |
+| V2-A-04 | Generate route: intent + provider factory + planner error mapping | DONE | `PLANNER_AUTH_FAILED`/`PLANNER_UNAVAILABLE` 502/503; audit unchanged (`shot_plan.generated`) |
+| V2-A-05 | Workspace `autoApproveGates` switch + inline auto-approve | DONE | Prisma `workspaces.auto_approve_gates` (migration `20260914010000_v2_auto_approve_gates`); PATCH `/api/workspaces/{id}` OWNER/ADMIN + `workspace.auto_approve_gates_changed` audit; generate with `autoApprove:true` → inline `approveRevision` (audit actor = requester); `/api/me` exposes flag |
+| V2-A-06 | Intent wizard UI | DONE | `/projects/[projectId]/wizard` — 3-step: 意图 → AI 计划（卖点/场景简报）→ 批准/物化 → Studio；admin 开关 toggle；项目页入口 |
+
+### V2-A commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm db:generate` / `openapi:generate` | Client regenerated; `docs/api/openapi.yaml` updated (intent/autoApprove) |
+| `pnpm lint` / `typecheck` / `test` / `build` | Local green 2026-09-14 Asia/Shanghai (47/47 providers tests incl. 14 new planner tests) |
+| `pnpm test:e2e` | **Not run locally** — Docker not available in this shell; relies on PR CI (chain unchanged: intent/autoApprove are optional fields) |
+| Provider | **Fake default**; kie planner only with `PLANNER_PROVIDER=kie` + local `KIE_API_KEY`; no keys in repo |
+| Migration | `20260914010000_v2_auto_approve_gates` (additive, default false — safe) |
+| Out of scope | UI 设计系统重构（V2 PR-1）；画布命令层 / 自由画布（PR-2）；聊天 Agent 面板（PR-4）；真实 kie planner 冒烟（owner 本机自验） |
+
+**Status:** **DONE** (not VERIFIED). VERIFIED only after independent 审稿 APPROVED on the PR.

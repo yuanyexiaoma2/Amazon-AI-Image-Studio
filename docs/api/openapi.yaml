@@ -606,6 +606,11 @@ components:
           format: uuid
         includePackage:
           type: boolean
+        intent:
+          type: string
+          maxLength: 2000
+        autoApprove:
+          type: boolean
     SaveShotPlanRequest:
       type: object
       properties:
@@ -2678,6 +2683,11 @@ paths:
                   type: string
                   format: uuid
                 includePackage:
+                  type: boolean
+                intent:
+                  type: string
+                  maxLength: 2000
+                autoApprove:
                   type: boolean
       responses:
         "201":

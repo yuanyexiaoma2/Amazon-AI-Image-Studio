@@ -23,6 +23,7 @@ export async function GET(request: Request) {
           id: m.workspaceId,
           name: m.workspace.name,
           role: m.role,
+          autoApproveGates: m.workspace.autoApproveGates,
         })),
       },
       { headers: { 'x-request-id': requestId } },

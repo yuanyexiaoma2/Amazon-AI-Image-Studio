@@ -61,6 +61,12 @@ export type ShotPlanDraftRequest = {
   confirmedFacts?: Array<{ key: string; value: unknown }>;
   /** Include PACKAGE slot (not in default 7). */
   includePackage?: boolean;
+  /**
+   * V2 planner: free-text owner intent — selling points, target scenes, style,
+   * audience. Real planners (Gemini) use it to draft purposes/copy; the Fake
+   * planner weaves it in deterministically for offline tests.
+   */
+  intent?: string;
 };
 
 export type PlannedShotBrief = {

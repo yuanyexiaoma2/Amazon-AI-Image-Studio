@@ -67,6 +67,25 @@ export {
   KIE_DEFAULT_CREATE_RATE,
 } from './create-rate-limiter.js';
 export {
+  OpenAiCompatShotPlanProvider,
+  PlannerProviderError,
+  buildPlannerPrompt,
+  extractJsonObject,
+  mergeWithTemplate,
+  KIE_DEFAULT_BASE_URL,
+  KIE_DEFAULT_CHAT_PATH,
+  KIE_DEFAULT_PLANNER_MODEL,
+  PLANNER_SYSTEM_PROMPT,
+  type PlannerErrorClass,
+  type OpenAiCompatPlannerConfig,
+} from './openai-compat-planner.js';
+export {
+  createShotPlanProvider,
+  resolvePlannerProviderKind,
+  type PlannerProviderKind,
+  type CreateShotPlanProviderOptions,
+} from './create-planner.js';
+export {
   createImageAdapter,
   resolveImageProviderKind,
   resolveProviderPollIntervalMs,
