@@ -1,6 +1,5 @@
 'use client';
 
-import { MaskEditor } from './MaskEditor';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
@@ -15,7 +14,9 @@ import {
   ReactFlowProvider,
   type Connection,
   type Edge,
+  type EdgeChange,
   type Node,
+  type NodeChange,
   type NodeTypes,
   Handle,
   Position,
@@ -34,20 +35,22 @@ import {
   defaultNodeConfig,
   isWorkflowNodeConfigType,
   validateNodeConfig,
+  type WorkflowCommand,
 } from '@studio/contracts';
+import {
+  useWorkflowCommands,
+  type CommandResult,
+  type WorkflowDraftPayload,
+} from './use-workflow-commands';
+import { useConfigOptions } from './use-config-options';
+import {
+  PropertiesPanel,
+  type MaskEditorState,
+  type SelectedNodeInfo,
+} from './PropertiesPanel';
+import { NUMERIC_CONFIG_KEYS } from './config-options';
 
-type DraftResponse = {
-  workflowId: string;
-  projectId: string;
-  name: string;
-  revisionNumber: number;
-  currentRevisionId: string | null;
-  graph: WorkflowGraph;
-  updatedAt: string;
-  updatedByUserId: string | null;
-};
-
-type HistoryEntry = { nodes: Node[]; edges: Edge[] };
+type CanvasSnapshot = { nodes: Node[]; edges: Edge[] };
 
 const NODE_LABEL_ZH: Record<string, string> = {
   source_image: '源图（Source Image）',
@@ -67,17 +70,6 @@ const NODE_LABEL_ZH: Record<string, string> = {
 function nodeLabelZh(type: string): string {
   return NODE_LABEL_ZH[type] ?? getNodeDefinition(type)?.label ?? type;
 }
-
-const OPTION_LABEL_ZH: Record<string, string> = {
-  auto: '自动',
-  precise: '精细',
-  soft: '柔和',
-  center: '居中',
-  top: '上',
-  bottom: '下',
-  left: '左',
-  right: '右',
-};
 
 function toFlowNodes(graph: WorkflowGraph): Node[] {
   return graph.nodes.map((n) => ({
@@ -127,7 +119,7 @@ function fromFlow(nodes: Node[], edges: Edge[]): WorkflowGraph {
   };
 }
 
-function cloneGraph(nodes: Node[], edges: Edge[]): HistoryEntry {
+function cloneGraph(nodes: Node[], edges: Edge[]): CanvasSnapshot {
   return {
     nodes: nodes.map((n) => ({ ...n, position: { ...n.position }, data: { ...(n.data as object) } })),
     edges: edges.map((e) => ({ ...e })),
@@ -178,140 +170,137 @@ function StudioNodeView(props: NodeProps) {
 
 const nodeTypes: NodeTypes = { studio: StudioNodeView };
 
-const CONFIG_FIELD_META: Record<
-  string,
-  Array<{ key: string; label: string; kind: 'text' | 'number' | 'select'; options?: string[] }>
-> = {
-  source_image: [{ key: 'assetVersionId', label: '素材版本 ID', kind: 'text' }],
-  product_truth: [{ key: 'truthRevisionId', label: 'Truth 修订 ID', kind: 'text' }],
-  prompt: [
-    { key: 'text', label: '提示词', kind: 'text' },
-    { key: 'negative', label: '反向提示词', kind: 'text' },
-    { key: 'locale', label: '语言地区', kind: 'text' },
-    { key: 'shotBriefId', label: '镜头简报 ID', kind: 'text' },
-    { key: 'slot', label: '槽位', kind: 'text' },
-  ],
-  remove_background: [
-    { key: 'subjectHint', label: '主体提示', kind: 'text' },
-    { key: 'edgeMode', label: '边缘模式', kind: 'select', options: ['auto', 'precise', 'soft'] },
-  ],
-  generate: [
-    { key: 'modelKey', label: '模型键', kind: 'text' },
-    { key: 'ratio', label: '比例', kind: 'text' },
-    { key: 'resolution', label: '分辨率', kind: 'select', options: ['1K', '2K', '4K'] },
-    { key: 'count', label: '数量', kind: 'number' },
-    { key: 'seed', label: '种子', kind: 'number' },
-  ],
-  replace_background: [
-    { key: 'fidelity', label: '保真度', kind: 'number' },
-    { key: 'lightBlend', label: '光线融合', kind: 'number' },
-    { key: 'maskId', label: '蒙版 ID', kind: 'text' },
-  ],
-  inpaint: [
-    { key: 'strength', label: '强度', kind: 'number' },
-    { key: 'modelKey', label: '模型键', kind: 'text' },
-    { key: 'maskId', label: '蒙版 ID', kind: 'text' },
-  ],
-  outpaint: [
-    { key: 'targetRatio', label: '目标比例', kind: 'text' },
-    {
-      key: 'placement',
-      label: '放置',
-      kind: 'select',
-      options: ['center', 'top', 'bottom', 'left', 'right'],
-    },
-    { key: 'modelKey', label: '模型键', kind: 'text' },
-  ],
-  upscale: [
-    { key: 'engineKey', label: '引擎键', kind: 'text' },
-    { key: 'targetResolution', label: '目标分辨率', kind: 'select', options: ['2K', '4K'] },
-  ],
-  qa_gate: [{ key: 'policyKey', label: '策略键', kind: 'text' }],
-  approval_selector: [
-    {
-      key: 'requiredRole',
-      label: '所需角色',
-      kind: 'select',
-      options: ['OWNER', 'ADMIN', 'MEMBER', 'REVIEWER'],
-    },
-  ],
-  export: [
-    { key: 'namingPreset', label: '命名预设', kind: 'text' },
-    { key: 'format', label: '格式', kind: 'select', options: ['png', 'jpeg', 'webp'] },
-  ],
-};
-
-function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
-  const { workspaceId, projectId } = props;
+function StudioCanvasInner(props: {
+  workspaceId: string;
+  projectId: string;
+  workflowId?: string | null;
+}) {
+  const { workspaceId, projectId, workflowId: requestedWorkflowId } = props;
   const { fitView } = useReactFlow();
-  const [draft, setDraft] = useState<DraftResponse | null>(null);
+  const [draft, setDraft] = useState<WorkflowDraftPayload | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [status, setStatus] = useState<string>('加载中…');
 
-  const [maskEditorOpen, setMaskEditorOpen] = useState(false);
-  const [maskImageUrl, setMaskImageUrl] = useState<string | null>(null);
-  const [maskSourceDims, setMaskSourceDims] = useState<{ w: number; h: number; versionId: string } | null>(null);
+  const [maskEditor, setMaskEditor] = useState<MaskEditorState>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const [edgeError, setEdgeError] = useState<string | null>(null);
+  const [cmdError, setCmdError] = useState<string | null>(null);
   const [deleteHint, setDeleteHint] = useState<string | null>(null);
+  const [runBusy, setRunBusy] = useState(false);
   const [narrow, setNarrow] = useState(false);
   const revisionRef = useRef(0);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dirtyRef = useRef(false);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
-  const historyRef = useRef<HistoryEntry[]>([]);
-  const futureRef = useRef<HistoryEntry[]>([]);
-  const applyingHistory = useRef(false);
-  const clipboardRef = useRef<HistoryEntry | null>(null);
+  const clipboardRef = useRef<CanvasSnapshot | null>(null);
+  const draftRef = useRef<WorkflowDraftPayload | null>(null);
+  const dragSnapshotRef = useRef<CanvasSnapshot | null>(null);
   nodesRef.current = nodes;
   edgesRef.current = edges;
+  draftRef.current = draft;
 
   const palette = useMemo(() => listPaletteNodeTypes(), []);
 
-  const pushHistory = useCallback(() => {
-    if (applyingHistory.current) return;
-    historyRef.current.push(cloneGraph(nodesRef.current, edgesRef.current));
-    if (historyRef.current.length > 100) historyRef.current.shift();
-    futureRef.current = [];
+  const getWorkflowId = useCallback(() => draftRef.current?.workflowId ?? null, []);
+
+  const handleCommandResult = useCallback((result: CommandResult) => {
+    if (result.ok) {
+      const b = result.batch;
+      setDraft((prev) => (prev ? { ...prev, name: b.name, revisionNumber: b.revisionNumber } : prev));
+      setCmdError(null);
+      setStatus(`已保存 · 修订 ${b.revisionNumber}`);
+      return;
+    }
+    const f = result.failure;
+    if (f.kind === 'conflict') {
+      setConflict(
+        f.message ||
+          '并发编辑冲突（409）。请重新加载以保留另一会话的更改，或放弃本地编辑。',
+      );
+      setStatus('冲突 — 未覆盖');
+      return;
+    }
+    if (f.kind === 'run-failed') {
+      // Graph commands were persisted server-side; only the run failed (e.g. 402).
+      setCmdError(f.message);
+      setStatus(`运行失败：${f.message}`);
+      if (f.revisionNumber !== undefined) {
+        const rev = f.revisionNumber;
+        setDraft((prev) => (prev ? { ...prev, revisionNumber: rev } : prev));
+      }
+      return;
+    }
+    setCmdError(f.message);
+    setStatus(`命令失败：${f.message}`);
   }, []);
 
-  const applyDraft = useCallback(
-    (d: DraftResponse) => {
-      setDraft(d);
-      revisionRef.current = d.revisionNumber;
-      const n = toFlowNodes(d.graph);
-      const e = toFlowEdges(d.graph);
-      setNodes(n);
-      setEdges(e);
-      nodesRef.current = n;
-      edgesRef.current = e;
-      dirtyRef.current = false;
-      historyRef.current = [cloneGraph(n, e)];
-      futureRef.current = [];
+  const commands = useWorkflowCommands({
+    workspaceId,
+    getWorkflowId,
+    revisionRef,
+    onSettled: handleCommandResult,
+  });
+
+  const applyLocalSnapshot = useCallback(
+    (snap: CanvasSnapshot) => {
+      setNodes(snap.nodes);
+      setEdges(snap.edges);
+      nodesRef.current = snap.nodes;
+      edgesRef.current = snap.edges;
+      setSelectedIds((prev) => prev.filter((id) => snap.nodes.some((n) => n.id === id)));
     },
     [setNodes, setEdges],
+  );
+
+  const makeRollback = useCallback(
+    (snap: CanvasSnapshot) => () => applyLocalSnapshot(snap),
+    [applyLocalSnapshot],
+  );
+
+  const applyDraft = useCallback(
+    (d: WorkflowDraftPayload) => {
+      setDraft(d);
+      revisionRef.current = d.revisionNumber;
+      applyLocalSnapshot({ nodes: toFlowNodes(d.graph), edges: toFlowEdges(d.graph) });
+    },
+    [applyLocalSnapshot],
   );
 
   const loadOrCreate = useCallback(async () => {
     setStatus('正在加载工作流…');
     setConflict(null);
+    setCmdError(null);
+    if (requestedWorkflowId) {
+      const getRes = await fetch(
+        `/api/workspaces/${workspaceId}/workflows/${requestedWorkflowId}`,
+      );
+      const got = await getRes.json().catch(() => null);
+      if (!getRes.ok) {
+        setStatus(`加载失败：${got?.error?.message ?? getRes.status}`);
+        return;
+      }
+      applyDraft(got);
+      setStatus(`已加载 · 修订 ${got.revisionNumber}`);
+      return;
+    }
     const listRes = await fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/workflows`);
-    const listJson = await listRes.json();
+    const listJson = await listRes.json().catch(() => null);
     if (!listRes.ok) {
       setStatus(`列表失败：${listJson?.error?.message ?? listRes.status}`);
       return;
     }
-    let workflowId: string | undefined = listJson.items?.[0]?.id;
+    const workflowId: string | undefined = listJson?.items?.[0]?.id;
     if (!workflowId) {
-      const createRes = await fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/workflows`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name: 'Studio 工作流' }),
-      });
-      const created = await createRes.json();
+      const createRes = await fetch(
+        `/api/workspaces/${workspaceId}/projects/${projectId}/workflows`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'Studio 工作流' }),
+        },
+      );
+      const created = await createRes.json().catch(() => null);
       if (!createRes.ok) {
         setStatus(`创建失败：${created?.error?.message ?? createRes.status}`);
         return;
@@ -321,14 +310,14 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
       return;
     }
     const getRes = await fetch(`/api/workspaces/${workspaceId}/workflows/${workflowId}`);
-    const got = await getRes.json();
+    const got = await getRes.json().catch(() => null);
     if (!getRes.ok) {
       setStatus(`加载失败：${got?.error?.message ?? getRes.status}`);
       return;
     }
     applyDraft(got);
     setStatus(`已加载 · 修订 ${got.revisionNumber}`);
-  }, [workspaceId, projectId, applyDraft]);
+  }, [workspaceId, projectId, requestedWorkflowId, applyDraft]);
 
   useEffect(() => {
     void loadOrCreate();
@@ -341,68 +330,58 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  const saveNow = useCallback(
-    async (graph: WorkflowGraph) => {
-      if (!draft) return;
-      setStatus('保存中…');
-      setConflict(null);
-      const res = await fetch(`/api/workspaces/${workspaceId}/workflows/${draft.workflowId}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          ifRevision: revisionRef.current,
-          graph,
-        }),
-      });
-      const json = await res.json();
-      if (res.status === 409) {
-        setConflict(
-          json?.error?.message ??
-            '并发编辑冲突（409）。请重新加载以保留另一会话的更改，或放弃本地编辑。',
-        );
-        setStatus('冲突 — 未覆盖');
-        return;
-      }
-      if (!res.ok) {
-        setStatus(`保存失败：${json?.error?.message ?? res.status}`);
-        return;
-      }
-      revisionRef.current = json.revisionNumber;
-      setDraft(json);
-      dirtyRef.current = false;
-      setStatus(`已保存 · 修订 ${json.revisionNumber}`);
-    },
-    [draft, workspaceId],
-  );
+  const selected = nodes.find((n) => n.id === selectedIds[0]) ?? null;
+  const selectedInfo: SelectedNodeInfo | null = useMemo(() => {
+    if (!selected) return null;
+    const data = selected.data as {
+      nodeType?: string;
+      label?: string;
+      config?: Record<string, unknown>;
+    };
+    return {
+      id: selected.id,
+      nodeType: String(data.nodeType ?? ''),
+      label: String(data.label ?? data.nodeType ?? ''),
+      position: { x: selected.position.x, y: selected.position.y },
+      config: data.config ?? { schemaVersion: 1 },
+    };
+  }, [selected]);
+  const selectedConfig = selectedInfo?.config ?? { schemaVersion: 1 };
 
-  const scheduleSave = useCallback(() => {
-    dirtyRef.current = true;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      void saveNow(fromFlow(nodesRef.current, edgesRef.current));
-    }, 500);
-  }, [saveNow]);
+  const sourceAssetVersionId = useMemo(() => {
+    const src = nodes.find(
+      (n) => String((n.data as { nodeType?: string }).nodeType) === 'source_image',
+    );
+    const value = src
+      ? (src.data as { config?: Record<string, unknown> }).config?.assetVersionId
+      : null;
+    return typeof value === 'string' && value ? value : null;
+  }, [nodes]);
 
-  const isValidConnection = useCallback(
-    (connection: Connection | Edge) => {
-      if (!connection.source || !connection.target) return false;
-      const graph = fromFlow(nodesRef.current, edgesRef.current);
-      const candidate: GraphEdge = {
-        id: `preview-${connection.source}-${connection.target}`,
-        source: connection.source,
-        target: connection.target,
-        sourceHandle: connection.sourceHandle ?? null,
-        targetHandle: connection.targetHandle ?? null,
-      };
-      return validateEdge(graph, candidate).ok;
-    },
-    [],
-  );
+  const configOptions = useConfigOptions({
+    workspaceId,
+    projectId,
+    sourceAssetVersionId,
+    activeNodeId: selectedInfo?.id ?? null,
+  });
+
+  const isValidConnection = useCallback((connection: Connection | Edge) => {
+    if (!connection.source || !connection.target) return false;
+    const graph = fromFlow(nodesRef.current, edgesRef.current);
+    const candidate: GraphEdge = {
+      id: `preview-${connection.source}-${connection.target}`,
+      source: connection.source,
+      target: connection.target,
+      sourceHandle: connection.sourceHandle ?? null,
+      targetHandle: connection.targetHandle ?? null,
+    };
+    return validateEdge(graph, candidate).ok;
+  }, []);
 
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
-      const graph = fromFlow(nodes, edges);
+      const graph = fromFlow(nodesRef.current, edgesRef.current);
       const candidate: GraphEdge = {
         id: `e-${connection.source}-${connection.sourceHandle ?? ''}-${connection.target}-${connection.targetHandle ?? ''}-${Date.now()}`,
         source: connection.source,
@@ -416,81 +395,146 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
         return;
       }
       setEdgeError(null);
-      pushHistory();
-      const nextEdges = addEdge({ ...connection, id: candidate.id }, edges);
+      const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+      const nextEdges = addEdge({ ...connection, id: candidate.id }, edgesRef.current);
       setEdges(nextEdges);
       edgesRef.current = nextEdges;
-      scheduleSave();
+      void commands
+        .applyNow(
+          [
+            {
+              type: 'connect',
+              edgeId: candidate.id,
+              source: candidate.source,
+              sourceHandle: candidate.sourceHandle,
+              target: candidate.target,
+              targetHandle: candidate.targetHandle,
+            },
+          ],
+          makeRollback(snapshot),
+        )
+        .then(handleCommandResult);
     },
-    [nodes, edges, setEdges, scheduleSave, pushHistory],
+    [setEdges, commands, handleCommandResult, makeRollback],
   );
 
   const onNodesChangeWrapped = useCallback(
-    (changes: Parameters<typeof onNodesChange>[0]) => {
-      const removes = changes.filter((c) => c.type === 'remove');
+    (changes: NodeChange<Node>[]) => {
+      const removes = changes.filter(
+        (c): c is Extract<NodeChange<Node>, { type: 'remove' }> => c.type === 'remove',
+      );
       if (removes.length > 0) {
-        const ids = new Set(removes.map((c) => ('id' in c ? c.id : '')).filter(Boolean));
-        const impacted = edgesRef.current.filter((e) => ids.has(e.source) || ids.has(e.target));
-        setDeleteHint(
-          `删除 ${ids.size} 个节点也会移除 ${impacted.length} 条相连的边。`,
+        const ids = removes.map((c) => c.id);
+        const idSet = new Set(ids);
+        const impacted = edgesRef.current.filter(
+          (e) => idSet.has(e.source) || idSet.has(e.target),
         );
-        pushHistory();
-      } else {
-        const meaningful = changes.some(
-          (c) => c.type === 'position' || c.type === 'add' || c.type === 'replace',
+        setDeleteHint(`删除 ${ids.length} 个节点也会移除 ${impacted.length} 条相连的边。`);
+        const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+        const nextNodes = nodesRef.current.filter((n) => !idSet.has(n.id));
+        const nextEdges = edgesRef.current.filter(
+          (e) => !idSet.has(e.source) && !idSet.has(e.target),
         );
-        if (meaningful && changes.some((c) => c.type === 'position' && 'dragging' in c && c.dragging === false)) {
-          pushHistory();
-        }
+        setNodes(nextNodes);
+        setEdges(nextEdges);
+        nodesRef.current = nextNodes;
+        edgesRef.current = nextEdges;
+        setSelectedIds((prev) => prev.filter((id) => !idSet.has(id)));
+        // removeNode deletes connected edges server-side; the follow-up
+        // onEdgesChange removals for those edges are ignored (already gone).
+        void commands
+          .applyNow(
+            ids.map((id): WorkflowCommand => ({ type: 'removeNode', nodeId: id })),
+            makeRollback(snapshot),
+          )
+          .then(handleCommandResult);
+        return;
+      }
+      if (
+        !dragSnapshotRef.current &&
+        changes.some((c) => c.type === 'position' && c.dragging === true)
+      ) {
+        dragSnapshotRef.current = cloneGraph(nodesRef.current, edgesRef.current);
       }
       onNodesChange(changes);
-      const meaningful = changes.some(
-        (c) =>
-          c.type === 'position' ||
-          c.type === 'remove' ||
-          c.type === 'add' ||
-          c.type === 'replace',
+      const stops = changes.filter(
+        (
+          c,
+        ): c is Extract<NodeChange<Node>, { type: 'position' }> & {
+          position: { x: number; y: number };
+        } => c.type === 'position' && c.dragging === false && c.position !== undefined,
       );
-      if (meaningful) scheduleSave();
+      if (stops.length > 0) {
+        const snapshot = dragSnapshotRef.current ?? cloneGraph(nodesRef.current, edgesRef.current);
+        dragSnapshotRef.current = null;
+        commands.schedule(
+          stops.map(
+            (c): WorkflowCommand => ({
+              type: 'moveNode',
+              nodeId: c.id,
+              position: { x: c.position.x, y: c.position.y },
+            }),
+          ),
+          makeRollback(snapshot),
+        );
+      }
     },
-    [onNodesChange, scheduleSave, pushHistory],
+    [onNodesChange, setNodes, setEdges, commands, handleCommandResult, makeRollback],
   );
 
   const onEdgesChangeWrapped = useCallback(
-    (changes: Parameters<typeof onEdgesChange>[0]) => {
-      if (changes.some((c) => c.type === 'remove')) pushHistory();
-      onEdgesChange(changes);
-      const meaningful = changes.some(
-        (c) => c.type === 'remove' || c.type === 'add' || c.type === 'replace',
+    (changes: EdgeChange<Edge>[]) => {
+      const removes = changes.filter(
+        (c): c is Extract<EdgeChange<Edge>, { type: 'remove' }> => c.type === 'remove',
       );
-      if (meaningful) scheduleSave();
+      const live = removes.filter((c) => edgesRef.current.some((e) => e.id === c.id));
+      const snapshot = live.length > 0 ? cloneGraph(nodesRef.current, edgesRef.current) : null;
+      onEdgesChange(changes);
+      if (snapshot) {
+        void commands
+          .applyNow(
+            live.map((c): WorkflowCommand => ({ type: 'disconnect', edgeId: c.id })),
+            makeRollback(snapshot),
+          )
+          .then(handleCommandResult);
+      }
     },
-    [onEdgesChange, scheduleSave, pushHistory],
+    [onEdgesChange, commands, handleCommandResult, makeRollback],
   );
 
   function addNode(type: string) {
     const id = `n-${type}-${Date.now()}`;
     const config = isWorkflowNodeConfigType(type)
-      ? defaultNodeConfig(type)
+      ? (defaultNodeConfig(type) as Record<string, unknown>)
       : { schemaVersion: 1 };
+    const position = {
+      x: 80 + nodesRef.current.length * 24,
+      y: 80 + nodesRef.current.length * 16,
+    };
     const next: Node = {
       id,
       type: 'studio',
-      position: { x: 80 + nodes.length * 24, y: 80 + nodes.length * 16 },
+      position,
       data: { label: nodeLabelZh(type), nodeType: type, config },
     };
-    pushHistory();
-    const nextNodes = [...nodes, next];
+    const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+    const nextNodes = [...nodesRef.current, next];
     setNodes(nextNodes);
     nodesRef.current = nextNodes;
-    scheduleSave();
+    void commands
+      .applyNow(
+        [{ type: 'addNode', nodeType: type, nodeId: id, position, config }],
+        makeRollback(snapshot),
+      )
+      .then(handleCommandResult);
   }
 
   function updateSelectedConfig(key: string, raw: string) {
     const id = selectedIds[0];
     if (!id) return;
-    pushHistory();
-    const nextNodes = nodes.map((n) => {
+    const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+    let nextConfig: Record<string, unknown> = { schemaVersion: 1 };
+    const nextNodes = nodesRef.current.map((n) => {
       if (n.id !== id) return n;
       const nodeType = String((n.data as { nodeType?: string }).nodeType ?? '');
       const prev = {
@@ -498,52 +542,53 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
       };
       let value: unknown = raw;
       if (raw === '') value = null;
-      else if (key === 'count' || key === 'seed' || key === 'fidelity' || key === 'lightBlend' || key === 'strength') {
-        value = Number(raw);
-      }
+      else if (NUMERIC_CONFIG_KEYS.has(key)) value = Number(raw);
       prev[key] = value;
       const validated = validateNodeConfig(nodeType, prev);
-      return {
-        ...n,
-        data: {
-          ...n.data,
-          config: validated.ok ? validated.config : prev,
-        },
-      };
+      nextConfig = (validated.ok ? validated.config : prev) as Record<string, unknown>;
+      return { ...n, data: { ...n.data, config: nextConfig } };
     });
     setNodes(nextNodes);
     nodesRef.current = nextNodes;
-    scheduleSave();
+    commands.schedule(
+      [{ type: 'configure', nodeId: id, config: nextConfig }],
+      makeRollback(snapshot),
+    );
   }
 
+  const handleUndoRedo = useCallback(
+    async (direction: 'undo' | 'redo') => {
+      const result = direction === 'undo' ? await commands.undo() : await commands.redo();
+      if (result.ok) {
+        applyDraft(result.draft);
+        setCmdError(null);
+        setStatus(
+          `${direction === 'undo' ? '已撤销' : '已重做'} · 修订 ${result.draft.revisionNumber}`,
+        );
+        return;
+      }
+      if (result.kind === 'nothing') {
+        setStatus(result.message);
+        return;
+      }
+      if (result.kind === 'conflict') {
+        setConflict(result.message);
+        setStatus('冲突 — 未覆盖');
+        return;
+      }
+      setCmdError(result.message);
+      setStatus(`操作失败：${result.message}`);
+    },
+    [commands, applyDraft],
+  );
+
   const undo = useCallback(() => {
-    if (historyRef.current.length <= 1) return;
-    const current = historyRef.current.pop()!;
-    futureRef.current.push(current);
-    const prev = historyRef.current[historyRef.current.length - 1]!;
-    applyingHistory.current = true;
-    setNodes(prev.nodes);
-    setEdges(prev.edges);
-    nodesRef.current = prev.nodes;
-    edgesRef.current = prev.edges;
-    applyingHistory.current = false;
-    scheduleSave();
-    setStatus('已撤销');
-  }, [setNodes, setEdges, scheduleSave]);
+    void handleUndoRedo('undo');
+  }, [handleUndoRedo]);
 
   const redo = useCallback(() => {
-    const next = futureRef.current.pop();
-    if (!next) return;
-    historyRef.current.push(next);
-    applyingHistory.current = true;
-    setNodes(next.nodes);
-    setEdges(next.edges);
-    nodesRef.current = next.nodes;
-    edgesRef.current = next.edges;
-    applyingHistory.current = false;
-    scheduleSave();
-    setStatus('已重做');
-  }, [setNodes, setEdges, scheduleSave]);
+    void handleUndoRedo('redo');
+  }, [handleUndoRedo]);
 
   const copySelected = useCallback(() => {
     const ids = new Set(selectedIds);
@@ -557,7 +602,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
   const pasteClipboard = useCallback(() => {
     const clip = clipboardRef.current;
     if (!clip || clip.nodes.length === 0) return;
-    pushHistory();
+    const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
     const idMap = new Map<string, string>();
     const stamp = Date.now();
     const pastedNodes = clip.nodes.map((n, i) => {
@@ -586,9 +631,34 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
     nodesRef.current = nextNodes;
     edgesRef.current = nextEdges;
     setSelectedIds(pastedNodes.map((n) => n.id));
-    scheduleSave();
-    setStatus(`已粘贴 ${pastedNodes.length} 个节点`);
-  }, [pushHistory, setNodes, setEdges, scheduleSave]);
+    const cmds: WorkflowCommand[] = [
+      ...pastedNodes.map(
+        (n): WorkflowCommand => ({
+          type: 'addNode',
+          nodeType: String((n.data as { nodeType?: string }).nodeType ?? 'source_image'),
+          nodeId: n.id,
+          position: { x: n.position.x, y: n.position.y },
+          config: (n.data as { config?: Record<string, unknown> }).config ?? {
+            schemaVersion: 1,
+          },
+        }),
+      ),
+      ...pastedEdges.map(
+        (e): WorkflowCommand => ({
+          type: 'connect',
+          edgeId: e.id,
+          source: e.source,
+          sourceHandle: e.sourceHandle ?? null,
+          target: e.target,
+          targetHandle: e.targetHandle ?? null,
+        }),
+      ),
+    ];
+    void commands.applyNow(cmds, makeRollback(snapshot)).then((r) => {
+      handleCommandResult(r);
+      if (r.ok) setStatus(`已粘贴 ${pastedNodes.length} 个节点 · 修订 ${r.batch.revisionNumber}`);
+    });
+  }, [setNodes, setEdges, commands, handleCommandResult, makeRollback]);
 
   useEffect(() => {
     function onKey(ev: KeyboardEvent) {
@@ -616,27 +686,26 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, redo, copySelected, pasteClipboard]);
 
-  const selected = nodes.find((n) => n.id === selectedIds[0]);
-  const selectedType = selected
-    ? String((selected.data as { nodeType?: string }).nodeType ?? '')
-    : '';
-  const selectedConfig = (selected?.data as { config?: Record<string, unknown> } | undefined)
-    ?.config ?? { schemaVersion: 1 };
-  const fields = CONFIG_FIELD_META[selectedType] ?? [];
-
   async function reload() {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
+    commands.reset();
+    dragSnapshotRef.current = null;
     await loadOrCreate();
   }
 
   async function snapshot() {
     if (!draft) return;
+    const flushed = commands.flush();
+    if (flushed) {
+      const r = await flushed;
+      handleCommandResult(r);
+      if (!r.ok) return;
+    }
     const res = await fetch(`/api/workspaces/${workspaceId}/workflows/${draft.workflowId}/snapshot`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ifRevision: revisionRef.current }),
     });
-    const json = await res.json();
+    const json = await res.json().catch(() => null);
     if (!res.ok) {
       setStatus(`快照失败：${json?.error?.message ?? res.status}`);
       if (res.status === 409) setConflict(json?.error?.message ?? '冲突');
@@ -646,28 +715,77 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
     setStatus(`快照 r${json.revision.revision} · 草稿修订 ${json.draft.revisionNumber}`);
   }
 
+  const runNode = useCallback(
+    async (nodeId: string) => {
+      setRunBusy(true);
+      setStatus('正在启动节点运行…');
+      try {
+        const r = await commands.applyNow([
+          {
+            type: 'run',
+            scope: { type: 'NODES', nodeIds: [nodeId] },
+            idempotencyKey: crypto.randomUUID(),
+            budgetLimit: { currency: 'USD', amount: 5 },
+            confirmBudget: true,
+          },
+        ]);
+        handleCommandResult(r);
+        if (r.ok && r.batch.run) {
+          setStatus(
+            `运行 ${r.batch.run.status}（${r.batch.run.id.slice(0, 8)}…）· 修订 ${r.batch.revisionNumber}`,
+          );
+        }
+      } finally {
+        setRunBusy(false);
+      }
+    },
+    [commands, handleCommandResult],
+  );
+
+  const runAll = useCallback(async (): Promise<string> => {
+    const r = await commands.applyNow([
+      {
+        type: 'run',
+        scope: { type: 'ALL' },
+        idempotencyKey: crypto.randomUUID(),
+        budgetLimit: { currency: 'USD', amount: 5 },
+        confirmBudget: true,
+      },
+    ]);
+    handleCommandResult(r);
+    if (r.ok) {
+      return r.batch.run ? `运行 ${r.batch.run.status}（${r.batch.run.id.slice(0, 8)}…）` : '运行已提交';
+    }
+    return r.failure.kind === 'conflict' ? '冲突 — 请加载远端' : `运行失败：${r.failure.message}`;
+  }, [commands, handleCommandResult]);
 
   async function openMaskEditor() {
-    const versionId =
-      typeof selectedConfig.assetVersionId === 'string'
+    const fromSelected =
+      typeof selectedConfig.assetVersionId === 'string' && selectedConfig.assetVersionId
         ? selectedConfig.assetVersionId
         : null;
+    const versionId = fromSelected ?? sourceAssetVersionId;
     if (!versionId) {
-      setStatus('请在 source_image 上填写 assetVersionId（或粘贴版本 ID）以编辑蒙版');
+      setStatus('请先为 source_image 选择素材版本以编辑蒙版');
       return;
     }
     const res = await fetch(
       `/api/workspaces/${workspaceId}/asset-versions/${versionId}/download-url?kind=NORMALIZED_PNG`,
     );
-    const json = await res.json();
+    const json = await res.json().catch(() => null);
     if (!res.ok) {
       setStatus(`蒙版编辑器：${json?.error?.message ?? res.status}`);
       return;
     }
-    setMaskImageUrl(json.url);
-    setMaskSourceDims({ w: 1024, h: 1024, versionId }); // dims refined after load; API metadata optional
-    // Try to get real dims from assets list is heavy; use 1024 placeholder — render uses DB dims.
-    setMaskEditorOpen(true);
+    setMaskEditor({ imageUrl: json.url, versionId, width: 1024, height: 1024 });
+  }
+
+  function onMaskSaved(id: string) {
+    if (selectedInfo?.nodeType === 'replace_background' || selectedInfo?.nodeType === 'inpaint') {
+      updateSelectedConfig('maskId', id);
+    }
+    configOptions.reloadMasks();
+    setStatus(`蒙版已保存 ${id.slice(0, 8)}…`);
   }
 
   if (narrow) {
@@ -680,6 +798,12 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
       </main>
     );
   }
+
+  const errorBar = edgeError
+    ? `非法连线已阻止：${edgeError}`
+    : cmdError
+      ? `命令错误：${cmdError}`
+      : null;
 
   return (
     <div
@@ -792,7 +916,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
             </div>
           </Panel>
         </ReactFlow>
-        {edgeError && (
+        {errorBar && (
           <div
             style={{
               position: 'absolute',
@@ -806,14 +930,14 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
               fontSize: 12,
             }}
           >
-            非法连线已阻止：{edgeError}
+            {errorBar}
           </div>
         )}
         {deleteHint && (
           <div
             style={{
               position: 'absolute',
-              bottom: edgeError ? 56 : 12,
+              bottom: errorBar ? 56 : 12,
               left: 12,
               right: 12,
               background: '#1a2438',
@@ -857,121 +981,26 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
       </div>
 
       <aside style={{ borderLeft: '1px solid #1e2a44', padding: 12, overflow: 'auto' }}>
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>节点属性</div>
-        {!selected ? (
-          <p style={{ opacity: 0.65, fontSize: 13 }}>
-            选择节点以编辑其 Zod 配置外壳（仅 Fake — 不调用 Provider）。
-          </p>
-        ) : (
-          <div style={{ fontSize: 13 }}>
-            <div>
-              <strong>{String((selected.data as { label?: string }).label)}</strong>
-            </div>
-            <div style={{ opacity: 0.7 }}>类型：{selectedType}</div>
-            <div style={{ opacity: 0.7 }}>
-              位置：{Math.round(selected.position.x)}, {Math.round(selected.position.y)}
-            </div>
-            <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-              {fields.map((f) => (
-                <label key={f.key} style={{ display: 'grid', gap: 4, fontSize: 12 }}>
-                  <span style={{ opacity: 0.8 }}>{f.label}</span>
-                  {f.kind === 'select' ? (
-                    <select
-                      value={String(selectedConfig[f.key] ?? '')}
-                      onChange={(e) => updateSelectedConfig(f.key, e.target.value)}
-                      style={{
-                        background: '#0b1020',
-                        color: '#e8eefc',
-                        border: '1px solid #2a3a5a',
-                        borderRadius: 4,
-                        padding: 4,
-                      }}
-                    >
-                      {(f.options ?? []).map((o) => (
-                        <option key={o} value={o}>
-                          {OPTION_LABEL_ZH[o] ?? o}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type={f.kind === 'number' ? 'number' : 'text'}
-                      value={
-                        selectedConfig[f.key] === null || selectedConfig[f.key] === undefined
-                          ? ''
-                          : String(selectedConfig[f.key])
-                      }
-                      onChange={(e) => updateSelectedConfig(f.key, e.target.value)}
-                      style={{
-                        background: '#0b1020',
-                        color: '#e8eefc',
-                        border: '1px solid #2a3a5a',
-                        borderRadius: 4,
-                        padding: 4,
-                      }}
-                    />
-                  )}
-                </label>
-              ))}
-            </div>
-            <pre style={{ fontSize: 11, opacity: 0.8, whiteSpace: 'pre-wrap', marginTop: 12 }}>
-              {JSON.stringify(selectedConfig, null, 2)}
-            </pre>
-            {(selectedType === 'source_image' ||
-              selectedType === 'replace_background' ||
-              selectedType === 'inpaint') && (
-              <div style={{ marginTop: 12 }}>
-                <button
-                  type="button"
-                  onClick={() => void openMaskEditor()}
-                  style={{
-                    background: '#121a2e',
-                    border: '1px solid #2a3a5a',
-                    color: '#e8eefc',
-                    borderRadius: 6,
-                    padding: '6px 10px',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                  }}
-                >
-                  打开蒙版编辑器
-                </button>
-                <div style={{ fontSize: 11, opacity: 0.65, marginTop: 4 }}>
-                  需在 source_image 填写 assetVersionId；将得到的 maskId 粘贴到 replace_background / inpaint。
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        {maskEditorOpen && maskImageUrl && maskSourceDims ? (
-          <div style={{ marginTop: 16 }}>
-            <MaskEditor
-              workspaceId={workspaceId}
-              assetVersionId={maskSourceDims.versionId}
-              imageUrl={maskImageUrl}
-              sourceWidth={maskSourceDims.w}
-              sourceHeight={maskSourceDims.h}
-              maskId={
-                typeof selectedConfig.maskId === 'string' ? selectedConfig.maskId : null
-              }
-              onSaved={(id) => {
-                if (selectedType === 'replace_background' || selectedType === 'inpaint') {
-                  updateSelectedConfig('maskId', id);
-                }
-                setStatus(`蒙版已保存 ${id.slice(0, 8)}…`);
-              }}
-              onClose={() => setMaskEditorOpen(false)}
-            />
-          </div>
-        ) : null}
-        <div style={{ marginTop: 24, fontSize: 11, opacity: 0.65 }}>
-          草稿修订：{draft?.revisionNumber ?? '—'}
-          <br />
-          自动保存：500ms · 撤销/重做仅当前会话 · isValidConnection 预览
-        </div>
+        <PropertiesPanel
+          workspaceId={workspaceId}
+          selected={selectedInfo}
+          options={configOptions}
+          sourceAssetVersionId={sourceAssetVersionId}
+          draftRevision={draft?.revisionNumber ?? null}
+          runBusy={runBusy}
+          onConfigChange={updateSelectedConfig}
+          onRunNode={(id) => void runNode(id)}
+          onOpenMaskEditor={() => void openMaskEditor()}
+          maskEditor={maskEditor}
+          maskEditorMaskId={
+            typeof selectedConfig.maskId === 'string' ? selectedConfig.maskId : null
+          }
+          onMaskSaved={onMaskSaved}
+          onMaskClose={() => setMaskEditor(null)}
+        />
       </aside>
 
-      <TaskDrawer workspaceId={workspaceId} projectId={projectId} draft={draft} />
+      <TaskDrawer workspaceId={workspaceId} projectId={projectId} ready={draft !== null} onRunAll={runAll} />
     </div>
   );
 }
@@ -980,9 +1009,10 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
 function TaskDrawer(props: {
   workspaceId: string;
   projectId: string;
-  draft: DraftResponse | null;
+  ready: boolean;
+  onRunAll: () => Promise<string>;
 }) {
-  const { workspaceId, projectId, draft } = props;
+  const { workspaceId, projectId, ready, onRunAll } = props;
   const [runs, setRuns] = useState<
     Array<{
       id: string;
@@ -1042,43 +1072,12 @@ function TaskDrawer(props: {
     };
   }, [workspaceId, projectId, refresh]);
 
-  async function snapshotAndRun() {
-    if (!draft) return;
+  async function runAll() {
     setBusy(true);
     setMsg(null);
     try {
-      const snap = await fetch(`/api/workspaces/${workspaceId}/workflows/${draft.workflowId}/snapshot`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ifRevision: draft.revisionNumber }),
-      });
-      const snapJson = await snap.json();
-      if (!snap.ok) {
-        setMsg(snapJson.error?.message ?? '快照失败');
-        return;
-      }
-      const revisionId = snapJson.revision?.id as string;
-      const runRes = await fetch(
-        `/api/workspaces/${workspaceId}/workflow-revisions/${revisionId}/runs`,
-        {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            scope: { type: 'ALL' },
-            idempotencyKey: crypto.randomUUID(),
-            budgetLimit: { currency: 'USD', amount: 5 },
-            confirmBudget: true,
-          }),
-        },
-      );
-      const runJson = await runRes.json();
-      if (!runRes.ok) {
-        setMsg(runJson.error?.message ?? '运行失败');
-        return;
-      }
-      setMsg(`运行 ${runJson.run?.status}（${runJson.run?.id?.slice(0, 8)}…）`);
+      const message = await onRunAll();
+      setMsg(message);
       await refresh();
     } finally {
       setBusy(false);
@@ -1115,8 +1114,8 @@ function TaskDrawer(props: {
     >
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <strong>任务抽屉</strong>
-        <button type="button" disabled={busy || !draft} onClick={() => void snapshotAndRun()}>
-          {busy ? '启动中…' : '快照并运行（Fake）'}
+        <button type="button" disabled={busy || !ready} onClick={() => void runAll()}>
+          {busy ? '启动中…' : '运行整图（Fake · 预算 $5）'}
         </button>
         <button type="button" onClick={() => void refresh()}>
           刷新
@@ -1186,7 +1185,11 @@ function TaskDrawer(props: {
   );
 }
 
-export function StudioCanvas(props: { workspaceId: string; projectId: string }) {
+export function StudioCanvas(props: {
+  workspaceId: string;
+  projectId: string;
+  workflowId?: string | null;
+}) {
   return (
     <ReactFlowProvider>
       <StudioCanvasInner {...props} />

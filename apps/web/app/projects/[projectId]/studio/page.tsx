@@ -8,6 +8,7 @@ function StudioInner() {
   const params = useParams<{ projectId: string }>();
   const search = useSearchParams();
   const workspaceId = search.get('workspaceId');
+  const workflowId = search.get('workflowId');
   const projectId = params.projectId;
 
   if (!workspaceId || !projectId) {
@@ -19,7 +20,9 @@ function StudioInner() {
     );
   }
 
-  return <StudioCanvas workspaceId={workspaceId} projectId={projectId} />;
+  return (
+    <StudioCanvas workspaceId={workspaceId} projectId={projectId} workflowId={workflowId} />
+  );
 }
 
 export default function ProjectStudioPage() {
