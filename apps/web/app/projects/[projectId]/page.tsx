@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 
 type Asset = {
   id: string;
@@ -56,6 +56,7 @@ type ShotPlan = {
 function ProjectDetailInner() {
   const params = useParams<{ projectId: string }>();
   const search = useSearchParams();
+  const router = useRouter();
   const workspaceId = search.get('workspaceId');
   const projectId = params.projectId;
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -278,9 +279,8 @@ function ProjectDetailInner() {
       setMsg(json?.error?.message ?? '物化失败');
       return;
     }
-    setMsg(
-      `已物化 ${json.briefCount} 图工作流（${json.workflow?.graph?.nodes?.length ?? 0} 个节点）→ 打开 Studio`,
-    );
+    setMsg(`已物化 ${json.briefCount} 图工作流`);
+    router.push(`/projects/${projectId}/studio?workspaceId=${workspaceId}`);
   }
 
   if (!workspaceId) {
