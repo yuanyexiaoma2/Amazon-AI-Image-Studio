@@ -537,6 +537,20 @@ export class WorkflowRepository {
   }
 
   /**
+   * V2 PR-2: look up a command batch by client batchId (idempotency pre-check —
+   * lets the API replay a batch without re-applying its commands to the graph).
+   */
+  async getCommandBatch(
+    workspaceId: string,
+    workflowId: string,
+    batchId: string,
+  ): Promise<WorkflowCommandBatch | null> {
+    return this.db.workflowCommandBatch.findFirst({
+      where: { workspaceId, workflowId, batchId },
+    });
+  }
+
+  /**
    * V2 PR-2: undo a command batch — draft graph rolls back to batch.beforeGraph.
    * Target: explicit batchId, else the most recent non-undone batch.
    * Conditional draft update on ifRevision (409 semantics); sets undone_at.
