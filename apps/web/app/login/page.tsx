@@ -22,7 +22,7 @@ export default function LoginPage() {
     });
     setLoading(false);
     if (res?.error) {
-      setError('Login failed. Check email/password.');
+      setError('登录失败。请检查邮箱/密码。');
       return;
     }
     router.push('/');
@@ -31,10 +31,10 @@ export default function LoginPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
-      <h1>Login</h1>
+      <h1>登录</h1>
       <form onSubmit={onSubmit} style={{ display: 'grid', gap: 12, maxWidth: 360 }}>
         <label>
-          Email
+          邮箱
           <input
             type="email"
             required
@@ -44,7 +44,7 @@ export default function LoginPage() {
           />
         </label>
         <label>
-          Password
+          密码
           <input
             type="password"
             required
@@ -55,7 +55,7 @@ export default function LoginPage() {
         </label>
         {error ? <p style={{ color: '#ff8f8f' }}>{error}</p> : null}
         <button type="submit" disabled={loading} style={{ padding: 10 }}>
-          {loading ? 'Signing in…' : 'Sign in'}
+          {loading ? '登录中…' : '登录'}
         </button>
       </form>
     </div>

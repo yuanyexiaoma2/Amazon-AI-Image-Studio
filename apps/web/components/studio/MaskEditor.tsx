@@ -37,7 +37,7 @@ export function MaskEditor(props: Props) {
   const [strokes, setStrokes] = useState<MaskStroke[]>([]);
   const [undoStack, setUndoStack] = useState<MaskStroke[][]>([]);
   const [maskId, setMaskId] = useState<string | null>(props.maskId ?? null);
-  const [status, setStatus] = useState('Ready');
+  const [status, setStatus] = useState('就绪');
   const [previewMask, setPreviewMask] = useState(true);
   const drawing = useRef(false);
   const current = useRef<MaskStroke | null>(null);
@@ -201,7 +201,7 @@ export function MaskEditor(props: Props) {
   }
 
   async function save(andRender: boolean) {
-    setStatus('Saving…');
+    setStatus('保存中…');
     const body = {
       strokes,
       coordinateSpace: 'normalized_0_1' as const,
@@ -225,7 +225,7 @@ export function MaskEditor(props: Props) {
       );
       const json = await res.json();
       if (!res.ok) {
-        setStatus(`Save failed: ${json?.error?.message ?? res.status}`);
+        setStatus(`保存失败：${json?.error?.message ?? res.status}`);
         return;
       }
       id = json.id as string;
@@ -238,23 +238,23 @@ export function MaskEditor(props: Props) {
       });
       const json = await res.json();
       if (!res.ok) {
-        setStatus(`Save failed: ${json?.error?.message ?? res.status}`);
+        setStatus(`保存失败：${json?.error?.message ?? res.status}`);
         return;
       }
     }
     if (andRender && id) {
-      setStatus('Rendering full-res mask…');
+      setStatus('正在渲染全分辨率蒙版…');
       const res = await fetch(`/api/workspaces/${props.workspaceId}/masks/${id}/render`, {
         method: 'POST',
       });
       const json = await res.json();
       if (!res.ok) {
-        setStatus(`Render failed: ${json?.error?.message ?? res.status}`);
+        setStatus(`渲染失败：${json?.error?.message ?? res.status}`);
         return;
       }
-      setStatus(`Saved + rendered ${json.width}×${json.height}`);
+      setStatus(`已保存并渲染 ${json.width}×${json.height}`);
     } else {
-      setStatus(`Saved mask ${id?.slice(0, 8)}…`);
+      setStatus(`已保存蒙版 ${id?.slice(0, 8)}…`);
     }
     if (id) props.onSaved?.(id);
   }
@@ -275,10 +275,10 @@ export function MaskEditor(props: Props) {
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <strong>Mask editor (W5-03)</strong>
+        <strong>蒙版编辑器（W5-03）</strong>
         {props.onClose ? (
           <button type="button" onClick={props.onClose} style={btnStyle}>
-            Close
+            关闭
           </button>
         ) : null}
       </div>
@@ -288,17 +288,17 @@ export function MaskEditor(props: Props) {
           onClick={() => setTool('brush')}
           style={{ ...btnStyle, outline: tool === 'brush' ? '2px solid #4af' : undefined }}
         >
-          Brush
+          画笔
         </button>
         <button
           type="button"
           onClick={() => setTool('erase')}
           style={{ ...btnStyle, outline: tool === 'erase' ? '2px solid #4af' : undefined }}
         >
-          Erase
+          擦除
         </button>
         <label>
-          Size{' '}
+          大小{' '}
           <input
             type="range"
             min={4}
@@ -308,7 +308,7 @@ export function MaskEditor(props: Props) {
           />
         </label>
         <label>
-          Zoom{' '}
+          缩放{' '}
           <input
             type="range"
             min={0.5}
@@ -324,16 +324,16 @@ export function MaskEditor(props: Props) {
             checked={previewMask}
             onChange={(e) => setPreviewMask(e.target.checked)}
           />{' '}
-          Preview
+          预览
         </label>
         <button type="button" onClick={undo} style={btnStyle}>
-          Undo
+          撤销
         </button>
         <button type="button" onClick={() => void save(false)} style={btnStyle}>
-          Save
+          保存
         </button>
         <button type="button" onClick={() => void save(true)} style={btnStyle}>
-          Save + render
+          保存并渲染
         </button>
       </div>
       <div
@@ -364,8 +364,8 @@ export function MaskEditor(props: Props) {
         />
       </div>
       <div style={{ fontSize: 11, opacity: 0.75 }}>
-        Source {props.sourceWidth}×{props.sourceHeight} · strokes {strokes.length} ·{' '}
-        {maskId ? `mask ${maskId.slice(0, 8)}…` : 'unsaved'} · {status}
+        源图 {props.sourceWidth}×{props.sourceHeight} · 笔划 {strokes.length} ·{' '}
+        {maskId ? `蒙版 ${maskId.slice(0, 8)}…` : '未保存'} · {status}
       </div>
     </div>
   );

@@ -23,7 +23,7 @@ export default function RegisterPage() {
     setLoading(false);
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      setError(data?.error?.message ?? 'Registration failed');
+      setError(data?.error?.message ?? '注册失败');
       return;
     }
     router.push('/login');
@@ -31,10 +31,10 @@ export default function RegisterPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
-      <h1>Register</h1>
+      <h1>注册</h1>
       <form onSubmit={onSubmit} style={{ display: 'grid', gap: 12, maxWidth: 360 }}>
         <label>
-          Name (optional)
+          姓名（可选）
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -42,7 +42,7 @@ export default function RegisterPage() {
           />
         </label>
         <label>
-          Email
+          邮箱
           <input
             type="email"
             required
@@ -52,7 +52,7 @@ export default function RegisterPage() {
           />
         </label>
         <label>
-          Password (min 12)
+          密码（至少 12 位）
           <input
             type="password"
             required
@@ -64,7 +64,7 @@ export default function RegisterPage() {
         </label>
         {error ? <p style={{ color: '#ff8f8f' }}>{error}</p> : null}
         <button type="submit" disabled={loading} style={{ padding: 10 }}>
-          {loading ? 'Creating…' : 'Create account'}
+          {loading ? '创建中…' : '创建账号'}
         </button>
       </form>
     </div>

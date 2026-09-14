@@ -49,13 +49,43 @@ type DraftResponse = {
 
 type HistoryEntry = { nodes: Node[]; edges: Edge[] };
 
+const NODE_LABEL_ZH: Record<string, string> = {
+  source_image: '源图（Source Image）',
+  product_truth: '产品真相（Product Truth）',
+  prompt: '提示词（Prompt）',
+  remove_background: '抠图（Remove Background）',
+  generate: '生成（Generate）',
+  replace_background: '换背景（Replace Background）',
+  inpaint: '局部重绘（Inpaint）',
+  outpaint: '外扩（Outpaint）',
+  upscale: '超分（Upscale）',
+  qa_gate: 'QA 门禁（QA Gate）',
+  approval_selector: '审批选择器（Approval）',
+  export: '导出（Export）',
+};
+
+function nodeLabelZh(type: string): string {
+  return NODE_LABEL_ZH[type] ?? getNodeDefinition(type)?.label ?? type;
+}
+
+const OPTION_LABEL_ZH: Record<string, string> = {
+  auto: '自动',
+  precise: '精细',
+  soft: '柔和',
+  center: '居中',
+  top: '上',
+  bottom: '下',
+  left: '左',
+  right: '右',
+};
+
 function toFlowNodes(graph: WorkflowGraph): Node[] {
   return graph.nodes.map((n) => ({
     id: n.id,
     type: 'studio',
     position: n.position,
     data: {
-      label: getNodeDefinition(n.type)?.label ?? n.type,
+      label: nodeLabelZh(n.type),
       nodeType: n.type,
       config: n.config ?? { schemaVersion: 1 },
     },
@@ -152,62 +182,62 @@ const CONFIG_FIELD_META: Record<
   string,
   Array<{ key: string; label: string; kind: 'text' | 'number' | 'select'; options?: string[] }>
 > = {
-  source_image: [{ key: 'assetVersionId', label: 'Asset version ID', kind: 'text' }],
-  product_truth: [{ key: 'truthRevisionId', label: 'Truth revision ID', kind: 'text' }],
+  source_image: [{ key: 'assetVersionId', label: '素材版本 ID', kind: 'text' }],
+  product_truth: [{ key: 'truthRevisionId', label: 'Truth 修订 ID', kind: 'text' }],
   prompt: [
-    { key: 'text', label: 'Prompt text', kind: 'text' },
-    { key: 'negative', label: 'Negative', kind: 'text' },
-    { key: 'locale', label: 'Locale', kind: 'text' },
-    { key: 'shotBriefId', label: 'Shot brief ID', kind: 'text' },
-    { key: 'slot', label: 'Slot', kind: 'text' },
+    { key: 'text', label: '提示词', kind: 'text' },
+    { key: 'negative', label: '反向提示词', kind: 'text' },
+    { key: 'locale', label: '语言地区', kind: 'text' },
+    { key: 'shotBriefId', label: '镜头简报 ID', kind: 'text' },
+    { key: 'slot', label: '槽位', kind: 'text' },
   ],
   remove_background: [
-    { key: 'subjectHint', label: 'Subject hint', kind: 'text' },
-    { key: 'edgeMode', label: 'Edge mode', kind: 'select', options: ['auto', 'precise', 'soft'] },
+    { key: 'subjectHint', label: '主体提示', kind: 'text' },
+    { key: 'edgeMode', label: '边缘模式', kind: 'select', options: ['auto', 'precise', 'soft'] },
   ],
   generate: [
-    { key: 'modelKey', label: 'Model key', kind: 'text' },
-    { key: 'ratio', label: 'Ratio', kind: 'text' },
-    { key: 'resolution', label: 'Resolution', kind: 'select', options: ['1K', '2K', '4K'] },
-    { key: 'count', label: 'Count', kind: 'number' },
-    { key: 'seed', label: 'Seed', kind: 'number' },
+    { key: 'modelKey', label: '模型键', kind: 'text' },
+    { key: 'ratio', label: '比例', kind: 'text' },
+    { key: 'resolution', label: '分辨率', kind: 'select', options: ['1K', '2K', '4K'] },
+    { key: 'count', label: '数量', kind: 'number' },
+    { key: 'seed', label: '种子', kind: 'number' },
   ],
   replace_background: [
-    { key: 'fidelity', label: 'Fidelity', kind: 'number' },
-    { key: 'lightBlend', label: 'Light blend', kind: 'number' },
-    { key: 'maskId', label: 'Mask ID', kind: 'text' },
+    { key: 'fidelity', label: '保真度', kind: 'number' },
+    { key: 'lightBlend', label: '光线融合', kind: 'number' },
+    { key: 'maskId', label: '蒙版 ID', kind: 'text' },
   ],
   inpaint: [
-    { key: 'strength', label: 'Strength', kind: 'number' },
-    { key: 'modelKey', label: 'Model key', kind: 'text' },
-    { key: 'maskId', label: 'Mask ID', kind: 'text' },
+    { key: 'strength', label: '强度', kind: 'number' },
+    { key: 'modelKey', label: '模型键', kind: 'text' },
+    { key: 'maskId', label: '蒙版 ID', kind: 'text' },
   ],
   outpaint: [
-    { key: 'targetRatio', label: 'Target ratio', kind: 'text' },
+    { key: 'targetRatio', label: '目标比例', kind: 'text' },
     {
       key: 'placement',
-      label: 'Placement',
+      label: '放置',
       kind: 'select',
       options: ['center', 'top', 'bottom', 'left', 'right'],
     },
-    { key: 'modelKey', label: 'Model key', kind: 'text' },
+    { key: 'modelKey', label: '模型键', kind: 'text' },
   ],
   upscale: [
-    { key: 'engineKey', label: 'Engine key', kind: 'text' },
-    { key: 'targetResolution', label: 'Target resolution', kind: 'select', options: ['2K', '4K'] },
+    { key: 'engineKey', label: '引擎键', kind: 'text' },
+    { key: 'targetResolution', label: '目标分辨率', kind: 'select', options: ['2K', '4K'] },
   ],
-  qa_gate: [{ key: 'policyKey', label: 'Policy key', kind: 'text' }],
+  qa_gate: [{ key: 'policyKey', label: '策略键', kind: 'text' }],
   approval_selector: [
     {
       key: 'requiredRole',
-      label: 'Required role',
+      label: '所需角色',
       kind: 'select',
       options: ['OWNER', 'ADMIN', 'MEMBER', 'REVIEWER'],
     },
   ],
   export: [
-    { key: 'namingPreset', label: 'Naming preset', kind: 'text' },
-    { key: 'format', label: 'Format', kind: 'select', options: ['png', 'jpeg', 'webp'] },
+    { key: 'namingPreset', label: '命名预设', kind: 'text' },
+    { key: 'format', label: '格式', kind: 'select', options: ['png', 'jpeg', 'webp'] },
   ],
 };
 
@@ -218,7 +248,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [status, setStatus] = useState<string>('Loading…');
+  const [status, setStatus] = useState<string>('加载中…');
 
   const [maskEditorOpen, setMaskEditorOpen] = useState(false);
   const [maskImageUrl, setMaskImageUrl] = useState<string | null>(null);
@@ -266,12 +296,12 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
   );
 
   const loadOrCreate = useCallback(async () => {
-    setStatus('Loading workflows…');
+    setStatus('正在加载工作流…');
     setConflict(null);
     const listRes = await fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/workflows`);
     const listJson = await listRes.json();
     if (!listRes.ok) {
-      setStatus(`Failed to list: ${listJson?.error?.message ?? listRes.status}`);
+      setStatus(`列表失败：${listJson?.error?.message ?? listRes.status}`);
       return;
     }
     let workflowId: string | undefined = listJson.items?.[0]?.id;
@@ -279,25 +309,25 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
       const createRes = await fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/workflows`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name: 'Studio workflow' }),
+        body: JSON.stringify({ name: 'Studio 工作流' }),
       });
       const created = await createRes.json();
       if (!createRes.ok) {
-        setStatus(`Create failed: ${created?.error?.message ?? createRes.status}`);
+        setStatus(`创建失败：${created?.error?.message ?? createRes.status}`);
         return;
       }
       applyDraft(created);
-      setStatus(`Created empty workflow · rev ${created.revisionNumber}`);
+      setStatus(`已创建空工作流 · 修订 ${created.revisionNumber}`);
       return;
     }
     const getRes = await fetch(`/api/workspaces/${workspaceId}/workflows/${workflowId}`);
     const got = await getRes.json();
     if (!getRes.ok) {
-      setStatus(`Load failed: ${got?.error?.message ?? getRes.status}`);
+      setStatus(`加载失败：${got?.error?.message ?? getRes.status}`);
       return;
     }
     applyDraft(got);
-    setStatus(`Loaded · rev ${got.revisionNumber}`);
+    setStatus(`已加载 · 修订 ${got.revisionNumber}`);
   }, [workspaceId, projectId, applyDraft]);
 
   useEffect(() => {
@@ -314,7 +344,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
   const saveNow = useCallback(
     async (graph: WorkflowGraph) => {
       if (!draft) return;
-      setStatus('Saving…');
+      setStatus('保存中…');
       setConflict(null);
       const res = await fetch(`/api/workspaces/${workspaceId}/workflows/${draft.workflowId}`, {
         method: 'PATCH',
@@ -328,19 +358,19 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
       if (res.status === 409) {
         setConflict(
           json?.error?.message ??
-            'Concurrent edit conflict (409). Reload to keep the other session\'s changes, or discard local edits.',
+            '并发编辑冲突（409）。请重新加载以保留另一会话的更改，或放弃本地编辑。',
         );
-        setStatus('Conflict — not overwritten');
+        setStatus('冲突 — 未覆盖');
         return;
       }
       if (!res.ok) {
-        setStatus(`Save failed: ${json?.error?.message ?? res.status}`);
+        setStatus(`保存失败：${json?.error?.message ?? res.status}`);
         return;
       }
       revisionRef.current = json.revisionNumber;
       setDraft(json);
       dirtyRef.current = false;
-      setStatus(`Saved · rev ${json.revisionNumber}`);
+      setStatus(`已保存 · 修订 ${json.revisionNumber}`);
     },
     [draft, workspaceId],
   );
@@ -402,7 +432,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
         const ids = new Set(removes.map((c) => ('id' in c ? c.id : '')).filter(Boolean));
         const impacted = edgesRef.current.filter((e) => ids.has(e.source) || ids.has(e.target));
         setDeleteHint(
-          `Deleting ${ids.size} node(s) also removes ${impacted.length} connected edge(s).`,
+          `删除 ${ids.size} 个节点也会移除 ${impacted.length} 条相连的边。`,
         );
         pushHistory();
       } else {
@@ -440,7 +470,6 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
 
   function addNode(type: string) {
     const id = `n-${type}-${Date.now()}`;
-    const def = getNodeDefinition(type);
     const config = isWorkflowNodeConfigType(type)
       ? defaultNodeConfig(type)
       : { schemaVersion: 1 };
@@ -448,7 +477,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
       id,
       type: 'studio',
       position: { x: 80 + nodes.length * 24, y: 80 + nodes.length * 16 },
-      data: { label: def?.label ?? type, nodeType: type, config },
+      data: { label: nodeLabelZh(type), nodeType: type, config },
     };
     pushHistory();
     const nextNodes = [...nodes, next];
@@ -499,7 +528,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
     edgesRef.current = prev.edges;
     applyingHistory.current = false;
     scheduleSave();
-    setStatus('Undo');
+    setStatus('已撤销');
   }, [setNodes, setEdges, scheduleSave]);
 
   const redo = useCallback(() => {
@@ -513,7 +542,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
     edgesRef.current = next.edges;
     applyingHistory.current = false;
     scheduleSave();
-    setStatus('Redo');
+    setStatus('已重做');
   }, [setNodes, setEdges, scheduleSave]);
 
   const copySelected = useCallback(() => {
@@ -522,7 +551,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
     const ns = nodesRef.current.filter((n) => ids.has(n.id));
     const es = edgesRef.current.filter((e) => ids.has(e.source) && ids.has(e.target));
     clipboardRef.current = cloneGraph(ns, es);
-    setStatus(`Copied ${ns.length} node(s)`);
+    setStatus(`已复制 ${ns.length} 个节点`);
   }, [selectedIds]);
 
   const pasteClipboard = useCallback(() => {
@@ -558,7 +587,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
     edgesRef.current = nextEdges;
     setSelectedIds(pastedNodes.map((n) => n.id));
     scheduleSave();
-    setStatus(`Pasted ${pastedNodes.length} node(s)`);
+    setStatus(`已粘贴 ${pastedNodes.length} 个节点`);
   }, [pushHistory, setNodes, setEdges, scheduleSave]);
 
   useEffect(() => {
@@ -609,12 +638,12 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
     });
     const json = await res.json();
     if (!res.ok) {
-      setStatus(`Snapshot failed: ${json?.error?.message ?? res.status}`);
-      if (res.status === 409) setConflict(json?.error?.message ?? 'Conflict');
+      setStatus(`快照失败：${json?.error?.message ?? res.status}`);
+      if (res.status === 409) setConflict(json?.error?.message ?? '冲突');
       return;
     }
     applyDraft(json.draft);
-    setStatus(`Snapshot r${json.revision.revision} · draft rev ${json.draft.revisionNumber}`);
+    setStatus(`快照 r${json.revision.revision} · 草稿修订 ${json.draft.revisionNumber}`);
   }
 
 
@@ -624,7 +653,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
         ? selectedConfig.assetVersionId
         : null;
     if (!versionId) {
-      setStatus('Set assetVersionId on source_image (or paste a version id) to edit mask');
+      setStatus('请在 source_image 上填写 assetVersionId（或粘贴版本 ID）以编辑蒙版');
       return;
     }
     const res = await fetch(
@@ -632,7 +661,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
     );
     const json = await res.json();
     if (!res.ok) {
-      setStatus(`Mask editor: ${json?.error?.message ?? res.status}`);
+      setStatus(`蒙版编辑器：${json?.error?.message ?? res.status}`);
       return;
     }
     setMaskImageUrl(json.url);
@@ -644,10 +673,9 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
   if (narrow) {
     return (
       <main style={{ padding: 24 }} role="main" aria-labelledby="studio-narrow-title">
-        <h1 id="studio-narrow-title">Studio</h1>
+        <h1 id="studio-narrow-title">Studio（画布）</h1>
         <p role="alert">
-          Desktop-only canvas editor. Minimum width 1280px — full canvas editing is not supported on
-          this viewport. Rotate device or widen the browser window.
+          仅桌面端画布编辑器。最小宽度 1280px — 当前视口不支持完整画布编辑。请旋转设备或加宽浏览器窗口。
         </p>
       </main>
     );
@@ -656,7 +684,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
   return (
     <div
       role="application"
-      aria-label="Studio workflow canvas"
+      aria-label="Studio 工作流画布"
       style={{
         display: 'grid',
         gridTemplateColumns: '220px 1fr 300px',
@@ -668,14 +696,14 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
       }}
     >
       <aside
-        aria-label="Node library"
+        aria-label="节点库"
         style={{ borderRight: '1px solid #1e2a44', padding: 12, overflow: 'auto' }}
       >
         <div style={{ fontWeight: 700, marginBottom: 8 }} id="node-library-heading">
-          Node library
+          节点库
         </div>
         <div style={{ fontSize: 11, opacity: 0.65, marginBottom: 8 }}>
-          11 MVP types · Zod configs (W3-05)
+          11 种 MVP 节点 · Zod 配置（W3-05）
         </div>
         {palette.map((n) => (
           <button
@@ -696,7 +724,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
               fontSize: 12,
             }}
           >
-            {n.label}
+            {nodeLabelZh(n.type)}
           </button>
         ))}
       </aside>
@@ -735,31 +763,31 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
             >
               <span role="status" aria-live="polite">{status}</span>
               <button type="button" onClick={() => void reload()}>
-                Reload
+                重新加载
               </button>
               <button type="button" onClick={() => void snapshot()}>
-                Snapshot
+                快照
               </button>
               <button type="button" onClick={() => undo()} title="Ctrl/Cmd+Z">
-                Undo
+                撤销
               </button>
               <button type="button" onClick={() => redo()} title="Ctrl/Cmd+Y">
-                Redo
+                重做
               </button>
               <button type="button" onClick={() => copySelected()} title="Ctrl/Cmd+C">
-                Copy
+                复制
               </button>
               <button type="button" onClick={() => pasteClipboard()} title="Ctrl/Cmd+V">
-                Paste
+                粘贴
               </button>
               <button
                 type="button"
                 onClick={() => {
                   void fitView({ padding: 0.2, duration: 200 });
-                  setStatus('Fit view');
+                  setStatus('适应视图');
                 }}
               >
-                Fit view
+                适应视图
               </button>
             </div>
           </Panel>
@@ -778,7 +806,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
               fontSize: 12,
             }}
           >
-            Illegal edge blocked: {edgeError}
+            非法连线已阻止：{edgeError}
           </div>
         )}
         {deleteHint && (
@@ -800,7 +828,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
           >
             <span>{deleteHint}</span>
             <button type="button" onClick={() => setDeleteHint(null)}>
-              Dismiss
+              关闭
             </button>
           </div>
         )}
@@ -818,10 +846,10 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
               fontSize: 13,
             }}
           >
-            <strong>409 conflict</strong> — {conflict}
+            <strong>409 冲突</strong> — {conflict}
             <div style={{ marginTop: 8 }}>
               <button type="button" onClick={() => void reload()}>
-                Reload remote
+                加载远端
               </button>
             </div>
           </div>
@@ -829,19 +857,19 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
       </div>
 
       <aside style={{ borderLeft: '1px solid #1e2a44', padding: 12, overflow: 'auto' }}>
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Node properties</div>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>节点属性</div>
         {!selected ? (
           <p style={{ opacity: 0.65, fontSize: 13 }}>
-            Select a node to edit its Zod-backed config shell (Fake only — no Provider execution).
+            选择节点以编辑其 Zod 配置外壳（仅 Fake — 不调用 Provider）。
           </p>
         ) : (
           <div style={{ fontSize: 13 }}>
             <div>
               <strong>{String((selected.data as { label?: string }).label)}</strong>
             </div>
-            <div style={{ opacity: 0.7 }}>type: {selectedType}</div>
+            <div style={{ opacity: 0.7 }}>类型：{selectedType}</div>
             <div style={{ opacity: 0.7 }}>
-              pos: {Math.round(selected.position.x)}, {Math.round(selected.position.y)}
+              位置：{Math.round(selected.position.x)}, {Math.round(selected.position.y)}
             </div>
             <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
               {fields.map((f) => (
@@ -861,7 +889,7 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
                     >
                       {(f.options ?? []).map((o) => (
                         <option key={o} value={o}>
-                          {o}
+                          {OPTION_LABEL_ZH[o] ?? o}
                         </option>
                       ))}
                     </select>
@@ -906,10 +934,10 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
                     fontSize: 12,
                   }}
                 >
-                  Open mask editor
+                  打开蒙版编辑器
                 </button>
                 <div style={{ fontSize: 11, opacity: 0.65, marginTop: 4 }}>
-                  Needs assetVersionId on source_image; paste resulting maskId into replace_background / inpaint.
+                  需在 source_image 填写 assetVersionId；将得到的 maskId 粘贴到 replace_background / inpaint。
                 </div>
               </div>
             )}
@@ -930,16 +958,16 @@ function StudioCanvasInner(props: { workspaceId: string; projectId: string }) {
                 if (selectedType === 'replace_background' || selectedType === 'inpaint') {
                   updateSelectedConfig('maskId', id);
                 }
-                setStatus(`Mask saved ${id.slice(0, 8)}…`);
+                setStatus(`蒙版已保存 ${id.slice(0, 8)}…`);
               }}
               onClose={() => setMaskEditorOpen(false)}
             />
           </div>
         ) : null}
         <div style={{ marginTop: 24, fontSize: 11, opacity: 0.65 }}>
-          Draft rev: {draft?.revisionNumber ?? '—'}
+          草稿修订：{draft?.revisionNumber ?? '—'}
           <br />
-          Autosave: 500ms · undo/redo session-local · isValidConnection preview
+          自动保存：500ms · 撤销/重做仅当前会话 · isValidConnection 预览
         </div>
       </aside>
 
@@ -1027,7 +1055,7 @@ function TaskDrawer(props: {
       });
       const snapJson = await snap.json();
       if (!snap.ok) {
-        setMsg(snapJson.error?.message ?? 'snapshot failed');
+        setMsg(snapJson.error?.message ?? '快照失败');
         return;
       }
       const revisionId = snapJson.revision?.id as string;
@@ -1047,10 +1075,10 @@ function TaskDrawer(props: {
       );
       const runJson = await runRes.json();
       if (!runRes.ok) {
-        setMsg(runJson.error?.message ?? 'run failed');
+        setMsg(runJson.error?.message ?? '运行失败');
         return;
       }
-      setMsg(`Run ${runJson.run?.status} (${runJson.run?.id?.slice(0, 8)}…)`);
+      setMsg(`运行 ${runJson.run?.status}（${runJson.run?.id?.slice(0, 8)}…）`);
       await refresh();
     } finally {
       setBusy(false);
@@ -1086,18 +1114,18 @@ function TaskDrawer(props: {
       }}
     >
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <strong>Task drawer</strong>
+        <strong>任务抽屉</strong>
         <button type="button" disabled={busy || !draft} onClick={() => void snapshotAndRun()}>
-          {busy ? 'Starting…' : 'Snapshot + Run (Fake)'}
+          {busy ? '启动中…' : '快照并运行（Fake）'}
         </button>
         <button type="button" onClick={() => void refresh()}>
-          Refresh
+          刷新
         </button>
         {msg && <span style={{ opacity: 0.85 }}>{msg}</span>}
       </div>
       <div style={{ display: 'grid', gap: 6, maxHeight: 160, overflow: 'auto' }}>
         {runs.length === 0 && (
-          <div role="status" style={{ opacity: 0.65 }}>No runs yet — queue / running / success / failed appear here.</div>
+          <div role="status" style={{ opacity: 0.65 }}>暂无运行 — 排队 / 运行中 / 成功 / 失败会显示在这里。</div>
         )}
         {runs.map((r) => (
           <div
@@ -1112,12 +1140,12 @@ function TaskDrawer(props: {
           >
             <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
               <span>
-                <code>{r.id.slice(0, 8)}</code> · <strong>{r.status}</strong> · est{' '}
+                <code>{r.id.slice(0, 8)}</code> · <strong>{r.status}</strong> · 预估{' '}
                 {(r.estimateMicrounits / 1_000_000).toFixed(3)} USD
               </span>
               {(r.status === 'QUEUED' || r.status === 'RUNNING') && (
                 <button type="button" onClick={() => void cancelRun(r.id)}>
-                  Cancel
+                  取消
                 </button>
               )}
             </div>
@@ -1125,11 +1153,11 @@ function TaskDrawer(props: {
               const latest = it.attempts[it.attempts.length - 1];
               return (
                 <div key={it.id} style={{ fontSize: 12, opacity: 0.9, paddingLeft: 8 }}>
-                  node <code>{it.nodeId}</code> · {it.status}
+                  节点 <code>{it.nodeId}</code> · {it.status}
                   {latest && (
                     <>
                       {' '}
-                      · attempt #{latest.attemptNo} {latest.status} ({latest.progress}%)
+                      · 尝试 #{latest.attemptNo} {latest.status}（{latest.progress}%）
                       {latest.errorClass && (
                         <span style={{ color: '#f88' }}>
                           {' '}
@@ -1138,7 +1166,7 @@ function TaskDrawer(props: {
                       )}
                       {(latest.status === 'FAILED_FINAL' || latest.status === 'FAILED_RETRYABLE') && (
                         <button type="button" style={{ marginLeft: 8 }} onClick={() => void retryAttempt(latest.id)}>
-                          Retry
+                          重试
                         </button>
                       )}
                     </>
