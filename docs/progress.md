@@ -612,3 +612,38 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 **范围纪律（规则 13）发现但未修：** `apps/web` lint 脚本是 `next lint \|\| true`（实质不执行）；无页面级鉴权 middleware（页面依赖 API 401 + 前端引导）；多 workflow 切换器缺失；无组件测试框架；admin 页保留手工 workspaceId 输入（ops 工具定位）；原生 `<select>` 下拉项无法内嵌缩略图（仅做选中后预览）。
 **Status:** **DONE** (not VERIFIED). Per V2 rule, VERIFIED requires a fresh-context re-review + owner merge + green main CI.
+
+---
+
+## PR-4 — 聊天 Agent 面板 (DONE)
+
+**Branch:** `feat/v2-chat-agent` (from main `7cc04d6`，即 PR #24/#25/#26 合并后)
+**Acceptance unit (one PR, one independent review):** V2 vision §3 PR-4 + §2.3/§2.6 — 聊天 Agent 作为画布第三操作者（LLM 输出 JSON 命令批次 → Zod 校验 → 复用 PR-2 命令层执行），会话级预算闸门复用 W4 预算语义，每轮一个可撤销批次。**Merging is performed by the owner** (V2 rule); implementer only opens the PR.
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| PR-4-01 | 共享 kie chat client + ChatAgentProvider（fake\|kie） | DONE | `packages/providers/src/kie-chat.ts`（从 openai-compat-planner 抽出 `kieChatCompletion()`，planner 行为不变）+ `chat-agent.ts`（Kie/Fake provider、`AgentTurnOutputSchema` 校验、失败降级纯文字、`CHAT_PROVIDER=fake\|kie` 工厂）（commit `24ff19f`）；providers 33 单测全绿 |
+| PR-4-02 | contracts chat schema | DONE | `packages/contracts/src/chat.ts`：ChatSession/ChatMessage/CreateChatSessionRequest/PostChatMessageRequest/PostChatMessageResponse/AgentTurnOutput（commit `0de7cbb`） |
+| PR-4-03 | db：chat_sessions + chat_messages + ChatRepository | DONE | 纯增量迁移 `20260915020000_v2_chat_agent`；createSession/listSessions/getWithMessages/appendMessage/addSpentMicrounits（FOR UPDATE 累加）+ 审计 `chat.session_created`/`chat.turn_applied`（commit `aeba8d0`）；5 个 db 集成测试 |
+| PR-4-04 | web API：apply-commands 抽取 + 三条 chat 路由 + 会话预算闸门 | DONE | `apps/web/lib/apply-commands.ts`（commands route 改薄壳，e2e 不回归即等价证明）；`POST/GET .../chat-sessions`、`GET .../chat-sessions/{sid}`、`POST .../messages`（同步 turn；kie 错误映射 502 CHAT_AUTH_FAILED / 503 CHAT_UNAVAILABLE；run 命令服务端改写 idempotencyKey=`chat-run-{nonce}` + budgetLimit=会话剩余额度 + confirmBudget:true；剩余≤0 或未设预算 → budgetRejected，移除 run、图命令照常；run 成功后按 estimateMicrounits 累加 spent）（commit `c4f5518`）；3 个 route 集成测试 |
+| PR-4-05 | Studio 聊天面板 UI | DONE | `components/studio/ChatPanel.tsx`：右侧「属性/助手」tab；进入自动取/建会话（默认预算 $5 可改）；user 右/assistant 左气泡；「已应用 N 条命令」徽标 + 「撤销本轮」（commands/undo {batchId} → 刷新画布）；预算剩余显示；发送中 spinner、错误红条（commit `4f365b9`） |
+| PR-4-06 | OpenAPI 注册 + e2e | DONE | openapi 注册 7 个 chat schema + 3 条路径（`docs/api/openapi.yaml` 语义上纯新增：锚点归一化后 0 删 1189 增；YAML anchor 编号偏移为序列化机械噪音）；`scripts/e2e-api.mjs` 新增「V2 PR-4 chat agent」段 11 条断言（独立用户/workspace/项目/workflow） |
+
+### PR-4 commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm lint` / `pnpm typecheck` | Exit 0，2026-09-15 Asia/Shanghai |
+| `pnpm test`（根，不带 RUN_INTEGRATION） | Exit 0 全绿（web 17 passed/13 skipped；db/domain/contracts/providers/imaging/config/storage/worker 全绿） |
+| `RUN_INTEGRATION=1 pnpm --filter @studio/db test` | 40/40（含 chat 5 个） |
+| `IMAGE_PROVIDER=fake RUN_INTEGRATION=1 pnpm --filter @studio/web test` | 29/30——唯一失败是 `shot-plan-roles.integration.test.ts` 本地 5s 超时（**预存问题**，干净 HEAD 同样失败，见范围外发现）；chat 3/3、workflow-commands 2/2 不回归 |
+| `pnpm build` | Exit 0 |
+| `pnpm test:e2e`（web :3100 + worker，`.env` 注入 + `IMAGE_PROVIDER=fake CHAT_PROVIDER=fake PLANNER_PROVIDER=fake INSPECT_INLINE=1 GENERATION_INLINE=1`，`APP_URL=http://127.0.0.1:3100`） | **PASS** exit 0；PR-4 段：建会话（budgetLimit $0.01 = 1 个 generate 节点 × Fake $0.01）→ 列表 ?workflowId= 过滤 → 「搭建」3 命令 + batchId + 图含 chat-src-1/chat-gen-1/chat-edge-1 → 「运行」run estimate=10000µ 轮询 SUCCEEDED + 会话 spent=10000µ + 4 条消息 → 「再运行一次」budgetRejected=true、无 run、图与 spent 不变 → commands/undo {batchId} 回滚到 0 节点 → 跨租户 GET 403 |
+| Provider | e2e 全程 **Fake only**（三个 provider env 显式覆盖；本地 .env 是 kie，e2e 绝不用真 key） |
+| 真实 kie 冒烟（可选，~0.01 credits LLM） | 已做：`CHAT_PROVIDER=kie` 起 web，建会话发「帮我搭建一个主图生成流程」→ kie agent 产出合法 JSON（6 命令过 Zod），但 connect 引用了 prompt 节点不存在的 source handle → apply-commands 原子拒绝 VALIDATION_ERROR，响应 200 且回复内注明失败、图未变（降级路径按设计工作）；kie 不知道各节点 handle 名 → 见范围外发现 |
+| tabbit 视觉自验 | 成功（本次 CDP 正常）：dev server :3000 + fake provider，登录 → studio → 「助手」tab（预算徽标 $5.00/$5.00）→ 发「帮我搭建一个主图生成流程」→ 用户右气泡 + 助手左气泡 + 「已应用 3 条命令（addNode×2、connect）」徽标 + 「撤销本轮」按钮 + 画布即时出现 源图→生成 连线 + 「画布助手已更新画布 · 修订 1」提示，截图存档 |
+| 进程清理 | e2e/冒烟/自验后 web/worker/dev 全部 taskkill；:3000/:3100 无监听；无本仓 node 残留进程 |
+
+**范围纪律（规则 13）发现但未修：** `shot-plan-roles.integration.test.ts` 在 RUN_INTEGRATION=1 下本地 5s 超时为预存问题（干净 HEAD 同样失败，与本 PR 无关）；chat-sessions GET 列表实际响应形状为 `{ items: [...] }`（与任务书描述的裸数组有出入，openapi 按实际形状注册）；ChatPanel 发送与 PR-2 的 500ms debounce 自动保存存在窗口竞态（Agent 批次落库与 debounce PATCH 并发时以后到者为准，经 revisionRef 重同步兜底）；kie agent 的 system prompt 未列出各节点可用 handle 名，真实模型容易编造 handle 导致批次被 domain 校验拒绝（降级路径已兜住，prompt 改进留后续）；e2e 起 web 需同时覆盖 `PLANNER_PROVIDER=fake`（本地 .env 为 kie，否则 W3-A 段会走真 planner）。
+
+**Status:** **DONE** (not VERIFIED). Per V2 rule, VERIFIED requires a fresh-context re-review + owner merge + green main CI.
