@@ -199,6 +199,8 @@ model Workspace {
   workflowDrafts      WorkflowDraft[]
   workflowRevisions   WorkflowRevision[]
   workflowCommandBatches WorkflowCommandBatch[]
+  chatSessions         ChatSession[]
+  chatMessages         ChatMessage[]
   generationRuns      GenerationRun[]
   generationItems     GenerationItem[]
   generationAttempts  GenerationAttempt[]
@@ -269,6 +271,7 @@ model Project {
   exportBundles    ExportBundle[]
   variants         Variant[]
   variantRuns      VariantRun[]
+  chatSessions     ChatSession[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, sku])
@@ -613,6 +616,7 @@ model Workflow {
   draft           WorkflowDraft?
   revisions       WorkflowRevision[] @relation("WorkflowRevisions")
   commandBatches  WorkflowCommandBatch[]
+  chatSessions    ChatSession[]
 
   @@unique([workspaceId, id])
   @@index([workspaceId, projectId])
@@ -660,7 +664,6 @@ model WorkflowRevision {
 }
 
 // ─── V2 PR-2: canvas command batches ─────────────────────────────────────────
-
 /// Applied canvas command batch (V2 PR-2). Idempotent by (workflow_id, batch_id);
 /// before/after graphs + undone_at power server-side undo/redo.
 model WorkflowCommandBatch {
@@ -1402,4 +1405,60 @@ model VariantItem {
   @@index([workspaceId, variantId, slot])
   @@index([workspaceId, variantRunId])
   @@map("variant_items")
+}
+
+// ─── V2 PR-4: chat agent sessions / messages ─────────────────────────────────
+
+enum ChatMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+/// Chat agent session (V2 PR-4). Bound to a project, optionally to a workflow;
+/// spentMicrounits accumulates the estimated cost of agent-triggered runs and
+/// is checked against budgetLimitJson by the session budget gate.
+model ChatSession {
+  id               String    @id @db.Uuid
+  workspaceId      String    @map("workspace_id") @db.Uuid
+  projectId        String    @map("project_id") @db.Uuid
+  workflowId       String?   @map("workflow_id") @db.Uuid
+  title            String?
+  budgetLimitJson  Json?     @map("budget_limit_json")
+  spentMicrounits  BigInt    @default(0) @map("spent_microunits")
+  createdByUserId  String    @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  project   Project    @relation(fields: [workspaceId, projectId], references: [workspaceId, id], onDelete: Restrict)
+  workflow  Workflow?  @relation(fields: [workspaceId, workflowId], references: [workspaceId, id], onDelete: Restrict)
+  messages  ChatMessage[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, projectId, createdAt])
+  @@map("chat_sessions")
+}
+
+/// Immutable chat message (no updatedAt — append-only). Assistant messages
+/// reference the applied command batch via batchId.
+model ChatMessage {
+  id          String          @id @db.Uuid
+  workspaceId String          @map("workspace_id") @db.Uuid
+  sessionId   String          @map("session_id") @db.Uuid
+  role        ChatMessageRole
+  contentJson Json            @map("content_json")
+  batchId     String?         @map("batch_id") @db.Uuid
+  provider    String?
+  modelId     String?         @map("model_id")
+  latencyMs   Int?            @map("latency_ms")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  session   ChatSession @relation(fields: [workspaceId, sessionId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, sessionId, createdAt])
+  @@map("chat_messages")
 }
