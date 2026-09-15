@@ -32,6 +32,12 @@ import {
   MaterializeShotPlanResponseSchema,
 } from './workflow.js';
 import {
+  ApplyWorkflowCommandsRequestSchema,
+  ApplyWorkflowCommandsResponseSchema,
+  UndoWorkflowCommandsRequestSchema,
+  RedoWorkflowCommandsRequestSchema,
+} from './workflow-commands.js';
+import {
   CreateRunRequestSchema,
   CreateRunResponseSchema,
   ModelRegistryResponseSchema,
@@ -88,6 +94,10 @@ registry.register('CreateRunRequest', CreateRunRequestSchema);
 registry.register('CreateRunResponse', CreateRunResponseSchema);
 registry.register('ModelRegistryResponse', ModelRegistryResponseSchema);
 registry.register('GenerationRun', GenerationRunSchema);
+registry.register('ApplyWorkflowCommandsRequest', ApplyWorkflowCommandsRequestSchema);
+registry.register('ApplyWorkflowCommandsResponse', ApplyWorkflowCommandsResponseSchema);
+registry.register('UndoWorkflowCommandsRequest', UndoWorkflowCommandsRequestSchema);
+registry.register('RedoWorkflowCommandsRequest', RedoWorkflowCommandsRequestSchema);
 
 registry.registerPath({
   method: 'post',
@@ -296,6 +306,63 @@ registry.registerPath({
   },
   responses: {
     201: { description: 'Snapshot created' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/workflows/{workflowId}/commands',
+  summary: 'Apply ordered command batch (idempotent batchId; 409 on revision conflict)',
+  request: {
+    body: { content: { 'application/json': { schema: ApplyWorkflowCommandsRequestSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Applied (or idempotent replay)',
+      content: { 'application/json': { schema: ApplyWorkflowCommandsResponseSchema } },
+    },
+    409: {
+      description: 'Optimistic lock conflict',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/workflows/{workflowId}/commands/undo',
+  summary: 'Undo a command batch (409 WORKFLOW_UNDO_CONFLICT)',
+  request: {
+    body: { content: { 'application/json': { schema: UndoWorkflowCommandsRequestSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Undone — returns latest draft',
+      content: { 'application/json': { schema: WorkflowDraftSchema } },
+    },
+    409: {
+      description: 'Undo conflict',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/workflows/{workflowId}/commands/redo',
+  summary: 'Redo an undone command batch (409 WORKFLOW_UNDO_CONFLICT)',
+  request: {
+    body: { content: { 'application/json': { schema: RedoWorkflowCommandsRequestSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Redone — returns latest draft',
+      content: { 'application/json': { schema: WorkflowDraftSchema } },
+    },
+    409: {
+      description: 'Redo conflict',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
   },
 });
 

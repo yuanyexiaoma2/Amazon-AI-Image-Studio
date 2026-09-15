@@ -17,9 +17,10 @@
  *     Playwright is not in this repo; API-level new-project→ZIP is the W6-08 chain.
  *     INSPECT_INLINE also runs QA/export inline (QA_INLINE / EXPORT_INLINE optional).
  * 11) W7: variants 3×7 Fake batch, partial fail/retry, ledger, structure/logo BLOCK, admin
+ * 12) V2 PR-2: canvas command layer — apply/idempotency/undo/redo/run/budget gate + masks list
  */
 import { setTimeout as sleep } from 'node:timers/promises';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 
 const base = (process.env.APP_URL ?? 'http://127.0.0.1:3000').replace(/\/$/, '');
@@ -1399,6 +1400,229 @@ async function main() {
   if (!rbgItem || rbgItem.status !== 'SUCCEEDED') fail('W5-04 replace_background item', rbgItem);
   if (!inpItem || inpItem.status !== 'SUCCEEDED') fail('W5-05 inpaint item', inpItem);
   ok('W5-04/05 Fake replace_background + inpaint succeeded');
+
+  // ─── V2 PR-2: canvas command layer (commands / undo / redo / run / masks list) ───
+  const v2WfCreate = await fetch(
+    `${base}/api/workspaces/${wsW2}/projects/${projectId}/workflows`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: jarW2.header(),
+        'x-request-id': `e2e-v2-wf-create-${suffix}`,
+      },
+      body: JSON.stringify({ name: 'E2E V2 commands workflow' }),
+    },
+  );
+  const v2WfCreated = await v2WfCreate.json();
+  if (v2WfCreate.status !== 201) fail('V2 workflow create', { status: v2WfCreate.status, v2WfCreated });
+  const v2WorkflowId = v2WfCreated.workflowId;
+  let v2Rev = v2WfCreated.revisionNumber;
+  ok(`V2 create empty workflow ${v2WorkflowId.slice(0, 8)}…`);
+
+  const v2CommandsUrl = `${base}/api/workspaces/${wsW2}/workflows/${v2WorkflowId}/commands`;
+  const v2Headers = (reqId) => ({
+    'content-type': 'application/json',
+    cookie: jarW2.header(),
+    'x-request-id': reqId,
+  });
+
+  const v2Batch1 = randomUUID();
+  const v2ApplyBody = {
+    ifRevision: v2Rev,
+    batchId: v2Batch1,
+    commands: [
+      { type: 'addNode', nodeType: 'source_image', nodeId: 'v2src', position: { x: 0, y: 0 } },
+      {
+        type: 'addNode',
+        nodeType: 'generate',
+        nodeId: 'v2gen',
+        position: { x: 260, y: 0 },
+        config: { schemaVersion: 1, modelKey: 'primary-image-edit', count: 1 },
+      },
+      {
+        type: 'connect',
+        edgeId: 'v2e1',
+        source: 'v2src',
+        sourceHandle: 'image',
+        target: 'v2gen',
+        targetHandle: 'references',
+      },
+      {
+        type: 'configure',
+        nodeId: 'v2gen',
+        config: { schemaVersion: 1, modelKey: 'primary-image-edit', ratio: '1:1', resolution: '2K', count: 1 },
+      },
+    ],
+  };
+  const v2Apply = await fetch(v2CommandsUrl, {
+    method: 'POST',
+    headers: v2Headers(`e2e-v2-apply-${suffix}`),
+    body: JSON.stringify(v2ApplyBody),
+  });
+  const v2ApplyJson = await v2Apply.json();
+  if (v2Apply.status !== 200) fail('V2 apply commands', { status: v2Apply.status, v2ApplyJson });
+  if (v2ApplyJson.batchId !== v2Batch1) fail('V2 batchId mismatch', v2ApplyJson);
+  if (v2ApplyJson.revisionNumber !== v2Rev + 1) fail('V2 revision not advanced', v2ApplyJson);
+  if (v2ApplyJson.graph?.nodes?.length !== 2) fail('V2 expected 2 nodes', v2ApplyJson.graph);
+  if (v2ApplyJson.graph?.edges?.length !== 1) fail('V2 expected 1 edge', v2ApplyJson.graph);
+  v2Rev = v2ApplyJson.revisionNumber;
+  ok('V2 commands: addNode×2 + connect + configure applied');
+
+  const v2Replay = await fetch(v2CommandsUrl, {
+    method: 'POST',
+    headers: v2Headers(`e2e-v2-replay-${suffix}`),
+    body: JSON.stringify(v2ApplyBody),
+  });
+  const v2ReplayJson = await v2Replay.json();
+  if (v2Replay.status !== 200) fail('V2 idempotent replay', { status: v2Replay.status, v2ReplayJson });
+  if (v2ReplayJson.revisionNumber !== v2Rev) fail('V2 replay bumped revision', v2ReplayJson);
+  if (v2ReplayJson.graph?.nodes?.length !== 2) fail('V2 replay duplicated nodes', v2ReplayJson.graph);
+  ok('V2 batchId idempotent replay (no revision bump, no dup nodes)');
+
+  const v2BadConnect = await fetch(v2CommandsUrl, {
+    method: 'POST',
+    headers: v2Headers(`e2e-v2-badconnect-${suffix}`),
+    body: JSON.stringify({
+      ifRevision: v2Rev,
+      batchId: randomUUID(),
+      commands: [
+        { type: 'connect', source: 'v2src', sourceHandle: 'image', target: 'v2src', targetHandle: 'image' },
+      ],
+    }),
+  });
+  const v2BadConnectJson = await v2BadConnect.json();
+  if (v2BadConnect.status !== 400 || v2BadConnectJson.error?.code !== 'VALIDATION_ERROR') {
+    fail('V2 expected self-loop 400 VALIDATION_ERROR', { status: v2BadConnect.status, v2BadConnectJson });
+  }
+  ok('V2 illegal connect (self-loop) rejected 400');
+
+  const v2Undo = await fetch(`${v2CommandsUrl}/undo`, {
+    method: 'POST',
+    headers: v2Headers(`e2e-v2-undo-${suffix}`),
+    body: JSON.stringify({ ifRevision: v2Rev }),
+  });
+  const v2UndoJson = await v2Undo.json();
+  if (v2Undo.status !== 200) fail('V2 undo', { status: v2Undo.status, v2UndoJson });
+  if (v2UndoJson.graph?.nodes?.length !== 0) fail('V2 undo did not restore pre-batch graph', v2UndoJson.graph);
+  v2Rev = v2UndoJson.revisionNumber;
+  ok('V2 undo restored pre-batch graph');
+
+  const v2Undo2 = await fetch(`${v2CommandsUrl}/undo`, {
+    method: 'POST',
+    headers: v2Headers(`e2e-v2-undo2-${suffix}`),
+    body: JSON.stringify({ ifRevision: v2Rev }),
+  });
+  const v2Undo2Json = await v2Undo2.json();
+  if (v2Undo2.status !== 409 || v2Undo2Json.error?.code !== 'WORKFLOW_UNDO_CONFLICT') {
+    fail('V2 expected second undo 409', { status: v2Undo2.status, v2Undo2Json });
+  }
+  if (!v2Undo2Json.error?.details?.reason) fail('V2 undo conflict missing details.reason', v2Undo2Json);
+  ok('V2 second undo → 409 WORKFLOW_UNDO_CONFLICT (details.reason)');
+
+  const v2Redo = await fetch(`${v2CommandsUrl}/redo`, {
+    method: 'POST',
+    headers: v2Headers(`e2e-v2-redo-${suffix}`),
+    body: JSON.stringify({ ifRevision: v2Rev }),
+  });
+  const v2RedoJson = await v2Redo.json();
+  if (v2Redo.status !== 200) fail('V2 redo', { status: v2Redo.status, v2RedoJson });
+  if (v2RedoJson.graph?.nodes?.length !== 2 || v2RedoJson.graph?.edges?.length !== 1) {
+    fail('V2 redo did not restore batch graph', v2RedoJson.graph);
+  }
+  v2Rev = v2RedoJson.revisionNumber;
+  ok('V2 redo restored batch graph');
+
+  const v2Stale = await fetch(v2CommandsUrl, {
+    method: 'POST',
+    headers: v2Headers(`e2e-v2-stale-${suffix}`),
+    body: JSON.stringify({
+      ifRevision: 0,
+      batchId: randomUUID(),
+      commands: [{ type: 'rename', name: 'stale rename' }],
+    }),
+  });
+  const v2StaleJson = await v2Stale.json();
+  if (v2Stale.status !== 409 || v2StaleJson.error?.code !== 'WORKFLOW_REVISION_CONFLICT') {
+    fail('V2 expected stale ifRevision 409', { status: v2Stale.status, v2StaleJson });
+  }
+  ok('V2 stale ifRevision → 409 WORKFLOW_REVISION_CONFLICT');
+
+  const v2Run = await fetch(v2CommandsUrl, {
+    method: 'POST',
+    headers: v2Headers(`e2e-v2-run-${suffix}`),
+    body: JSON.stringify({
+      ifRevision: v2Rev,
+      batchId: randomUUID(),
+      commands: [
+        {
+          type: 'run',
+          scope: { type: 'NODES', nodeIds: ['v2gen'] },
+          idempotencyKey: `e2e-v2-run-${suffix}`,
+          budgetLimit: { currency: 'USD', amount: 5 },
+          confirmBudget: true,
+        },
+      ],
+    }),
+  });
+  const v2RunJson = await v2Run.json();
+  if (v2Run.status !== 200) fail('V2 run command', { status: v2Run.status, v2RunJson });
+  if (!v2RunJson.run?.id) fail('V2 run command missing run', v2RunJson);
+  v2Rev = v2RunJson.revisionNumber;
+  ok('V2 run command (scope NODES) returned run');
+
+  let v2RunFinal = null;
+  for (let i = 0; i < 50; i++) {
+    const g = await fetch(`${base}/api/workspaces/${wsW2}/runs/${v2RunJson.run.id}`, {
+      headers: { cookie: jarW2.header(), 'x-request-id': `e2e-v2-run-poll-${suffix}-${i}` },
+    });
+    v2RunFinal = await g.json();
+    const st = v2RunFinal.status ?? v2RunFinal.run?.status;
+    if (['SUCCEEDED', 'FAILED_FINAL', 'FAILED_RETRYABLE', 'CANCELED'].includes(st)) break;
+    await sleep(250);
+  }
+  const v2RunStatus = v2RunFinal?.status ?? v2RunFinal?.run?.status;
+  if (v2RunStatus !== 'SUCCEEDED') fail('V2 run did not succeed', v2RunFinal);
+  ok('V2 run command settled → SUCCEEDED');
+
+  const v2Budget = await fetch(v2CommandsUrl, {
+    method: 'POST',
+    headers: v2Headers(`e2e-v2-budget-${suffix}`),
+    body: JSON.stringify({
+      ifRevision: v2Rev,
+      batchId: randomUUID(),
+      commands: [
+        {
+          type: 'run',
+          scope: { type: 'NODES', nodeIds: ['v2gen'] },
+          idempotencyKey: `e2e-v2-budget-${suffix}`,
+          budgetLimit: { currency: 'USD', amount: 0.000001 },
+          confirmBudget: false,
+        },
+      ],
+    }),
+  });
+  const v2BudgetJson = await v2Budget.json();
+  if (v2Budget.status !== 402 || v2BudgetJson.error?.code !== 'BUDGET_EXCEEDED') {
+    fail('V2 expected run budget gate 402', { status: v2Budget.status, v2BudgetJson });
+  }
+  if (v2BudgetJson.error?.details?.commandsApplied !== true) {
+    fail('V2 budget gate missing details.commandsApplied=true', v2BudgetJson);
+  }
+  ok('V2 run budget gate 402 BUDGET_EXCEEDED (commandsApplied=true)');
+
+  const v2Masks = await fetch(
+    `${base}/api/workspaces/${wsW2}/asset-versions/${asset.currentVersionId}/masks`,
+    { headers: { cookie: jarW2.header(), 'x-request-id': `e2e-v2-masks-${suffix}` } },
+  );
+  const v2MasksJson = await v2Masks.json();
+  if (v2Masks.status !== 200) fail('V2 masks list', { status: v2Masks.status, v2MasksJson });
+  if (!Array.isArray(v2MasksJson.items)) fail('V2 masks list missing items array', v2MasksJson);
+  if (!v2MasksJson.items.some((m) => m.id === maskId)) {
+    fail('V2 masks list missing W5-B mask', v2MasksJson);
+  }
+  ok('V2 masks list endpoint (reuses W5-B mask)');
+  console.log('E2E PASS: V2 canvas commands (apply/idempotency/validate/undo/redo/conflict/run/budget/masks)');
 
   // ─── W5-C: outpaint + upscale ───
   const w5cGraph = {
