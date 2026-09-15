@@ -615,7 +615,7 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 ---
 
-## PR-4 — 聊天 Agent 面板 (DONE)
+## PR-4 — 聊天 Agent 面板 (VERIFIED)
 
 **Branch:** `feat/v2-chat-agent` (from main `7cc04d6`，即 PR #24/#25/#26 合并后)
 **Acceptance unit (one PR, one independent review):** V2 vision §3 PR-4 + §2.3/§2.6 — 聊天 Agent 作为画布第三操作者（LLM 输出 JSON 命令批次 → Zod 校验 → 复用 PR-2 命令层执行），会话级预算闸门复用 W4 预算语义，每轮一个可撤销批次。**Merging is performed by the owner** (V2 rule); implementer only opens the PR.
@@ -646,4 +646,21 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 **范围纪律（规则 13）发现但未修：** `shot-plan-roles.integration.test.ts` 在 RUN_INTEGRATION=1 下本地 5s 超时为预存问题（干净 HEAD 同样失败，与本 PR 无关）；chat-sessions GET 列表实际响应形状为 `{ items: [...] }`（与任务书描述的裸数组有出入，openapi 按实际形状注册）；ChatPanel 发送与 PR-2 的 500ms debounce 自动保存存在窗口竞态（Agent 批次落库与 debounce PATCH 并发时以后到者为准，经 revisionRef 重同步兜底）；kie agent 的 system prompt 未列出各节点可用 handle 名，真实模型容易编造 handle 导致批次被 domain 校验拒绝（降级路径已兜住，prompt 改进留后续）；e2e 起 web 需同时覆盖 `PLANNER_PROVIDER=fake`（本地 .env 为 kie，否则 W3-A 段会走真 planner）。
 
-**Status:** **DONE** (not VERIFIED). Per V2 rule, VERIFIED requires a fresh-context re-review + owner merge + green main CI.
+### PR-4 fresh-context review (V2 rule 12b) — REVIEW PASS
+
+独立复审会话（与实现无共享上下文）逐条核验 7 条验收标准并亲自重跑全部检查，复审留言：[PR #28 comment](https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/28#issuecomment-5676915975)。复审中经所有者授权直接修复 4 项（其中 4 项原为上面的「范围外发现」）：
+
+| Commit | 修复 |
+|---|---|
+| `b5ab66d` | kie system prompt 内嵌 `buildNodeHandleDoc()`（由 domain NODE_REGISTRY 生成各节点合法端口名）+ 3 个防漂移单测 |
+| `92745b1` | shot-plan-roles 集成测试 per-test `timeout: 30_000`（web 集成修后 30/30） |
+| `983318b` | `applyExternal` 先 `await flush()` 发出未发送的本地编辑再同步 revision（不再静默丢弃） |
+| `33354c5` | e2e 脚本头 + AGENTS.md 写明服务端必须显式覆盖三 provider=fake |
+
+复审重跑（修复后 head `33354c5`）：lint/typecheck/build exit 0；根 test 全绿；db 集成 40/40；web 集成（fake）30/30；e2e（web :3100 + worker，全 Fake）PASS exit 0（PR-4 段 11 断言全过）；head CI 绿。
+
+**Merge（所有者明确指示）：** squash merge PR #27 → main `d43f362c27423fd25e414d5bb164543d003e9849`（[CI run 34945564788](https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34945564788) 绿）；squash merge PR #28 → main `28ed7a24e0053b84309f01436d429694337a3c36`（[CI run 34945585886](https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34945585886) 绿）。
+
+**不修仅记录（留 PR 后续）：** 会话预算创建后不可改（功能缺口）；会话预算为 estimate 口径软闸门（并发 turn 理论可小幅超支，run 级 W4 闸门仍为硬约束）。
+
+**Status:** **VERIFIED** — 全新上下文复审 REVIEW PASS（PR #28 留言）+ 已合并 main `28ed7a2` + main CI 绿（run 34945585886）。
