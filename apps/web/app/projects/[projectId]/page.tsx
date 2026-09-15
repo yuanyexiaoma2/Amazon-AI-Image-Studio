@@ -290,6 +290,10 @@ function ProjectDetailInner() {
   return (
     <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
       <div style={{ marginBottom: 12 }}>
+        <a href={`/projects/${projectId}/wizard?workspaceId=${workspaceId}`} style={{ color: '#9db7ff' }}>
+          意图向导（一句话 → 一套图）→
+        </a>
+        {' · '}
         <a href={`/projects/${projectId}/studio?workspaceId=${workspaceId}`} style={{ color: '#9db7ff' }}>
           打开 Studio 画布 →
         </a>

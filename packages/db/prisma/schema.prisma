@@ -175,6 +175,8 @@ model Workspace {
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  /** V2: personal self-use mode — plan/QA gates may auto-approve (audited). */
+  autoApproveGates Boolean @default(false) @map("auto_approve_gates")
 
   owner               User                   @relation("WorkspaceOwner", fields: [ownerUserId], references: [id])
   members             WorkspaceMember[]

@@ -34,6 +34,10 @@ const envSchema = z.object({
   KIE_CREATE_RATE_WINDOW_MS: z.string().optional(),
   KIE_WORKER_CONCURRENCY_CAP: z.string().optional(),
   PROVIDER_POLL_INTERVAL_MS: z.string().optional(),
+  // V2 planner agent — real LLM planner via kie.ai OpenAI-compatible chat
+  // completions (reuses KIE_API_KEY). Default fake (offline deterministic).
+  PLANNER_PROVIDER: z.enum(['fake', 'kie']).default('fake'),
+  KIE_LLM_MODEL: z.string().optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

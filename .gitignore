@@ -37,3 +37,4 @@ packages/db/prisma/*.db-journal
 # test / playwright
 test-results/
 playwright-report/
+.env.bak

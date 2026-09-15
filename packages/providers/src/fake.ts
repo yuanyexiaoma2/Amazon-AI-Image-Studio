@@ -135,23 +135,43 @@ export class FakeShotPlanProvider implements ShotPlanProvider {
         ? brandFact.value.trim()
         : sku.split('-')[0] || 'Acme';
 
-    const briefs = DEFAULT_SEVEN_IMAGE_TEMPLATE.map((t) => ({
-      slot: t.slot,
-      purpose: t.purpose,
-      orderIndex: t.orderIndex,
-      aspectRatio: t.aspectRatio,
-      targetPixels: { ...t.targetPixels },
-      copy:
-        t.slot === 'FEATURE'
-          ? [{ text: `${brand} highlight`, source: 'fake-planner' }]
-          : t.slot === 'DIMENSION'
-            ? [{ text: 'Use confirmed dimensions only', source: 'fake-planner' }]
-            : [],
-      must: [...t.must],
-      mustNot: [...t.mustNot],
-      qaPolicy: t.qaPolicy,
-      referencedAssetVersionIds: [],
-    }));
+    // V2: weave owner intent deterministically — segments become FEATURE
+    // selling points (copy source 'intent'); full intent flavors LIFESTYLE.
+    const intentSegments = (request.intent ?? '')
+      .split(/[、,，;；。\n]/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+      .slice(0, 4);
+    let featureIdx = 0;
+
+    const briefs = DEFAULT_SEVEN_IMAGE_TEMPLATE.map((t) => {
+      const isFeature = t.slot === 'FEATURE';
+      const segment = isFeature ? intentSegments[featureIdx++] : undefined;
+      return {
+        slot: t.slot,
+        purpose:
+          segment != null
+            ? `${t.purpose}: ${segment}`
+            : t.slot === 'LIFESTYLE' && request.intent?.trim()
+              ? `${t.purpose} — scene from owner intent`
+              : t.purpose,
+        orderIndex: t.orderIndex,
+        aspectRatio: t.aspectRatio,
+        targetPixels: { ...t.targetPixels },
+        copy:
+          segment != null
+            ? [{ text: segment.slice(0, 200), source: 'intent' }]
+            : t.slot === 'FEATURE'
+              ? [{ text: `${brand} highlight`, source: 'fake-planner' }]
+              : t.slot === 'DIMENSION'
+                ? [{ text: 'Use confirmed dimensions only', source: 'fake-planner' }]
+                : [],
+        must: [...t.must],
+        mustNot: [...t.mustNot],
+        qaPolicy: t.qaPolicy,
+        referencedAssetVersionIds: [],
+      };
+    });
 
     if (request.includePackage) {
       briefs.push({

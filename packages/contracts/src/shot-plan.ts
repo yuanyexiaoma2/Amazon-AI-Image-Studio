@@ -83,6 +83,10 @@ export const GenerateShotPlanRequestSchema = z.object({
   /** Optional; server uses project's approved Truth revision when omitted. */
   truthRevisionId: z.string().uuid().optional(),
   includePackage: z.boolean().optional(),
+  /** V2: free-text owner intent — selling points / scenes / style for the planner. */
+  intent: z.string().max(2000).optional(),
+  /** V2: when true, server auto-approves if the workspace has autoApproveGates on. */
+  autoApprove: z.boolean().optional(),
 });
 
 export const SaveShotPlanRequestSchema = z.object({
