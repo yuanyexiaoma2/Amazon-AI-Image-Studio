@@ -164,8 +164,9 @@ function StudioCanvasInner(props: {
   workspaceId: string;
   projectId: string;
   workflowId?: string | null;
+  belowStepper?: boolean;
 }) {
-  const { workspaceId, projectId, workflowId: requestedWorkflowId } = props;
+  const { workspaceId, projectId, workflowId: requestedWorkflowId, belowStepper } = props;
   const { fitView } = useReactFlow();
   const [draft, setDraft] = useState<WorkflowDraftPayload | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -796,7 +797,11 @@ function StudioCanvasInner(props: {
       : null;
 
   return (
-    <div role="application" aria-label="Studio 工作流画布" className="studio-grid">
+    <div
+      role="application"
+      aria-label="Studio 工作流画布"
+      className={belowStepper ? 'studio-grid studio-grid-below-stepper' : 'studio-grid'}
+    >
       <aside aria-label="节点库" className="studio-aside studio-aside-left">
         <div style={{ fontWeight: 700, marginBottom: 'var(--space-2)' }} id="node-library-heading">
           节点库
@@ -1086,6 +1091,7 @@ export function StudioCanvas(props: {
   workspaceId: string;
   projectId: string;
   workflowId?: string | null;
+  belowStepper?: boolean;
 }) {
   return (
     <ReactFlowProvider>

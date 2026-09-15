@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { StudioCanvas } from '@/components/studio/StudioCanvas';
+import { ProjectStepper } from '@/components/project-stepper';
 import { Spinner } from '@/components/ui';
 import { useWorkspace } from '@/lib/use-workspace';
 
@@ -30,7 +31,17 @@ function StudioInner() {
   }
 
   return (
-    <StudioCanvas workspaceId={workspaceId} projectId={projectId} workflowId={workflowId} />
+    <div>
+      <div className="stepper-bar">
+        <ProjectStepper projectId={projectId} input={{ hasWorkflow: true }} />
+      </div>
+      <StudioCanvas
+        workspaceId={workspaceId}
+        projectId={projectId}
+        workflowId={workflowId}
+        belowStepper
+      />
+    </div>
   );
 }
 

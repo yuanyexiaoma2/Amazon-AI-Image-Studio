@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Button, EmptyState, ErrorBanner, Select, Spinner } from '@/components/ui';
+import { ProjectStepper } from '@/components/project-stepper';
 import { useWorkspace } from '@/lib/use-workspace';
 
 type Finding = {
@@ -205,6 +206,7 @@ function ReviewInner() {
 
   return (
     <main className="container container-wide" role="main" aria-labelledby="review-title">
+      <ProjectStepper projectId={projectId} input={{ hasQaReports: reports.length > 0 }} />
       <p className="row">
         <Link href={projectHref(`/projects/${projectId}`)}>← 项目</Link>
         <Link href={projectHref(`/projects/${projectId}/studio`)}>Studio</Link>

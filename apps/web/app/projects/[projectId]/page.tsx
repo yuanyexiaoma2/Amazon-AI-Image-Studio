@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Badge, Button, EmptyState, Spinner } from '@/components/ui';
+import { ProjectStepper } from '@/components/project-stepper';
 import { useWorkspace } from '@/lib/use-workspace';
 
 type Asset = {
@@ -64,6 +65,7 @@ function ProjectDetailInner() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [pack, setPack] = useState<TruthPack | null>(null);
   const [shotPlan, setShotPlan] = useState<ShotPlan | null>(null);
+  const [workflowCount, setWorkflowCount] = useState(0);
   const [msg, setMsg] = useState<string>('');
   const [uploading, setUploading] = useState(false);
 
@@ -71,17 +73,20 @@ function ProjectDetailInner() {
 
   const refresh = useCallback(async () => {
     if (!workspaceId || !projectId) return;
-    const [aRes, tRes, sRes] = await Promise.all([
+    const [aRes, tRes, sRes, wRes] = await Promise.all([
       fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/assets`),
       fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/truth-pack`),
       fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/shot-plans`),
+      fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/workflows`),
     ]);
     const aJson = await aRes.json();
     const tJson = await tRes.json();
     const sJson = await sRes.json();
+    const wJson = wRes.ok ? await wRes.json() : null;
     setAssets(aJson.items ?? []);
     setPack(tJson);
     setShotPlan(sJson);
+    setWorkflowCount(wJson?.items?.length ?? 0);
   }, [workspaceId, projectId]);
 
   useEffect(() => {
@@ -323,6 +328,15 @@ function ProjectDetailInner() {
 
   return (
     <div className="container">
+      <ProjectStepper
+        projectId={projectId}
+        input={{
+          hasAssets: assets.length > 0,
+          truthApproved: Boolean(pack?.approvedRevisionId),
+          shotPlanApproved: Boolean(shotPlan?.approvedRevisionId),
+          hasWorkflow: workflowCount > 0,
+        }}
+      />
       <div className="row" style={{ marginBottom: 'var(--space-3)' }}>
         <Link href={projectHref(`/projects/${projectId}/wizard`)}>
           意图向导（一句话 → 一套图）→
@@ -372,7 +386,7 @@ function ProjectDetailInner() {
         )}
       </section>
 
-      <section>
+      <section id="truth-pack">
         <h2>Truth Pack（产品真相包）</h2>
         <div className="row" style={{ marginBottom: 'var(--space-3)' }}>
           <Button onClick={extract}>抽取（Fake Vision）</Button>
@@ -414,7 +428,7 @@ function ProjectDetailInner() {
         )}
       </section>
 
-      <section style={{ marginTop: 'var(--space-6)' }}>
+      <section id="shot-plan" style={{ marginTop: 'var(--space-6)' }}>
         <h2>Shot Plan（拍摄计划）（W3-A）</h2>
         <div className="row" style={{ marginBottom: 'var(--space-3)' }}>
           <Button onClick={generateShotPlan} disabled={!pack?.approvedRevisionId}>

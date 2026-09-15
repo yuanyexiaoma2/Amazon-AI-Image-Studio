@@ -61,6 +61,8 @@
   --font-size-lg: 14px;
   --font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
     sans-serif;
+  --header-h: 57px;
+  --stepper-h: 41px;
 }
 
 /* reset */
@@ -288,15 +290,102 @@ code {
   white-space: pre-wrap;
 }
 
+/* project stepper */
+.stepper-bar {
+  height: var(--stepper-h);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.stepper-bar .stepper {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.stepper {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  margin-bottom: var(--space-4);
+}
+
+.stepper-step {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.stepper-step:hover {
+  text-decoration: none;
+  color: var(--text);
+}
+
+.stepper-step + .stepper-step::before {
+  content: '›';
+  margin-right: var(--space-2);
+  color: var(--border-emph);
+}
+
+.stepper-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border-emph);
+  font-size: var(--font-size-xs);
+}
+
+.stepper-done {
+  color: var(--ok-soft);
+}
+
+.stepper-done .stepper-marker {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.stepper-current {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.stepper-current .stepper-marker {
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
+}
+
+.stepper-todo {
+  color: var(--text-faint);
+}
+
 /* studio canvas layout */
 .studio-grid {
   display: grid;
   grid-template-columns: 220px 1fr 300px;
   grid-template-rows: 1fr 120px;
-  height: calc(100vh - 57px);
+  height: calc(100vh - var(--header-h));
   width: 100%;
   background: var(--bg);
   color: var(--text);
+}
+
+.studio-grid-below-stepper {
+  height: calc(100vh - var(--header-h) - var(--stepper-h));
 }
 
 .studio-aside {
@@ -446,7 +535,7 @@ code {
 }
 
 .site-main {
-  min-height: calc(100vh - 57px);
+  min-height: calc(100vh - var(--header-h));
 }
 
 /* thumbnail well for asset previews */
