@@ -17,6 +17,7 @@
     - b) `VERIFIED` 需要**全新上下文复审**：开一个**新会话**（与实现无共享上下文），只给 PR diff + 验收标准，重跑检查并在 PR 留言结论 + 记入 `docs/progress.md`。同一会话不得给自己的代码标 VERIFIED。
     - c) **合并动作由所有者执行或明确指示**（高风险：auth / 租户隔离 / DB migration / 计费 / 真实 Provider / 队列幂等 / 删除，必须所有者明确点头）。
     - d) VERIFIED = 全新上下文复审 PASS + 已合并 + main CI 绿。
+13. **范围纪律：** 只完成当前任务指定的事。执行中发现任务范围外的问题，在 PR 描述或 `docs/progress.md` 里记录报告，但不得顺手修改。
 
 
 ## Review & delivery policy (W2+)
