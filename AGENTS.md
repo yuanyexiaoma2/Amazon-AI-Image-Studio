@@ -55,6 +55,9 @@ pnpm worker       # bullmq worker (inspect + truth extract)
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 pnpm openapi:generate
 # E2E (web + worker must be running; or set INSPECT_INLINE=1 for in-process inspect):
+# IMPORTANT: the local .env may carry real providers (IMAGE_PROVIDER=kie etc.).
+# Always start the web/worker for e2e with explicit Fake overrides, e.g.:
+#   IMAGE_PROVIDER=fake CHAT_PROVIDER=fake PLANNER_PROVIDER=fake INSPECT_INLINE=1 GENERATION_INLINE=1 pnpm --filter @studio/web start &
 pnpm --filter @studio/web start &
 pnpm worker &
 pnpm test:e2e

@@ -19,6 +19,12 @@
  * 11) W7: variants 3×7 Fake batch, partial fail/retry, ledger, structure/logo BLOCK, admin
  * 12) V2 PR-2: canvas command layer — apply/idempotency/undo/redo/run/budget gate + masks list
  * 13) V2 PR-4: chat agent — session/turn/graph apply/run + session budget gate/undo/cross-tenant
+ *
+ * PROVIDER OVERRIDE REQUIRED: this script exercises the Fake providers only.
+ * The SERVER (web + worker) must be started with explicit fake overrides —
+ * IMAGE_PROVIDER=fake CHAT_PROVIDER=fake PLANNER_PROVIDER=fake — because the
+ * local .env may carry kie (real keys); the e2e script itself is client-side
+ * and cannot control server env. Never run e2e against real providers.
  */
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createHash, randomUUID } from 'node:crypto';
