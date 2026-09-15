@@ -2,8 +2,9 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { Button, EmptyState, ErrorBanner, Select, Spinner } from '@/components/ui';
+import { useWorkspace } from '@/lib/use-workspace';
 
 type Finding = {
   id: string;
@@ -37,8 +38,7 @@ type Approval = {
 
 function ReviewInner() {
   const params = useParams<{ projectId: string }>();
-  const search = useSearchParams();
-  const workspaceId = search.get('workspaceId');
+  const { workspaceId, loading: wsLoading, projectHref } = useWorkspace();
   const projectId = params.projectId;
   const [reports, setReports] = useState<Report[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
@@ -193,15 +193,21 @@ function ReviewInner() {
     return (
       <main className="container" role="main">
         <h1>审核</h1>
-        <ErrorBanner message="缺少 workspaceId 查询参数。请从项目页打开审核。" />
+        {wsLoading ? (
+          <Spinner label="正在解析工作空间…" />
+        ) : (
+          <p role="alert" className="banner-warn">
+            无法解析工作空间 — 请先从 <Link href="/projects">项目列表</Link> 打开项目。
+          </p>
+        )}
       </main>
     );
 
   return (
     <main className="container container-wide" role="main" aria-labelledby="review-title">
       <p className="row">
-        <Link href={`/projects/${projectId}?workspaceId=${workspaceId}`}>← 项目</Link>
-        <Link href={`/projects/${projectId}/studio?workspaceId=${workspaceId}`}>Studio</Link>
+        <Link href={projectHref(`/projects/${projectId}`)}>← 项目</Link>
+        <Link href={projectHref(`/projects/${projectId}/studio`)}>Studio</Link>
       </p>
       <h1 id="review-title">审核 — QA 发现、对比、批准</h1>
       <p className="muted" style={{ maxWidth: 720 }}>

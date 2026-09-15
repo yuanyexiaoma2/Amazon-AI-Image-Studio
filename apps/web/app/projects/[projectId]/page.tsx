@@ -2,8 +2,9 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Badge, Button, EmptyState } from '@/components/ui';
+import { useParams, useRouter } from 'next/navigation';
+import { Badge, Button, EmptyState, Spinner } from '@/components/ui';
+import { useWorkspace } from '@/lib/use-workspace';
 
 type Asset = {
   id: string;
@@ -57,9 +58,8 @@ type ShotPlan = {
 
 function ProjectDetailInner() {
   const params = useParams<{ projectId: string }>();
-  const search = useSearchParams();
   const router = useRouter();
-  const workspaceId = search.get('workspaceId');
+  const { workspaceId, loading: wsLoading, projectHref } = useWorkspace();
   const projectId = params.projectId;
   const [assets, setAssets] = useState<Asset[]>([]);
   const [pack, setPack] = useState<TruthPack | null>(null);
@@ -307,19 +307,30 @@ function ProjectDetailInner() {
   }
 
   if (!workspaceId) {
-    return <p className="container">缺少 workspaceId 查询参数。请从 /projects 打开。</p>;
+    if (wsLoading) {
+      return (
+        <p className="container">
+          <Spinner label="正在解析工作空间…" />
+        </p>
+      );
+    }
+    return (
+      <p className="container">
+        无法解析工作空间 — 请先从 <Link href="/projects">项目列表</Link> 登录并打开项目。
+      </p>
+    );
   }
 
   return (
     <div className="container">
       <div className="row" style={{ marginBottom: 'var(--space-3)' }}>
-        <Link href={`/projects/${projectId}/wizard?workspaceId=${workspaceId}`}>
+        <Link href={projectHref(`/projects/${projectId}/wizard`)}>
           意图向导（一句话 → 一套图）→
         </Link>
-        <Link href={`/projects/${projectId}/studio?workspaceId=${workspaceId}`}>
+        <Link href={projectHref(`/projects/${projectId}/studio`)}>
           打开 Studio 画布 →
         </Link>
-        <Link href={`/projects/${projectId}/review?workspaceId=${workspaceId}`}>
+        <Link href={projectHref(`/projects/${projectId}/review`)}>
           审核 / QA / 导出 →
         </Link>
         <Button onClick={createBlankCanvas}>新建空白画布</Button>
