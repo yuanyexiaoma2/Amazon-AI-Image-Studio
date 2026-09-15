@@ -8,6 +8,7 @@
  */
 import { useMemo } from 'react';
 import { MaskEditor } from './MaskEditor';
+import { AssetImage } from '../asset-image';
 import {
   CONFIG_FIELD_META,
   OPTION_LABEL_ZH,
@@ -182,6 +183,14 @@ export function PropertiesPanel(props: {
                       ))}
                     </select>
                     {hint && <span className="faint" style={{ fontSize: 'var(--font-size-xs)' }}>{hint}</span>}
+                    {f.source === 'assets' && current ? (
+                      <AssetImage
+                        workspaceId={workspaceId}
+                        versionId={current}
+                        size={64}
+                        alt={f.label}
+                      />
+                    ) : null}
                   </label>
                 );
               }

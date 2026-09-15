@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Badge, Button, EmptyState, Spinner } from '@/components/ui';
+import { AssetImage } from '@/components/asset-image';
 import { ProjectStepper } from '@/components/project-stepper';
 import { useWorkspace } from '@/lib/use-workspace';
 
@@ -375,11 +376,19 @@ function ProjectDetailInner() {
         {assets.length === 0 ? (
           <EmptyState>暂无素材</EmptyState>
         ) : (
-          <ul className="stack" style={{ gap: 'var(--space-2)', paddingLeft: 18 }}>
+          <ul className="stack" style={{ gap: 'var(--space-2)', paddingLeft: 0, listStyle: 'none' }}>
             {assets.map((a) => (
-              <li key={a.id}>
-                {a.originalFilename ?? a.id} — <Badge>{a.status}</Badge>
-                {a.currentVersionId ? ` · 版本 ${a.currentVersionId.slice(0, 8)}…` : ''}
+              <li key={a.id} className="row">
+                <AssetImage
+                  workspaceId={workspaceId}
+                  versionId={a.currentVersionId}
+                  size={48}
+                  alt={a.originalFilename ?? a.id}
+                />
+                <span>
+                  {a.originalFilename ?? a.id} — <Badge>{a.status}</Badge>
+                  {a.currentVersionId ? ` · 版本 ${a.currentVersionId.slice(0, 8)}…` : ''}
+                </span>
               </li>
             ))}
           </ul>

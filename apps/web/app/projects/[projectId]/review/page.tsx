@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { Button, EmptyState, ErrorBanner, Select, Spinner } from '@/components/ui';
 import { ProjectStepper } from '@/components/project-stepper';
 import { useWorkspace } from '@/lib/use-workspace';
+import { useAssetImage } from '@/lib/use-asset-image';
 
 type Finding = {
   id: string;
@@ -36,6 +37,42 @@ type Approval = {
   reason: string | null;
   decidedAt: string;
 };
+
+/** Real NORMALIZED_PNG underlay for the compare panel; falls back to the gray well. */
+function CompareImage(props: { workspaceId: string; versionId: string }) {
+  const { url, loading, error } = useAssetImage(
+    props.workspaceId,
+    props.versionId,
+    'NORMALIZED_PNG',
+  );
+  const [broken, setBroken] = useState(false);
+  if (url && !broken) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        className="compare-img"
+        src={url}
+        alt="候选图"
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  return (
+    <span
+      className="faint"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 'var(--font-size-sm)',
+      }}
+    >
+      {loading ? '图像加载中…' : `图像不可用（${error ?? '加载失败'}）— 显示灰底`}
+    </span>
+  );
+}
 
 function ReviewInner() {
   const params = useParams<{ projectId: string }>();
@@ -156,6 +193,9 @@ function ReviewInner() {
             report.overallStatus === 'BLOCK' ? 'compare-well compare-well-block' : 'compare-well'
           }
         >
+          {workspaceId ? (
+            <CompareImage workspaceId={workspaceId} versionId={report.assetVersionId} />
+          ) : null}
           {(report.findings ?? []).flatMap((f) =>
             (f.evidence?.regions ?? []).map((r, i) => (
               <div

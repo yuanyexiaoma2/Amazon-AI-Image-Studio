@@ -48,6 +48,7 @@ import {
   type MaskEditorState,
   type SelectedNodeInfo,
 } from './PropertiesPanel';
+import { AssetImage } from '../asset-image';
 import { NUMERIC_CONFIG_KEYS } from './config-options';
 
 type CanvasSnapshot = { nodes: Node[]; edges: Edge[] };
@@ -71,7 +72,7 @@ function nodeLabelZh(type: string): string {
   return NODE_LABEL_ZH[type] ?? getNodeDefinition(type)?.label ?? type;
 }
 
-function toFlowNodes(graph: WorkflowGraph): Node[] {
+function toFlowNodes(graph: WorkflowGraph, workspaceId: string): Node[] {
   return graph.nodes.map((n) => ({
     id: n.id,
     type: 'studio',
@@ -80,6 +81,7 @@ function toFlowNodes(graph: WorkflowGraph): Node[] {
       label: nodeLabelZh(n.type),
       nodeType: n.type,
       config: n.config ?? { schemaVersion: 1 },
+      workspaceId,
     },
   }));
 }
@@ -130,6 +132,14 @@ function StudioNodeView(props: NodeProps) {
   const nodeType = String((props.data as { nodeType?: string }).nodeType ?? '');
   const def = getNodeDefinition(nodeType);
   const label = String((props.data as { label?: string }).label ?? nodeType);
+  const data = props.data as {
+    workspaceId?: string;
+    config?: Record<string, unknown>;
+  };
+  const sourceVersionId =
+    nodeType === 'source_image' && typeof data.config?.assetVersionId === 'string'
+      ? (data.config.assetVersionId as string)
+      : null;
   return (
     <div className={props.selected ? 'studio-node studio-node-selected' : 'studio-node'}>
       {def?.inputPorts.map((p, i) => (
@@ -144,6 +154,16 @@ function StudioNodeView(props: NodeProps) {
       ))}
       <div style={{ fontWeight: 600 }}>{label}</div>
       <div className="faint" style={{ fontSize: 10 }}>{nodeType}</div>
+      {sourceVersionId ? (
+        <div style={{ marginTop: 4 }}>
+          <AssetImage
+            workspaceId={data.workspaceId ?? null}
+            versionId={sourceVersionId}
+            size={36}
+            alt={label}
+          />
+        </div>
+      ) : null}
       {def?.outputPorts.map((p, i) => (
         <Handle
           key={`out-${p.id}`}
@@ -253,9 +273,9 @@ function StudioCanvasInner(props: {
     (d: WorkflowDraftPayload) => {
       setDraft(d);
       revisionRef.current = d.revisionNumber;
-      applyLocalSnapshot({ nodes: toFlowNodes(d.graph), edges: toFlowEdges(d.graph) });
+      applyLocalSnapshot({ nodes: toFlowNodes(d.graph, workspaceId), edges: toFlowEdges(d.graph) });
     },
-    [applyLocalSnapshot],
+    [applyLocalSnapshot, workspaceId],
   );
 
   const loadOrCreate = useCallback(async () => {
@@ -506,7 +526,7 @@ function StudioCanvasInner(props: {
       id,
       type: 'studio',
       position,
-      data: { label: nodeLabelZh(type), nodeType: type, config },
+      data: { label: nodeLabelZh(type), nodeType: type, config, workspaceId },
     };
     const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
     const nextNodes = [...nodesRef.current, next];
