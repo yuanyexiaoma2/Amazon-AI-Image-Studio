@@ -1,7 +1,12 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { Badge, Button, EmptyState, Spinner } from '@/components/ui';
+import { AssetImage } from '@/components/asset-image';
+import { ProjectStepper } from '@/components/project-stepper';
+import { useWorkspace } from '@/lib/use-workspace';
 
 type Asset = {
   id: string;
@@ -55,13 +60,13 @@ type ShotPlan = {
 
 function ProjectDetailInner() {
   const params = useParams<{ projectId: string }>();
-  const search = useSearchParams();
   const router = useRouter();
-  const workspaceId = search.get('workspaceId');
+  const { workspaceId, loading: wsLoading, projectHref } = useWorkspace();
   const projectId = params.projectId;
   const [assets, setAssets] = useState<Asset[]>([]);
   const [pack, setPack] = useState<TruthPack | null>(null);
   const [shotPlan, setShotPlan] = useState<ShotPlan | null>(null);
+  const [workflowCount, setWorkflowCount] = useState(0);
   const [msg, setMsg] = useState<string>('');
   const [uploading, setUploading] = useState(false);
 
@@ -69,17 +74,20 @@ function ProjectDetailInner() {
 
   const refresh = useCallback(async () => {
     if (!workspaceId || !projectId) return;
-    const [aRes, tRes, sRes] = await Promise.all([
+    const [aRes, tRes, sRes, wRes] = await Promise.all([
       fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/assets`),
       fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/truth-pack`),
       fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/shot-plans`),
+      fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/workflows`),
     ]);
     const aJson = await aRes.json();
     const tJson = await tRes.json();
     const sJson = await sRes.json();
+    const wJson = wRes.ok ? await wRes.json() : null;
     setAssets(aJson.items ?? []);
     setPack(tJson);
     setShotPlan(sJson);
+    setWorkflowCount(wJson?.items?.length ?? 0);
   }, [workspaceId, projectId]);
 
   useEffect(() => {
@@ -305,37 +313,52 @@ function ProjectDetailInner() {
   }
 
   if (!workspaceId) {
-    return <p>缺少 workspaceId 查询参数。请从 /projects 打开。</p>;
+    if (wsLoading) {
+      return (
+        <p className="container">
+          <Spinner label="正在解析工作空间…" />
+        </p>
+      );
+    }
+    return (
+      <p className="container">
+        无法解析工作空间 — 请先从 <Link href="/projects">项目列表</Link> 登录并打开项目。
+      </p>
+    );
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
-      <div style={{ marginBottom: 12 }}>
-        <a href={`/projects/${projectId}/wizard?workspaceId=${workspaceId}`} style={{ color: '#9db7ff' }}>
+    <div className="container">
+      <ProjectStepper
+        projectId={projectId}
+        input={{
+          hasAssets: assets.length > 0,
+          truthApproved: Boolean(pack?.approvedRevisionId),
+          shotPlanApproved: Boolean(shotPlan?.approvedRevisionId),
+          hasWorkflow: workflowCount > 0,
+        }}
+      />
+      <div className="row" style={{ marginBottom: 'var(--space-3)' }}>
+        <Link href={projectHref(`/projects/${projectId}/wizard`)}>
           意图向导（一句话 → 一套图）→
-        </a>
-        {' · '}
-        <a href={`/projects/${projectId}/studio?workspaceId=${workspaceId}`} style={{ color: '#9db7ff' }}>
+        </Link>
+        <Link href={projectHref(`/projects/${projectId}/studio`)}>
           打开 Studio 画布 →
-        </a>
-        {' · '}
-        <a href={`/projects/${projectId}/review?workspaceId=${workspaceId}`} style={{ color: '#9db7ff' }}>
+        </Link>
+        <Link href={projectHref(`/projects/${projectId}/review`)}>
           审核 / QA / 导出 →
-        </a>
-        {' · '}
-        <button type="button" onClick={createBlankCanvas}>
-          新建空白画布
-        </button>
+        </Link>
+        <Button onClick={createBlankCanvas}>新建空白画布</Button>
       </div>
       <h1>项目素材 + Truth Pack（产品真相包） + Shot Plan（拍摄计划）</h1>
-      <p style={{ opacity: 0.75 }}>
+      <p className="muted">
         上传 → 批准 Truth Pack → 生成 7 镜计划（Fake） → 批准 → 一键物化（W3-B2）。当前仅 Fake 模式。
       </p>
       <p>
         <strong>{msg}</strong>
       </p>
 
-      <section style={{ marginBottom: 24 }}>
+      <section style={{ marginBottom: 'var(--space-6)' }}>
         <h2>上传</h2>
         <input
           type="file"
@@ -348,37 +371,49 @@ function ProjectDetailInner() {
         />
       </section>
 
-      <section style={{ marginBottom: 24 }}>
+      <section style={{ marginBottom: 'var(--space-6)' }}>
         <h2>素材库</h2>
-        <ul>
-          {assets.map((a) => (
-            <li key={a.id}>
-              {a.originalFilename ?? a.id} — <code>{a.status}</code>
-              {a.currentVersionId ? ` · 版本 ${a.currentVersionId.slice(0, 8)}…` : ''}
-            </li>
-          ))}
-          {assets.length === 0 && <li>暂无素材</li>}
-        </ul>
+        {assets.length === 0 ? (
+          <EmptyState>暂无素材</EmptyState>
+        ) : (
+          <ul className="stack" style={{ gap: 'var(--space-2)', paddingLeft: 0, listStyle: 'none' }}>
+            {assets.map((a) => (
+              <li key={a.id} className="row">
+                <AssetImage
+                  workspaceId={workspaceId}
+                  versionId={a.currentVersionId}
+                  size={48}
+                  alt={a.originalFilename ?? a.id}
+                />
+                <span>
+                  {a.originalFilename ?? a.id} — <Badge>{a.status}</Badge>
+                  {a.currentVersionId ? ` · 版本 ${a.currentVersionId.slice(0, 8)}…` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
-      <section>
+      <section id="truth-pack">
         <h2>Truth Pack（产品真相包）</h2>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <button type="button" onClick={extract}>
-            抽取（Fake Vision）
-          </button>
-          <button type="button" onClick={confirmAll}>
-            确认全部 EXTRACTED
-          </button>
-          <button type="button" onClick={approve}>
-            批准此修订
-          </button>
+        <div className="row" style={{ marginBottom: 'var(--space-3)' }}>
+          <Button onClick={extract}>抽取（Fake Vision）</Button>
+          <Button onClick={confirmAll}>确认全部 EXTRACTED</Button>
+          <Button onClick={approve}>批准此修订</Button>
         </div>
         {pack?.revision ? (
           <div>
             <p>
-              修订 #{pack.revision.revision} — <code>{pack.revision.status}</code>
-              {pack.approvedRevisionId ? ' · 已批准' : ''}
+              修订 #{pack.revision.revision} — <Badge>{pack.revision.status}</Badge>
+              {pack.approvedRevisionId ? (
+                <>
+                  {' '}
+                  <Badge tone="ok">已批准</Badge>
+                </>
+              ) : (
+                ''
+              )}
             </p>
             <ul>
               {pack.revision.facts.map((f) => (
@@ -398,32 +433,35 @@ function ProjectDetailInner() {
             </ul>
           </div>
         ) : (
-          <p>尚无修订 — 请抽取或保存事实。</p>
+          <EmptyState>尚无修订 — 请抽取或保存事实。</EmptyState>
         )}
       </section>
 
-      <section style={{ marginTop: 24 }}>
+      <section id="shot-plan" style={{ marginTop: 'var(--space-6)' }}>
         <h2>Shot Plan（拍摄计划）（W3-A）</h2>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <button type="button" onClick={generateShotPlan} disabled={!pack?.approvedRevisionId}>
+        <div className="row" style={{ marginBottom: 'var(--space-3)' }}>
+          <Button onClick={generateShotPlan} disabled={!pack?.approvedRevisionId}>
             生成 7 镜（Fake）
-          </button>
-          <button type="button" onClick={approveShotPlan} disabled={!shotPlan?.revision}>
+          </Button>
+          <Button onClick={approveShotPlan} disabled={!shotPlan?.revision}>
             批准 Shot Plan
-          </button>
-          <button
-            type="button"
-            onClick={materializeShotPlan}
-            disabled={!shotPlan?.approvedRevisionId}
-          >
+          </Button>
+          <Button onClick={materializeShotPlan} disabled={!shotPlan?.approvedRevisionId}>
             物化 → Studio
-          </button>
+          </Button>
         </div>
         {shotPlan?.revision ? (
           <div>
             <p>
-              修订 #{shotPlan.revision.revision} — <code>{shotPlan.revision.status}</code>
-              {shotPlan.approvedRevisionId ? ' · 已批准' : ''}
+              修订 #{shotPlan.revision.revision} — <Badge>{shotPlan.revision.status}</Badge>
+              {shotPlan.approvedRevisionId ? (
+                <>
+                  {' '}
+                  <Badge tone="ok">已批准</Badge>
+                </>
+              ) : (
+                ''
+              )}
               {' · 真相 '}
               <code>{shotPlan.revision.truthRevisionId.slice(0, 8)}…</code>
             </p>
@@ -436,13 +474,13 @@ function ProjectDetailInner() {
               ))}
             </ul>
             {shotPlan.canvasPayload ? (
-              <p style={{ opacity: 0.7 }}>
+              <p className="muted">
                 canvasPayload 已就绪（{shotPlan.canvasPayload.briefs.length} 条有序简报） · 物化会校验 referencedAssetVersionIds
               </p>
             ) : null}
           </div>
         ) : (
-          <p>尚无 Shot Plan — 请先批准 Truth Pack，再生成。</p>
+          <EmptyState>尚无 Shot Plan — 请先批准 Truth Pack，再生成。</EmptyState>
         )}
       </section>
 
@@ -452,7 +490,7 @@ function ProjectDetailInner() {
 
 export default function ProjectDetailPage() {
   return (
-    <Suspense fallback={<p>加载中…</p>}>
+    <Suspense fallback={<p className="container">加载中…</p>}>
       <ProjectDetailInner />
     </Suspense>
   );

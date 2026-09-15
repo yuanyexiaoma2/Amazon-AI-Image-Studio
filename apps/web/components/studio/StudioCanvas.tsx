@@ -48,6 +48,7 @@ import {
   type MaskEditorState,
   type SelectedNodeInfo,
 } from './PropertiesPanel';
+import { AssetImage } from '../asset-image';
 import { NUMERIC_CONFIG_KEYS } from './config-options';
 
 type CanvasSnapshot = { nodes: Node[]; edges: Edge[] };
@@ -71,7 +72,7 @@ function nodeLabelZh(type: string): string {
   return NODE_LABEL_ZH[type] ?? getNodeDefinition(type)?.label ?? type;
 }
 
-function toFlowNodes(graph: WorkflowGraph): Node[] {
+function toFlowNodes(graph: WorkflowGraph, workspaceId: string): Node[] {
   return graph.nodes.map((n) => ({
     id: n.id,
     type: 'studio',
@@ -80,6 +81,7 @@ function toFlowNodes(graph: WorkflowGraph): Node[] {
       label: nodeLabelZh(n.type),
       nodeType: n.type,
       config: n.config ?? { schemaVersion: 1 },
+      workspaceId,
     },
   }));
 }
@@ -130,37 +132,45 @@ function StudioNodeView(props: NodeProps) {
   const nodeType = String((props.data as { nodeType?: string }).nodeType ?? '');
   const def = getNodeDefinition(nodeType);
   const label = String((props.data as { label?: string }).label ?? nodeType);
+  const data = props.data as {
+    workspaceId?: string;
+    config?: Record<string, unknown>;
+  };
+  const sourceVersionId =
+    nodeType === 'source_image' && typeof data.config?.assetVersionId === 'string'
+      ? (data.config.assetVersionId as string)
+      : null;
   return (
-    <div
-      style={{
-        minWidth: 140,
-        padding: '8px 10px',
-        borderRadius: 8,
-        border: props.selected ? '2px solid #7aa2ff' : '1px solid #3a4a6a',
-        background: '#121a2e',
-        color: '#e8eefc',
-        fontSize: 12,
-      }}
-    >
+    <div className={props.selected ? 'studio-node studio-node-selected' : 'studio-node'}>
       {def?.inputPorts.map((p, i) => (
         <Handle
           key={`in-${p.id}`}
           id={p.id}
           type="target"
           position={Position.Left}
-          style={{ top: 16 + i * 14, background: '#7aa2ff', width: 8, height: 8 }}
+          style={{ top: 16 + i * 14, background: 'var(--accent-strong)', width: 8, height: 8 }}
           title={`${p.id}: ${p.type}`}
         />
       ))}
       <div style={{ fontWeight: 600 }}>{label}</div>
-      <div style={{ opacity: 0.6, fontSize: 10 }}>{nodeType}</div>
+      <div className="faint" style={{ fontSize: 10 }}>{nodeType}</div>
+      {sourceVersionId ? (
+        <div style={{ marginTop: 4 }}>
+          <AssetImage
+            workspaceId={data.workspaceId ?? null}
+            versionId={sourceVersionId}
+            size={36}
+            alt={label}
+          />
+        </div>
+      ) : null}
       {def?.outputPorts.map((p, i) => (
         <Handle
           key={`out-${p.id}`}
           id={p.id}
           type="source"
           position={Position.Right}
-          style={{ top: 16 + i * 14, background: '#6bcf8e', width: 8, height: 8 }}
+          style={{ top: 16 + i * 14, background: 'var(--ok-soft)', width: 8, height: 8 }}
           title={`${p.id}: ${p.type}`}
         />
       ))}
@@ -174,8 +184,9 @@ function StudioCanvasInner(props: {
   workspaceId: string;
   projectId: string;
   workflowId?: string | null;
+  belowStepper?: boolean;
 }) {
-  const { workspaceId, projectId, workflowId: requestedWorkflowId } = props;
+  const { workspaceId, projectId, workflowId: requestedWorkflowId, belowStepper } = props;
   const { fitView } = useReactFlow();
   const [draft, setDraft] = useState<WorkflowDraftPayload | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -262,9 +273,9 @@ function StudioCanvasInner(props: {
     (d: WorkflowDraftPayload) => {
       setDraft(d);
       revisionRef.current = d.revisionNumber;
-      applyLocalSnapshot({ nodes: toFlowNodes(d.graph), edges: toFlowEdges(d.graph) });
+      applyLocalSnapshot({ nodes: toFlowNodes(d.graph, workspaceId), edges: toFlowEdges(d.graph) });
     },
-    [applyLocalSnapshot],
+    [applyLocalSnapshot, workspaceId],
   );
 
   const loadOrCreate = useCallback(async () => {
@@ -515,7 +526,7 @@ function StudioCanvasInner(props: {
       id,
       type: 'studio',
       position,
-      data: { label: nodeLabelZh(type), nodeType: type, config },
+      data: { label: nodeLabelZh(type), nodeType: type, config, workspaceId },
     };
     const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
     const nextNodes = [...nodesRef.current, next];
@@ -790,9 +801,9 @@ function StudioCanvasInner(props: {
 
   if (narrow) {
     return (
-      <main style={{ padding: 24 }} role="main" aria-labelledby="studio-narrow-title">
+      <main className="container" role="main" aria-labelledby="studio-narrow-title">
         <h1 id="studio-narrow-title">Studio（画布）</h1>
-        <p role="alert">
+        <p role="alert" className="banner-warn">
           仅桌面端画布编辑器。最小宽度 1280px — 当前视口不支持完整画布编辑。请旋转设备或加宽浏览器窗口。
         </p>
       </main>
@@ -809,24 +820,13 @@ function StudioCanvasInner(props: {
     <div
       role="application"
       aria-label="Studio 工作流画布"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '220px 1fr 300px',
-        gridTemplateRows: '1fr 120px',
-        height: 'calc(100vh - 57px)',
-        width: '100%',
-        background: '#0b1020',
-        color: '#e8eefc',
-      }}
+      className={belowStepper ? 'studio-grid studio-grid-below-stepper' : 'studio-grid'}
     >
-      <aside
-        aria-label="节点库"
-        style={{ borderRight: '1px solid #1e2a44', padding: 12, overflow: 'auto' }}
-      >
-        <div style={{ fontWeight: 700, marginBottom: 8 }} id="node-library-heading">
+      <aside aria-label="节点库" className="studio-aside studio-aside-left">
+        <div style={{ fontWeight: 700, marginBottom: 'var(--space-2)' }} id="node-library-heading">
           节点库
         </div>
-        <div style={{ fontSize: 11, opacity: 0.65, marginBottom: 8 }}>
+        <div className="faint" style={{ fontSize: 'var(--font-size-xs)', marginBottom: 'var(--space-2)' }}>
           11 种 MVP 节点 · Zod 配置（W3-05）
         </div>
         {palette.map((n) => (
@@ -834,26 +834,14 @@ function StudioCanvasInner(props: {
             key={n.type}
             type="button"
             onClick={() => addNode(n.type)}
-            style={{
-              display: 'block',
-              width: '100%',
-              textAlign: 'left',
-              marginBottom: 6,
-              padding: '6px 8px',
-              background: '#121a2e',
-              border: '1px solid #2a3a5a',
-              color: '#e8eefc',
-              borderRadius: 6,
-              cursor: 'pointer',
-              fontSize: 12,
-            }}
+            className="palette-btn"
           >
             {nodeLabelZh(n.type)}
           </button>
         ))}
       </aside>
 
-      <div style={{ position: 'relative', minWidth: 0 }}>
+      <div className="studio-canvas-wrap">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -868,44 +856,33 @@ function StudioCanvasInner(props: {
           multiSelectionKeyCode="Shift"
           proOptions={{ hideAttribution: true }}
         >
-          <Background gap={18} color="#1e2a44" />
-          <MiniMap pannable zoomable style={{ background: '#121a2e' }} />
+          <Background gap={18} color="var(--border)" />
+          <MiniMap pannable zoomable style={{ background: 'var(--surface)' }} />
           <Controls />
           <Panel position="top-left">
-            <div
-              style={{
-                background: '#121a2e',
-                border: '1px solid #2a3a5a',
-                borderRadius: 6,
-                padding: '6px 10px',
-                fontSize: 12,
-                display: 'flex',
-                gap: 8,
-                alignItems: 'center',
-                flexWrap: 'wrap',
-              }}
-            >
+            <div className="studio-toolbar">
               <span role="status" aria-live="polite">{status}</span>
-              <button type="button" onClick={() => void reload()}>
+              <button type="button" className="btn" onClick={() => void reload()}>
                 重新加载
               </button>
-              <button type="button" onClick={() => void snapshot()}>
+              <button type="button" className="btn" onClick={() => void snapshot()}>
                 快照
               </button>
-              <button type="button" onClick={() => undo()} title="Ctrl/Cmd+Z">
+              <button type="button" className="btn" onClick={() => undo()} title="Ctrl/Cmd+Z">
                 撤销
               </button>
-              <button type="button" onClick={() => redo()} title="Ctrl/Cmd+Y">
+              <button type="button" className="btn" onClick={() => redo()} title="Ctrl/Cmd+Y">
                 重做
               </button>
-              <button type="button" onClick={() => copySelected()} title="Ctrl/Cmd+C">
+              <button type="button" className="btn" onClick={() => copySelected()} title="Ctrl/Cmd+C">
                 复制
               </button>
-              <button type="button" onClick={() => pasteClipboard()} title="Ctrl/Cmd+V">
+              <button type="button" className="btn" onClick={() => pasteClipboard()} title="Ctrl/Cmd+V">
                 粘贴
               </button>
               <button
                 type="button"
+                className="btn"
                 onClick={() => {
                   void fitView({ padding: 0.2, duration: 200 });
                   setStatus('适应视图');
@@ -917,62 +894,26 @@ function StudioCanvasInner(props: {
           </Panel>
         </ReactFlow>
         {errorBar && (
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 12,
-              left: 12,
-              right: 12,
-              background: '#3a1520',
-              border: '1px solid #c44',
-              padding: 8,
-              borderRadius: 6,
-              fontSize: 12,
-            }}
-          >
+          <div className="banner-error canvas-overlay" style={{ bottom: 12 }}>
             {errorBar}
           </div>
         )}
         {deleteHint && (
           <div
-            style={{
-              position: 'absolute',
-              bottom: errorBar ? 56 : 12,
-              left: 12,
-              right: 12,
-              background: '#1a2438',
-              border: '1px solid #3a4a6a',
-              padding: 8,
-              borderRadius: 6,
-              fontSize: 12,
-              display: 'flex',
-              justifyContent: 'space-between',
-              gap: 8,
-            }}
+            className="banner-info canvas-overlay"
+            style={{ bottom: errorBar ? 56 : 12, display: 'flex', justifyContent: 'space-between' }}
           >
             <span>{deleteHint}</span>
-            <button type="button" onClick={() => setDeleteHint(null)}>
+            <button type="button" className="btn" onClick={() => setDeleteHint(null)}>
               关闭
             </button>
           </div>
         )}
         {conflict && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 48,
-              left: 12,
-              right: 12,
-              background: '#3a3010',
-              border: '1px solid #c90',
-              padding: 10,
-              borderRadius: 6,
-              fontSize: 13,
-            }}
-          >
+          <div className="banner-warn canvas-overlay" style={{ top: 48 }}>
             <strong>409 冲突</strong> — {conflict}
-            <div style={{ marginTop: 8 }}>
-              <button type="button" onClick={() => void reload()}>
+            <div style={{ marginTop: 'var(--space-2)' }}>
+              <button type="button" className="btn" onClick={() => void reload()}>
                 加载远端
               </button>
             </div>
@@ -980,7 +921,7 @@ function StudioCanvasInner(props: {
         )}
       </div>
 
-      <aside style={{ borderLeft: '1px solid #1e2a44', padding: 12, overflow: 'auto' }}>
+      <aside className="studio-aside studio-aside-right">
         <PropertiesPanel
           workspaceId={workspaceId}
           selected={selectedInfo}
@@ -1101,49 +1042,30 @@ function TaskDrawer(props: {
   }
 
   return (
-    <div
-      style={{
-        gridColumn: '1 / -1',
-        borderTop: '1px solid #1e2a44',
-        padding: 12,
-        fontSize: 13,
-        display: 'grid',
-        gap: 8,
-        background: '#0d1424',
-      }}
-    >
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+    <div className="studio-drawer">
+      <div className="row">
         <strong>任务抽屉</strong>
-        <button type="button" disabled={busy || !ready} onClick={() => void runAll()}>
+        <button type="button" className="btn" disabled={busy || !ready} onClick={() => void runAll()}>
           {busy ? '启动中…' : '运行整图（Fake · 预算 $5）'}
         </button>
-        <button type="button" onClick={() => void refresh()}>
+        <button type="button" className="btn" onClick={() => void refresh()}>
           刷新
         </button>
         {msg && <span style={{ opacity: 0.85 }}>{msg}</span>}
       </div>
-      <div style={{ display: 'grid', gap: 6, maxHeight: 160, overflow: 'auto' }}>
+      <div className="stack" style={{ gap: 6, maxHeight: 160, overflow: 'auto' }}>
         {runs.length === 0 && (
-          <div role="status" style={{ opacity: 0.65 }}>暂无运行 — 排队 / 运行中 / 成功 / 失败会显示在这里。</div>
+          <div role="status" className="faint">暂无运行 — 排队 / 运行中 / 成功 / 失败会显示在这里。</div>
         )}
         {runs.map((r) => (
-          <div
-            key={r.id}
-            style={{
-              border: '1px solid #2a3a5a',
-              borderRadius: 6,
-              padding: 8,
-              display: 'grid',
-              gap: 4,
-            }}
-          >
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
+          <div key={r.id} className="run-card">
+            <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'space-between' }}>
               <span>
                 <code>{r.id.slice(0, 8)}</code> · <strong>{r.status}</strong> · 预估{' '}
                 {(r.estimateMicrounits / 1_000_000).toFixed(3)} USD
               </span>
               {(r.status === 'QUEUED' || r.status === 'RUNNING') && (
-                <button type="button" onClick={() => void cancelRun(r.id)}>
+                <button type="button" className="btn" onClick={() => void cancelRun(r.id)}>
                   取消
                 </button>
               )}
@@ -1151,20 +1073,20 @@ function TaskDrawer(props: {
             {r.items.map((it) => {
               const latest = it.attempts[it.attempts.length - 1];
               return (
-                <div key={it.id} style={{ fontSize: 12, opacity: 0.9, paddingLeft: 8 }}>
+                <div key={it.id} style={{ fontSize: 'var(--font-size-sm)', opacity: 0.9, paddingLeft: 8 }}>
                   节点 <code>{it.nodeId}</code> · {it.status}
                   {latest && (
                     <>
                       {' '}
                       · 尝试 #{latest.attemptNo} {latest.status}（{latest.progress}%）
                       {latest.errorClass && (
-                        <span style={{ color: '#f88' }}>
+                        <span style={{ color: 'var(--danger-text)' }}>
                           {' '}
                           {latest.errorClass}: {latest.errorMessage}
                         </span>
                       )}
                       {(latest.status === 'FAILED_FINAL' || latest.status === 'FAILED_RETRYABLE') && (
-                        <button type="button" style={{ marginLeft: 8 }} onClick={() => void retryAttempt(latest.id)}>
+                        <button type="button" className="btn" style={{ marginLeft: 8 }} onClick={() => void retryAttempt(latest.id)}>
                           重试
                         </button>
                       )}
@@ -1177,7 +1099,7 @@ function TaskDrawer(props: {
         ))}
       </div>
       {events.length > 0 && (
-        <div style={{ fontSize: 11, opacity: 0.55 }}>
+        <div className="faint" style={{ fontSize: 'var(--font-size-xs)' }}>
           SSE: {events[0]}
         </div>
       )}
@@ -1189,6 +1111,7 @@ export function StudioCanvas(props: {
   workspaceId: string;
   projectId: string;
   workflowId?: string | null;
+  belowStepper?: boolean;
 }) {
   return (
     <ReactFlowProvider>

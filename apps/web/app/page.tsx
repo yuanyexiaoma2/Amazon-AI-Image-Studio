@@ -1,6 +1,8 @@
+import Link from 'next/link';
+
 export default function HomePage() {
   return (
-    <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
+    <div className="container">
       <h1>Amazon AI Image Studio</h1>
       <p>
         MVP 已覆盖 W3-B2：注册 → 项目 → Truth Pack（产品真相包） → Shot Plan（拍摄计划） →{' '}
@@ -8,27 +10,19 @@ export default function HomePage() {
       </p>
       <ul>
         <li>
-          <a href="/register" style={{ color: '#9db7ff' }}>
-            注册
-          </a>
+          <Link href="/register">注册</Link>
         </li>
         <li>
-          <a href="/login" style={{ color: '#9db7ff' }}>
-            登录
-          </a>
+          <Link href="/login">登录</Link>
         </li>
         <li>
-          <a href="/projects" style={{ color: '#9db7ff' }}>
-            项目 / 素材 / Truth Pack（产品真相包）
-          </a>
+          <Link href="/projects">项目 / 素材 / Truth Pack（产品真相包）</Link>
         </li>
         <li>
-          <a href="/projects" style={{ color: '#9db7ff' }}>
-            Studio 画布（打开项目后进入 Studio）
-          </a>
+          <Link href="/projects">Studio 画布（打开项目后进入 Studio）</Link>
         </li>
       </ul>
-      <p style={{ opacity: 0.7, fontSize: 14 }}>
+      <p className="muted" style={{ fontSize: 'var(--font-size-lg)' }}>
         规格：<code>docs/specs/amazon-ai-image-studio-v1.1.md</code> · 进度：{' '}
         <code>docs/progress.md</code>
       </p>

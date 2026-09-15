@@ -1,13 +1,14 @@
 'use client';
 
 /**
- * V2 PR-2 — extracted properties panel (no visual redesign; same inline
- * styles as the legacy aside in StudioCanvas). UUID text inputs are replaced
+ * V2 PR-2 — extracted properties panel. UUID text inputs are replaced
  * by plain <select> dropdowns fed by useConfigOptions; executable nodes get
  * a "运行此节点" button that dispatches a scoped `run` command.
+ * V2 PR-1 — styling moved to globals.css token classes (`.btn` / `.input`).
  */
 import { useMemo } from 'react';
 import { MaskEditor } from './MaskEditor';
+import { AssetImage } from '../asset-image';
 import {
   CONFIG_FIELD_META,
   OPTION_LABEL_ZH,
@@ -37,14 +38,6 @@ export type MaskEditorState = {
   width: number;
   height: number;
 } | null;
-
-const inputStyle = {
-  background: '#0b1020',
-  color: '#e8eefc',
-  border: '1px solid #2a3a5a',
-  borderRadius: 4,
-  padding: 4,
-} as const;
 
 function hintFor(
   field: ConfigFieldMeta,
@@ -137,41 +130,33 @@ export function PropertiesPanel(props: {
 
   return (
     <>
-      <div style={{ fontWeight: 700, marginBottom: 8 }}>节点属性</div>
+      <div style={{ fontWeight: 700, marginBottom: 'var(--space-2)' }}>节点属性</div>
       {!selected ? (
-        <p style={{ opacity: 0.65, fontSize: 13 }}>
+        <p className="faint" style={{ fontSize: 'var(--font-size-md)' }}>
           选择节点以编辑其 Zod 配置外壳（仅 Fake — 不调用 Provider）。
         </p>
       ) : (
-        <div style={{ fontSize: 13 }}>
+        <div style={{ fontSize: 'var(--font-size-md)' }}>
           <div>
             <strong>{selected.label}</strong>
           </div>
-          <div style={{ opacity: 0.7 }}>类型：{selected.nodeType}</div>
-          <div style={{ opacity: 0.7 }}>
+          <div className="muted">类型：{selected.nodeType}</div>
+          <div className="muted">
             位置：{Math.round(selected.position.x)}, {Math.round(selected.position.y)}
           </div>
           {runnable && (
             <div style={{ marginTop: 10 }}>
               <button
                 type="button"
+                className="btn"
                 disabled={runBusy}
                 onClick={() => onRunNode(selected.id)}
-                style={{
-                  background: '#121a2e',
-                  border: '1px solid #2a3a5a',
-                  color: '#e8eefc',
-                  borderRadius: 6,
-                  padding: '6px 10px',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                }}
               >
                 {runBusy ? '启动中…' : '运行此节点（Fake · 预算 $5）'}
               </button>
             </div>
           )}
-          <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+          <div className="stack" style={{ marginTop: 'var(--space-3)', gap: 'var(--space-2)' }}>
             {fields.map((f) => {
               const current =
                 selected.config[f.key] === null || selected.config[f.key] === undefined
@@ -182,13 +167,13 @@ export function PropertiesPanel(props: {
                 const hint = hintFor(f, options, sourceAssetVersionId);
                 const disabled = f.source === 'masks' && !sourceAssetVersionId;
                 return (
-                  <label key={f.key} style={{ display: 'grid', gap: 4, fontSize: 12 }}>
-                    <span style={{ opacity: 0.8 }}>{f.label}</span>
+                  <label key={f.key} className="stack" style={{ gap: 'var(--space-1)', fontSize: 'var(--font-size-sm)' }}>
+                    <span className="muted">{f.label}</span>
                     <select
+                      className="input"
                       value={current}
                       disabled={disabled}
                       onChange={(e) => onConfigChange(f.key, e.target.value)}
-                      style={inputStyle}
                     >
                       <option value="">（未选择）</option>
                       {opts.map((o) => (
@@ -197,18 +182,26 @@ export function PropertiesPanel(props: {
                         </option>
                       ))}
                     </select>
-                    {hint && <span style={{ fontSize: 11, opacity: 0.6 }}>{hint}</span>}
+                    {hint && <span className="faint" style={{ fontSize: 'var(--font-size-xs)' }}>{hint}</span>}
+                    {f.source === 'assets' && current ? (
+                      <AssetImage
+                        workspaceId={workspaceId}
+                        versionId={current}
+                        size={64}
+                        alt={f.label}
+                      />
+                    ) : null}
                   </label>
                 );
               }
               return (
-                <label key={f.key} style={{ display: 'grid', gap: 4, fontSize: 12 }}>
-                  <span style={{ opacity: 0.8 }}>{f.label}</span>
+                <label key={f.key} className="stack" style={{ gap: 'var(--space-1)', fontSize: 'var(--font-size-sm)' }}>
+                  <span className="muted">{f.label}</span>
                   {f.kind === 'select' ? (
                     <select
+                      className="input"
                       value={current}
                       onChange={(e) => onConfigChange(f.key, e.target.value)}
-                      style={inputStyle}
                     >
                       {(f.options ?? []).map((o) => (
                         <option key={o} value={o}>
@@ -218,39 +211,27 @@ export function PropertiesPanel(props: {
                     </select>
                   ) : (
                     <input
+                      className="input"
                       type={f.kind === 'number' ? 'number' : 'text'}
                       value={current}
                       onChange={(e) => onConfigChange(f.key, e.target.value)}
-                      style={inputStyle}
                     />
                   )}
                 </label>
               );
             })}
           </div>
-          <pre style={{ fontSize: 11, opacity: 0.8, whiteSpace: 'pre-wrap', marginTop: 12 }}>
+          <pre className="code-block" style={{ opacity: 0.8, marginTop: 'var(--space-3)' }}>
             {JSON.stringify(selected.config, null, 2)}
           </pre>
           {(selected.nodeType === 'source_image' ||
             selected.nodeType === 'replace_background' ||
             selected.nodeType === 'inpaint') && (
-            <div style={{ marginTop: 12 }}>
-              <button
-                type="button"
-                onClick={onOpenMaskEditor}
-                style={{
-                  background: '#121a2e',
-                  border: '1px solid #2a3a5a',
-                  color: '#e8eefc',
-                  borderRadius: 6,
-                  padding: '6px 10px',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                }}
-              >
+            <div style={{ marginTop: 'var(--space-3)' }}>
+              <button type="button" className="btn" onClick={onOpenMaskEditor}>
                 打开蒙版编辑器
               </button>
-              <div style={{ fontSize: 11, opacity: 0.65, marginTop: 4 }}>
+              <div className="faint" style={{ fontSize: 'var(--font-size-xs)', marginTop: 'var(--space-1)' }}>
                 蒙版基于 source_image 的素材版本；保存后可在 replace_background / inpaint 的蒙版下拉中选择。
               </div>
             </div>
@@ -258,7 +239,7 @@ export function PropertiesPanel(props: {
         </div>
       )}
       {maskEditor ? (
-        <div style={{ marginTop: 16 }}>
+        <div style={{ marginTop: 'var(--space-4)' }}>
           <MaskEditor
             workspaceId={workspaceId}
             assetVersionId={maskEditor.versionId}
@@ -271,7 +252,7 @@ export function PropertiesPanel(props: {
           />
         </div>
       ) : null}
-      <div style={{ marginTop: 24, fontSize: 11, opacity: 0.65 }}>
+      <div className="faint" style={{ marginTop: 'var(--space-6)', fontSize: 'var(--font-size-xs)' }}>
         草稿修订：{draftRevision ?? '—'}
         <br />
         变更经命令 API 同步 · 撤销/重做为服务端批次 · isValidConnection 预览
