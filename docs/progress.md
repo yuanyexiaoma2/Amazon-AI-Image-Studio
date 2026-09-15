@@ -664,3 +664,33 @@ One branch / one PR / one review each; merge unlocks the next segment.
 **不修仅记录（留 PR 后续）：** 会话预算创建后不可改（功能缺口）；会话预算为 estimate 口径软闸门（并发 turn 理论可小幅超支，run 级 W4 闸门仍为硬约束）。
 
 **Status:** **VERIFIED** — 全新上下文复审 REVIEW PASS（PR #28 留言）+ 已合并 main `28ed7a2` + main CI 绿（run 34945585886）。
+
+## PR-5 — 视觉重设计 (DONE)
+
+现代浅色 SaaS 主题（Linear/Notion/Shopify 一档），在 PR-1 的 token 体系上只改 tokens + 组件类 + 页面 className，不动交互逻辑 / API（规则 13）。
+
+| 项 | 内容 | 状态 | 证据 |
+|---|---|---|---|
+| PR-5-01 | globals.css 全量换浅色 token 体系（bg #f7f8fa / surface #fff / text #111827 / accent indigo #4f46e5 / 状态色浅色适配 / 圆角 6-10 / shadow tokens），并保留 `@media (prefers-color-scheme: dark)` 深色 token 一套 | DONE | `apps/web/app/globals.css`（commit `2d51678`） |
+| PR-5-02 | 组件类重调：btn（白底描边 + hover / primary indigo 实心 / 新增 btn-danger）、input（focus 描边 + soft ring）、card（白底 + 1px #e5e7eb + 微阴影）、badge/banner 全部改浅色 tint 系、stepper/header/code-block/empty-state | DONE | 同上 + `components/ui.tsx` 新增 `danger` variant |
+| PR-5-03 | xyflow 画布浅色化：Background 点阵 var(--canvas-dot)、edge/minimap/controls CSS 覆盖、studio-node 白卡 + 选中 indigo 描边、palette hover 态 | DONE | `components/studio/StudioCanvas.tsx` + globals.css `.react-flow*`（commit `9828a20`） |
+| PR-5-04 | 逐页适配：`/`（card-grid 入口卡）、`/login` `/register`（居中 auth-card 门面）、`/projects`（项目卡列表）、`/projects/[id]`、`/wizard`（清掉硬编码 #9db7ff/#2a3a5c 与原生 button/textarea 内联样式，换 ui 组件 + tokens）、`/review`（驳回/覆盖 BLOCK 用 danger）、`/admin`、`/studio` | DONE | commits `fe183a3` / `9828a20` |
+| PR-5-05 | 截图存档（tabbit，dev :3000，1440×900） | DONE | `docs/screenshots/pr-5/01-home.png … 10-studio-stub.png`（10 张，commit 见分支） |
+
+### PR-5 commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm lint` | Exit 0（web 0 warnings/errors），2026-09-15 Asia/Shanghai |
+| `pnpm typecheck` | Exit 0 |
+| `pnpm test`（根） | Exit 0 全绿（web 17 passed/13 skipped，其余包全绿） |
+| `pnpm build` | Exit 0 |
+| `pnpm test:e2e`（web :3200，`.env` 注入 + `IMAGE_PROVIDER=fake PLANNER_PROVIDER=fake CHAT_PROVIDER=fake INSPECT_INLINE=1 GENERATION_INLINE=1`，`APP_URL=http://127.0.0.1:3200`，INLINE 模式无需另起 worker，既有 worker 未动） | **PASS** exit 0（含 W2…W7 与 PR-4 chat 全段） |
+| tabbit 视觉自验 | CDP 正常。注册 visual-check@example.com（UI 注册被 1Password 扩展干扰，改 POST /api/register 建号 + 页面登录）→ 逐页截图 10 张存档。tabbit 截图偶发 captureScreenshot 超时（5 次，recoverable），换新 tab 重拍即恢复 |
+| 进程清理 | e2e :3200 实例已 taskkill 干净（含子进程 PID 364）；:3000 dev server 与既有 worker 未动 |
+
+**事故记录（已恢复）：** `pnpm build` 与 dev server 共用 `apps/web/.next`，构建覆盖了 dev 的运行时 chunk 导致 :3000 短暂 500（Cannot find module './2131.js'）；touch 源码触发 dev 全量重编译后恢复 200（/、/login、/projects 验证）。后续应避免在 dev server 运行时直接 `pnpm build`（或给 build 配独立 distDir）——范围外，仅记录。
+
+**范围纪律（规则 13）发现但未修：** MaskEditor 蒙版画布 overlay 用 canvas 硬编码 rgba 色（遮罩染色，深浅主题均可用，未 token 化）；登录/注册页的 1Password 类扩展会干扰程序化 fill（非应用问题）。
+
+**Status:** **DONE**（不标 VERIFIED — 待 V2 rule 12b 全新上下文复审 + 所有者合并）。
