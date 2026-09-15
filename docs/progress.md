@@ -552,3 +552,32 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | Out of scope | UI 设计系统重构（V2 PR-1）；画布命令层 / 自由画布（PR-2）；聊天 Agent 面板（PR-4） |
 
 **Status:** **DONE** (not VERIFIED). VERIFIED per V2 amended policy: fresh-context review PASS + owner merge + main CI green.
+
+---
+
+## V2 PR-2 — 画布命令层 + 自由画布 (DONE)
+
+**Branch:** `feat/v2-canvas-commands` (from main `b4d247e`)
+**Acceptance unit (one PR, one independent review):** V2 vision §3 PR-2 — canvas command layer (addNode / connect / configure / run / undo) + free canvas Studio UX. **Merging is performed by the owner** (V2 rule); implementer only opens the PR.
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| PR-2-01 | Command schema + domain `applyWorkflowCommands` | DONE | contracts `workflow-commands` schema + domain `applyWorkflowCommands` (commit `06fd1dc`); 27 domain unit tests + 7 contracts unit tests |
+| PR-2-02 | `command_batches` table + WorkflowRepository apply/undo/redo | DONE | Pure-incremental migration `20260915010000_v2_canvas_command_batches`; `applyCommandBatch` / `undoCommandBatch` / `redoCommandBatch`; `WorkflowUndoError`; idempotent `batchId` (commit `16f3912`); 6 integration tests |
+| PR-2-03 | Command API + `create-run` extraction | DONE | `POST .../commands`, `.../commands/undo`, `.../commands/redo` routes + `getCommandBatch`; shared `apps/web/lib/create-run.ts` keeps 402 / idempotency semantics (commit `ca49d7f`); 2 route-level integration tests |
+| PR-2-04 | Studio on command API + dropdowns + per-node run + blank canvas | DONE | `use-workflow-commands.ts` serial promise chain + optimistic rollback + 500ms debounce merge (configure/moveNode); server undo/redo replaces frontend `historyRef`; config panel UUID free-text → dropdowns (assets / truth-pack / shot-plan briefs / masks linked / model-registry); per-node run button; TaskDrawer whole-canvas run → `run` command; project page「新建空白画布」+ studio `?workflowId=` (commit `88789ff`) |
+| PR-2-05 | OpenAPI registration + e2e | DONE | commands / undo / redo paths + 4 schemas registered (masks list endpoint registered earlier); new V2 e2e segment (commit `901edb1`) |
+
+### V2 PR-2 commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm lint` / `typecheck` / `test` / `build` | Local green (exit 0), 2026-09-15 Asia/Shanghai |
+| `RUN_INTEGRATION=1 pnpm --filter @studio/db test` | 35/35 (incl. 6 new) |
+| apps/web route integration / unit | 2/2 integration; 7 unit passed |
+| `pnpm db:migrate:deploy` | Includes `20260915010000_v2_canvas_command_batches` (pure incremental) |
+| `pnpm test:e2e` (web :3100 + worker, `INSPECT_INLINE=1 GENERATION_INLINE=1`, `IMAGE_PROVIDER=fake` override) | PASS ~8s; V2 segment: batch apply / idempotent replay / illegal connect 400 / undo / redo / `WORKFLOW_UNDO_CONFLICT` / stale 409 / `run` command SUCCEEDED / 402 `BUDGET_EXCEEDED` with `commandsApplied:true` / masks list |
+| Provider | **Fake only** (e2e explicit `IMAGE_PROVIDER=fake`); no real keys |
+| Out of scope | UI redesign PR-1; chat Agent PR-4; real Provider; BRANCH_FROM all-branch traversal; whole-graph PATCH endpoint retained |
+
+**Status:** **DONE** (not VERIFIED). Per V2 rule, VERIFIED requires a fresh-context re-review + owner merge + green main CI.
