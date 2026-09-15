@@ -38,6 +38,8 @@ const envSchema = z.object({
   // completions (reuses KIE_API_KEY). Default fake (offline deterministic).
   PLANNER_PROVIDER: z.enum(['fake', 'kie']).default('fake'),
   KIE_LLM_MODEL: z.string().optional(),
+  // V2 chat agent (PR-4) — canvas-operator LLM via the same kie chat endpoint.
+  CHAT_PROVIDER: z.enum(['fake', 'kie']).default('fake'),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

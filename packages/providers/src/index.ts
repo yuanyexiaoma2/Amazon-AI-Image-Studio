@@ -67,13 +67,24 @@ export {
   KIE_DEFAULT_CREATE_RATE,
 } from './create-rate-limiter.js';
 export {
+  kieChatCompletion,
+  kieChatPathForModel,
+  extractJsonObject,
+  normalizeHttpError,
+  ChatProviderError,
+  KIE_DEFAULT_BASE_URL,
+  KIE_DEFAULT_LLM_MODEL,
+  type ChatErrorClass,
+  type KieChatConfig,
+  type KieChatMessage,
+  type KieChatCompletionInput,
+  type KieChatCompletionResult,
+} from './kie-chat.js';
+export {
   OpenAiCompatShotPlanProvider,
   PlannerProviderError,
   buildPlannerPrompt,
-  extractJsonObject,
   mergeWithTemplate,
-  kieChatPathForModel,
-  KIE_DEFAULT_BASE_URL,
   KIE_DEFAULT_PLANNER_MODEL,
   PLANNER_SYSTEM_PROMPT,
   type PlannerErrorClass,
@@ -85,6 +96,23 @@ export {
   type PlannerProviderKind,
   type CreateShotPlanProviderOptions,
 } from './create-planner.js';
+export {
+  KieChatAgentProvider,
+  FakeChatAgentProvider,
+  ChatWorkflowCommandSchema,
+  ChatAgentTurnOutputSchema,
+  CHAT_AGENT_SYSTEM_PROMPT,
+  createChatAgentProvider,
+  resolveChatProviderKind,
+  type ChatAgentProvider,
+  type ChatAgentMessage,
+  type ChatAgentTurnInput,
+  type ChatAgentTurnOutput,
+  type ChatProviderKind,
+  type KieChatAgentConfig,
+  type FakeChatAgentOptions,
+  type CreateChatAgentProviderOptions,
+} from './chat-agent.js';
 export {
   createImageAdapter,
   resolveImageProviderKind,
