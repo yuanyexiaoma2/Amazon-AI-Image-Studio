@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Button, ErrorBanner, Input } from '@/components/ui';
 
 type Balances = {
   availableMicrounits: number;
@@ -75,56 +76,54 @@ export default function AdminPage() {
   }
 
   return (
-    <main style={{ padding: 24, fontFamily: 'system-ui', maxWidth: 1100 }}>
+    <main className="container" style={{ maxWidth: 1100 }}>
       <h1>管理后台 — 任务 / 积分 / 对账</h1>
-      <p style={{ color: '#555' }}>仅 OWNER/ADMIN（W7-06）。Fake 账本 — ADR-0003。</p>
-      <label>
-        工作空间 ID{' '}
-        <input
-          value={workspaceId}
-          onChange={(e) => setWorkspaceId(e.target.value)}
-          style={{ width: 360 }}
-        />
-      </label>{' '}
-      <button type="button" onClick={() => void load()}>
-        刷新
-      </button>
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
-      {message && <p style={{ color: 'green' }}>{message}</p>}
+      <p className="muted">仅 OWNER/ADMIN（W7-06）。Fake 账本 — ADR-0003。</p>
+      <div className="row">
+        <label className="row" style={{ flex: 1 }}>
+          工作空间 ID{' '}
+          <Input
+            value={workspaceId}
+            onChange={(e) => setWorkspaceId(e.target.value)}
+            style={{ maxWidth: 360 }}
+          />
+        </label>
+        <Button onClick={() => void load()}>刷新</Button>
+      </div>
+      {error && <ErrorBanner message={error} />}
+      {message && <p className="banner-info">{message}</p>}
 
-      <section style={{ marginTop: 24 }}>
+      <section style={{ marginTop: 'var(--space-6)' }}>
         <h2>积分调整</h2>
-        <input
-          value={adjustAmount}
-          onChange={(e) => setAdjustAmount(e.target.value)}
-          style={{ width: 160 }}
-        />{' '}
-        微单位{' '}
-        <input
-          value={adjustNote}
-          onChange={(e) => setAdjustNote(e.target.value)}
-          style={{ width: 280 }}
-        />{' '}
-        <button type="button" onClick={() => void onAdjust()}>
-          调整
-        </button>
+        <div className="row">
+          <Input
+            value={adjustAmount}
+            onChange={(e) => setAdjustAmount(e.target.value)}
+            style={{ width: 160 }}
+          />
+          微单位
+          <Input
+            value={adjustNote}
+            onChange={(e) => setAdjustNote(e.target.value)}
+            style={{ width: 280 }}
+          />
+          <Button onClick={() => void onAdjust()}>调整</Button>
+        </div>
         {credits && (
-          <pre style={{ background: '#f6f6f6', padding: 12 }}>
-            {JSON.stringify(credits.balances, null, 2)}
-          </pre>
+          <pre className="code-block">{JSON.stringify(credits.balances, null, 2)}</pre>
         )}
       </section>
 
-      <section style={{ marginTop: 24 }}>
+      <section style={{ marginTop: 'var(--space-6)' }}>
         <h2>成本对账</h2>
-        <pre style={{ background: '#f6f6f6', padding: 12, maxHeight: 280, overflow: 'auto' }}>
+        <pre className="code-block" style={{ maxHeight: 280 }}>
           {JSON.stringify(recon, null, 2)}
         </pre>
       </section>
 
-      <section style={{ marginTop: 24 }}>
+      <section style={{ marginTop: 'var(--space-6)' }}>
         <h2>任务</h2>
-        <pre style={{ background: '#f6f6f6', padding: 12, maxHeight: 420, overflow: 'auto' }}>
+        <pre className="code-block" style={{ maxHeight: 420 }}>
           {JSON.stringify(jobs, null, 2)}
         </pre>
       </section>

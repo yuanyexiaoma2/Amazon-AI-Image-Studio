@@ -263,37 +263,38 @@ export function MaskEditor(props: Props) {
 
   return (
     <div
+      className="stack"
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-        padding: 12,
-        background: '#0f1628',
-        border: '1px solid #2a3a5a',
-        borderRadius: 8,
-        color: '#e8eefc',
+        gap: 'var(--space-2)',
+        padding: 'var(--space-3)',
+        background: 'var(--panel)',
+        border: '1px solid var(--border-strong)',
+        borderRadius: 'var(--radius-lg)',
+        color: 'var(--text)',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <strong>蒙版编辑器（W5-03）</strong>
         {props.onClose ? (
-          <button type="button" onClick={props.onClose} style={btnStyle}>
+          <button type="button" className="btn" onClick={props.onClose}>
             关闭
           </button>
         ) : null}
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, fontSize: 12, alignItems: 'center' }}>
+      <div className="row" style={{ fontSize: 'var(--font-size-sm)' }}>
         <button
           type="button"
+          className="btn"
           onClick={() => setTool('brush')}
-          style={{ ...btnStyle, outline: tool === 'brush' ? '2px solid #4af' : undefined }}
+          style={{ outline: tool === 'brush' ? '2px solid var(--focus)' : undefined }}
         >
           画笔
         </button>
         <button
           type="button"
+          className="btn"
           onClick={() => setTool('erase')}
-          style={{ ...btnStyle, outline: tool === 'erase' ? '2px solid #4af' : undefined }}
+          style={{ outline: tool === 'erase' ? '2px solid var(--focus)' : undefined }}
         >
           擦除
         </button>
@@ -326,13 +327,13 @@ export function MaskEditor(props: Props) {
           />{' '}
           预览
         </label>
-        <button type="button" onClick={undo} style={btnStyle}>
+        <button type="button" className="btn" onClick={undo}>
           撤销
         </button>
-        <button type="button" onClick={() => void save(false)} style={btnStyle}>
+        <button type="button" className="btn" onClick={() => void save(false)}>
           保存
         </button>
-        <button type="button" onClick={() => void save(true)} style={btnStyle}>
+        <button type="button" className="btn" onClick={() => void save(true)}>
           保存并渲染
         </button>
       </div>
@@ -342,7 +343,7 @@ export function MaskEditor(props: Props) {
           height: size,
           position: 'relative',
           overflow: 'hidden',
-          border: '1px solid #334',
+          border: '1px solid var(--border-canvas)',
           cursor: tool === 'brush' ? 'crosshair' : 'cell',
         }}
       >
@@ -363,20 +364,10 @@ export function MaskEditor(props: Props) {
           onPointerCancel={onPointerUp}
         />
       </div>
-      <div style={{ fontSize: 11, opacity: 0.75 }}>
+      <div className="muted" style={{ fontSize: 'var(--font-size-xs)' }}>
         源图 {props.sourceWidth}×{props.sourceHeight} · 笔划 {strokes.length} ·{' '}
         {maskId ? `蒙版 ${maskId.slice(0, 8)}…` : '未保存'} · {status}
       </div>
     </div>
   );
 }
-
-const btnStyle: Record<string, string | number> = {
-  background: '#121a2e',
-  border: '1px solid #2a3a5a',
-  color: '#e8eefc',
-  borderRadius: 6,
-  padding: '4px 8px',
-  cursor: 'pointer',
-  fontSize: 12,
-};

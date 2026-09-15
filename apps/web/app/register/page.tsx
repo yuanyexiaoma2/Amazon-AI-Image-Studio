@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button, ErrorBanner, Input } from '@/components/ui';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -30,42 +31,36 @@ export default function RegisterPage() {
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
+    <div className="container">
       <h1>注册</h1>
-      <form onSubmit={onSubmit} style={{ display: 'grid', gap: 12, maxWidth: 360 }}>
+      <form onSubmit={onSubmit} className="stack" style={{ maxWidth: 360 }}>
         <label>
           姓名（可选）
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={{ display: 'block', width: '100%', padding: 8 }}
-          />
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <label>
           邮箱
-          <input
+          <Input
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            style={{ display: 'block', width: '100%', padding: 8 }}
           />
         </label>
         <label>
           密码（至少 12 位）
-          <input
+          <Input
             type="password"
             required
             minLength={12}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            style={{ display: 'block', width: '100%', padding: 8 }}
           />
         </label>
-        {error ? <p style={{ color: '#ff8f8f' }}>{error}</p> : null}
-        <button type="submit" disabled={loading} style={{ padding: 10 }}>
+        {error ? <ErrorBanner message={error} /> : null}
+        <Button type="submit" variant="primary" size="lg" disabled={loading}>
           {loading ? '创建中…' : '创建账号'}
-        </button>
+        </Button>
       </form>
     </div>
   );

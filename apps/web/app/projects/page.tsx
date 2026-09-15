@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Button, EmptyState, ErrorBanner, Input } from '@/components/ui';
 
 type Workspace = { id: string; name: string; role: string };
 type Project = { id: string; sku: string; name: string; status: string };
@@ -49,26 +50,40 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
+    <div className="container">
       <h1>项目</h1>
-      <p style={{ opacity: 0.75 }}>W2 素材库 + Truth Pack（产品真相包）入口。</p>
-      {error && <p style={{ color: '#f88' }}>{error}</p>}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="SKU" />
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="名称" />
-        <button type="button" onClick={createProject}>
+      <p className="muted">W2 素材库 + Truth Pack（产品真相包）入口。</p>
+      {error && <ErrorBanner message={error} />}
+      <div className="row" style={{ marginBottom: 'var(--space-4)' }}>
+        <Input
+          value={sku}
+          onChange={(e) => setSku(e.target.value)}
+          placeholder="SKU"
+          style={{ width: 200 }}
+        />
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="名称"
+          style={{ width: 240 }}
+        />
+        <Button variant="primary" onClick={createProject}>
           创建项目
-        </button>
+        </Button>
       </div>
-      <ul>
-        {projects.map((p) => (
-          <li key={p.id}>
-            <Link href={`/projects/${p.id}?workspaceId=${workspaceId}`} style={{ color: '#9db7ff' }}>
-              {p.sku} — {p.name}
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {projects.length === 0 ? (
+        <EmptyState>暂无项目 — 输入 SKU 与名称创建第一个项目。</EmptyState>
+      ) : (
+        <ul className="stack" style={{ gap: 'var(--space-2)', paddingLeft: 18 }}>
+          {projects.map((p) => (
+            <li key={p.id}>
+              <Link href={`/projects/${p.id}?workspaceId=${workspaceId}`}>
+                {p.sku} — {p.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

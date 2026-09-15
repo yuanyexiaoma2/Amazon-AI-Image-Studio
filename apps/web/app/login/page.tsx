@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { Button, ErrorBanner, Input } from '@/components/ui';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,33 +31,31 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
+    <div className="container">
       <h1>登录</h1>
-      <form onSubmit={onSubmit} style={{ display: 'grid', gap: 12, maxWidth: 360 }}>
+      <form onSubmit={onSubmit} className="stack" style={{ maxWidth: 360 }}>
         <label>
           邮箱
-          <input
+          <Input
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            style={{ display: 'block', width: '100%', padding: 8 }}
           />
         </label>
         <label>
           密码
-          <input
+          <Input
             type="password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            style={{ display: 'block', width: '100%', padding: 8 }}
           />
         </label>
-        {error ? <p style={{ color: '#ff8f8f' }}>{error}</p> : null}
-        <button type="submit" disabled={loading} style={{ padding: 10 }}>
+        {error ? <ErrorBanner message={error} /> : null}
+        <Button type="submit" variant="primary" size="lg" disabled={loading}>
           {loading ? '登录中…' : '登录'}
-        </button>
+        </Button>
       </form>
     </div>
   );
