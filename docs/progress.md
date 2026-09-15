@@ -581,3 +581,34 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | Out of scope | UI redesign PR-1; chat Agent PR-4; real Provider; BRANCH_FROM all-branch traversal; whole-graph PATCH endpoint retained |
 
 **Status:** **DONE** (not VERIFIED). Per V2 rule, VERIFIED requires a fresh-context re-review + owner merge + green main CI.
+
+---
+
+## V2 PR-1 — UI 重构 (DONE)
+
+**Branch:** `feat/v2-ui-overhaul` (stacked on `feat/v2-canvas-commands` / PR #25, 未合并)
+**Acceptance unit (one PR, one independent review):** V2 vision §3 PR-1 — 样式体系、素材缩略图、审核页真实看图、步骤导航、登录态导航。**Merging is performed by the owner** (V2 rule); implementer only opens the PR.
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| PR-1-01 | 样式体系（方案 A 零依赖） | DONE | `app/globals.css` CSS 变量 tokens（抽出 #0b1020/#e8eefc/#1e2a44/#9db7ff/#121a2e/#2a3a5a 等全部魔法色）+ reset + 组件类；`components/ui.tsx` 原语 Button/Card/Input/Select/Badge/ErrorBanner/EmptyState/Spinner；逐页去内联化（layout/home/login/register/projects/项目详情/admin/review/studio stub + StudioCanvas/PropertiesPanel/MaskEditor），不改交互逻辑（commit `2c521a2`） |
+| PR-1-02 | 登录态导航 | DONE | `components/site-header.tsx`（/api/me：email + workspace 名/角色徽标，OWNER/ADMIN 显示 Admin 入口，signOut 退出登录）替换 layout 内联 header；`lib/use-me.ts` 轻量缓存；全站裸 `<a>` → next/link（commit `34b3f7d`） |
+| PR-1-03 | Workspace 上下文 | DONE | `lib/use-workspace.ts`：?workspaceId= 优先 → localStorage 记忆 → /api/me 首个 workspace；`projectHref()` 自动拼参；projects/项目详情/studio/review 接入，缺参不再裸报错（commit `be8a8d9`） |
+| PR-1-04 | 步骤导航 | DONE | `components/project-stepper.tsx`（素材→Truth Pack→Shot Plan→画布→审核导出，当前高亮/完成打勾/可点击）；纯函数 `lib/project-step.ts deriveProjectStep()` + 10 个 vitest 单测；项目详情/studio/review 三页顶部（commit `a9c16c3`） |
+| PR-1-05 | 素材缩略图 + 审核真图 | DONE | `lib/use-asset-image.ts`（download-url 签名 URL，900s 过期/800s 预刷新/按 versionId 缓存/卸载清理）+ `components/asset-image.tsx`（原生 img）；项目详情素材列表缩略图、PropertiesPanel source_image 选中预览、节点卡片小图；审核页 compare 面板垫 NORMALIZED_PNG 真图 + evidence 叠加保留 + 失败回退灰底（commit `139f43c`） |
+| PR-1-06 | /projects Suspense 修复 | DONE | useWorkspace 经 useSearchParams，/projects 缺 Suspense 导致 build 预渲染失败 → 补边界（commit `4ee7cd2`） |
+
+### V2 PR-1 commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm lint` | Exit 0（apps/web 仍是 `next lint \|\| true` — 范围外发现） |
+| `pnpm typecheck` | Exit 0（packages build + 全仓 tsc） |
+| `pnpm test` | 全绿：web 17 passed（含新 project-step 10 个）/ 10 skipped（integration 需 RUN_INTEGRATION）；domain 151；contracts 24；providers 33；db 4 passed/31 skipped；imaging 9；config 7；storage 2；worker 1 |
+| `pnpm build` | Exit 0（13 静态页生成；仅有 bullmq 可选依赖 @valkey/valkey-glide 预存警告） |
+| `pnpm test:e2e`（web :3200 + worker，主仓 .env 注入，`IMAGE_PROVIDER=fake INSPECT_INLINE=1 GENERATION_INLINE=1`，`APP_URL=http://127.0.0.1:3200`） | **PASS** exit 0，87×E2E OK，含 V2 canvas commands 全段；验完 web/worker 进程已杀、:3200 已释放 |
+| 视觉自验 | tabbit 浏览器 CDP `Target.createTarget` 持续失败（3 个 task 均无法新建页），**截图未成**；降级为 SSR HTML 验证：/ /login /register /projects /studio 全部带编译后 CSS 包（含全部 tokens/组件类）、零内联 hex 样式、class 结构正确（site-header/container/btn/input/stepper 等） |
+| /api/me | 已返回 workspaces[].role（OWNER/ADMIN 判断无需 API 变更） |
+
+**范围纪律（规则 13）发现但未修：** `apps/web` lint 脚本是 `next lint \|\| true`（实质不执行）；无页面级鉴权 middleware（页面依赖 API 401 + 前端引导）；多 workflow 切换器缺失；无组件测试框架；admin 页保留手工 workspaceId 输入（ops 工具定位）；原生 `<select>` 下拉项无法内嵌缩略图（仅做选中后预览）。
+**Status:** **DONE** (not VERIFIED). Per V2 rule, VERIFIED requires a fresh-context re-review + owner merge + green main CI.
