@@ -555,7 +555,7 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 ---
 
-## V2 PR-2 — 画布命令层 + 自由画布 (DONE)
+## V2 PR-2 — 画布命令层 + 自由画布 (VERIFIED)
 
 **Branch:** `feat/v2-canvas-commands` (from main `b4d247e`)
 **Acceptance unit (one PR, one independent review):** V2 vision §3 PR-2 — canvas command layer (addNode / connect / configure / run / undo) + free canvas Studio UX. **Merging is performed by the owner** (V2 rule); implementer only opens the PR.
@@ -580,7 +580,7 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | Provider | **Fake only** (e2e explicit `IMAGE_PROVIDER=fake`); no real keys |
 | Out of scope | UI redesign PR-1; chat Agent PR-4; real Provider; BRANCH_FROM all-branch traversal; whole-graph PATCH endpoint retained |
 
-**Status:** **DONE** (not VERIFIED). Per V2 rule, VERIFIED requires a fresh-context re-review + owner merge + green main CI.
+**Status:** **VERIFIED** — 符合 V2 规则 12d：fresh-context 复审 REVIEW PASS（PR #25 留言 <https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/pull/25#issuecomment-5673584150>）+ 所有者 squash 合并至 main（merge SHA `7a2a07d90083235222bd57e11cf7304f983b0bdb`）+ main CI 绿（run <https://github.com/yuanyexiaoma2/Amazon-AI-Image-Studio/actions/runs/34925284168>）。
 
 ---
 
