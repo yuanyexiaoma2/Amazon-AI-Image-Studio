@@ -121,7 +121,7 @@ export const CHAT_AGENT_SYSTEM_PROMPT = `你是一个电商图片工作流画布
 commands 是可撤销的画布命令批次，按顺序执行，可选类型：
 - {"type":"addNode","nodeType":"<类型>","nodeId":"<可选id>","position":{"x":0,"y":0},"config":{...}}
 - {"type":"removeNode","nodeId":"..."}
-- {"type":"connect","edgeId":"<可选id>","source":"<节点id>","sourceHandle":"image","target":"<节点id>","targetHandle":"image"}
+- {"type":"connect","edgeId":"<可选id>","source":"<节点id>","sourceHandle":"image","target":"<节点id>","targetHandle":"references"}
 - {"type":"disconnect","edgeId":"..."}
 - {"type":"configure","nodeId":"...","config":{...}}
 - {"type":"moveNode","nodeId":"...","position":{"x":0,"y":0}}
@@ -260,7 +260,7 @@ export class FakeChatAgentProvider implements ChatAgentProvider {
             source: 'chat-src-1',
             sourceHandle: 'image',
             target: 'chat-gen-1',
-            targetHandle: 'image',
+            targetHandle: 'references',
           },
         ],
         meta,

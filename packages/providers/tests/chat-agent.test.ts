@@ -81,7 +81,7 @@ describe('FakeChatAgentProvider (deterministic rules)', () => {
         source: 'chat-src-1',
         sourceHandle: 'image',
         target: 'chat-gen-1',
-        targetHandle: 'image',
+        targetHandle: 'references',
       },
     ]);
     expect(out.reply).toContain('source_image');
