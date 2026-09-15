@@ -91,7 +91,12 @@ describe.skipIf(!run)('Shot Plan API role gates (real route handlers)', () => {
     return { owner, reviewer, member, project, truthRevisionId: revision.id };
   }
 
-  it('API: REVIEWER denied generate/PUT; may GET and approve; MEMBER cannot approve', async () => {
+  it(
+    'API: REVIEWER denied generate/PUT; may GET and approve; MEMBER cannot approve',
+    // Seeds 3 users + workspaces + truth pack via real Postgres; can exceed the
+    // 5s default on a loaded local machine.
+    { timeout: 30_000 },
+    async () => {
     const { owner, reviewer, member, project } = await seed();
     const workspaceId = owner.workspace.id;
     const projectId = project.id;

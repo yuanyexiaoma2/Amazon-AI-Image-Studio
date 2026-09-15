@@ -18,6 +18,13 @@
  *     INSPECT_INLINE also runs QA/export inline (QA_INLINE / EXPORT_INLINE optional).
  * 11) W7: variants 3×7 Fake batch, partial fail/retry, ledger, structure/logo BLOCK, admin
  * 12) V2 PR-2: canvas command layer — apply/idempotency/undo/redo/run/budget gate + masks list
+ * 13) V2 PR-4: chat agent — session/turn/graph apply/run + session budget gate/undo/cross-tenant
+ *
+ * PROVIDER OVERRIDE REQUIRED: this script exercises the Fake providers only.
+ * The SERVER (web + worker) must be started with explicit fake overrides —
+ * IMAGE_PROVIDER=fake CHAT_PROVIDER=fake PLANNER_PROVIDER=fake — because the
+ * local .env may carry kie (real keys); the e2e script itself is client-side
+ * and cannot control server env. Never run e2e against real providers.
  */
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createHash, randomUUID } from 'node:crypto';
@@ -2334,6 +2341,192 @@ async function main() {
 
 
   console.log('E2E PASS: W2…W7 variants batch/QA/export/admin (Fake only)');
+
+  // ─── V2 PR-4: chat agent (session / agent turn / graph apply / session budget / undo) ───
+  // Fresh user+workspace so the credit balance is deterministic: model-registry GET
+  // seeds the W4 demo grant ($10). Fake primary model = $0.01/image; the fake agent's
+  // 「搭建」 graph has exactly 1 executable node (generate) → one run estimate is
+  // 10_000 microunits = $0.01. Session budgetLimit $0.01 ⇒ first run passes
+  // (estimate == limit, gate is strict >), spent=10_000, second run is rejected.
+  const emailChat = `e2e-chat-${suffix}@example.com`;
+  await register(emailChat, password, 'Chat User');
+  const jarChat = await login(emailChat, password);
+  const meChat = await me(jarChat);
+  const chatWs = meChat.workspaces[0].id;
+  const chatHeaders = (reqId) => ({
+    'content-type': 'application/json',
+    cookie: jarChat.header(),
+    'x-request-id': reqId,
+  });
+
+  const chatRegistry = await fetch(`${base}/api/workspaces/${chatWs}/model-registry`, {
+    headers: chatHeaders(`e2e-chat-registry-${suffix}`),
+  });
+  if (chatRegistry.status !== 200) fail('PR-4 model-registry (credit seed)', { status: chatRegistry.status });
+  ok('PR-4 fresh workspace + credit seed grant');
+
+  const chatProject = await createProject(jarChat, chatWs, `SKU-CHAT-${suffix}`, 'E2E Chat Project');
+  if (chatProject.status !== 201) fail('PR-4 create project', chatProject);
+  const chatProjectId = chatProject.json.id;
+
+  const chatWfRes = await fetch(
+    `${base}/api/workspaces/${chatWs}/projects/${chatProjectId}/workflows`,
+    {
+      method: 'POST',
+      headers: chatHeaders(`e2e-chat-wf-${suffix}`),
+      body: JSON.stringify({ name: 'E2E chat agent workflow' }),
+    },
+  );
+  const chatWf = await chatWfRes.json();
+  if (chatWfRes.status !== 201) fail('PR-4 create workflow', { status: chatWfRes.status, chatWf });
+  const chatWorkflowId = chatWf.workflowId;
+
+  const chatBase = `${base}/api/workspaces/${chatWs}/projects/${chatProjectId}/chat-sessions`;
+  const chatWfUrl = `${base}/api/workspaces/${chatWs}/workflows/${chatWorkflowId}`;
+
+  // 1) create session bound to the workflow with the tight budget
+  const chatSessRes = await fetch(chatBase, {
+    method: 'POST',
+    headers: chatHeaders(`e2e-chat-sess-${suffix}`),
+    body: JSON.stringify({
+      workflowId: chatWorkflowId,
+      title: 'E2E chat session',
+      budgetLimit: { currency: 'USD', amount: 0.01 },
+    }),
+  });
+  const chatSess = await chatSessRes.json();
+  if (chatSessRes.status !== 201) fail('PR-4 create session', { status: chatSessRes.status, chatSess });
+  if (chatSess.workflowId !== chatWorkflowId) fail('PR-4 session not bound to workflow', chatSess);
+  if (chatSess.spentMicrounits !== 0) fail('PR-4 session spentMicrounits != 0', chatSess);
+  if (chatSess.budgetLimit?.amount !== 0.01) fail('PR-4 session budgetLimit mismatch', chatSess);
+  const chatSid = chatSess.id;
+  ok(`PR-4 chat session ${chatSid.slice(0, 8)}… (budget $0.01)`);
+
+  const chatListRes = await fetch(`${chatBase}?workflowId=${chatWorkflowId}`, {
+    headers: chatHeaders(`e2e-chat-list-${suffix}`),
+  });
+  const chatList = await chatListRes.json();
+  if (chatListRes.status !== 200 || !chatList.items?.some((s) => s.id === chatSid)) {
+    fail('PR-4 list sessions ?workflowId=', { status: chatListRes.status, chatList });
+  }
+  ok('PR-4 list sessions filtered by workflowId');
+
+  // 2) build turn → fake agent emits addNode×2 + connect, applied as one batch
+  const chatTurn1Res = await fetch(`${chatBase}/${chatSid}/messages`, {
+    method: 'POST',
+    headers: chatHeaders(`e2e-chat-turn1-${suffix}`),
+    body: JSON.stringify({ content: '帮我搭建一个主图生成流程' }),
+  });
+  const chatTurn1 = await chatTurn1Res.json();
+  if (chatTurn1Res.status !== 200) fail('PR-4 turn 1 (build)', { status: chatTurn1Res.status, chatTurn1 });
+  if (chatTurn1.assistantMessage?.content?.commandsSummary?.count !== 3) {
+    fail('PR-4 turn 1 expected 3 commands', chatTurn1.assistantMessage);
+  }
+  if (!chatTurn1.batchId) fail('PR-4 turn 1 missing batchId', chatTurn1);
+  if (chatTurn1.run) fail('PR-4 turn 1 unexpected run', chatTurn1.run);
+  const chatBatch1 = chatTurn1.batchId;
+  ok('PR-4 turn 1 「搭建」→ 3 commands applied (batchId present)');
+
+  const chatWfGet1 = await fetch(chatWfUrl, { headers: chatHeaders(`e2e-chat-wfget1-${suffix}`) });
+  const chatWfDraft1 = await chatWfGet1.json();
+  if (chatWfGet1.status !== 200) fail('PR-4 get workflow after build', { status: chatWfGet1.status });
+  const chatNodeIds1 = (chatWfDraft1.graph?.nodes ?? []).map((n) => n.id);
+  const chatEdgeIds1 = (chatWfDraft1.graph?.edges ?? []).map((e) => e.id);
+  if (!chatNodeIds1.includes('chat-src-1') || !chatNodeIds1.includes('chat-gen-1')) {
+    fail('PR-4 graph missing chat-src-1/chat-gen-1', chatWfDraft1.graph);
+  }
+  if (!chatEdgeIds1.includes('chat-edge-1')) fail('PR-4 graph missing chat-edge-1', chatWfDraft1.graph);
+  ok('PR-4 canvas graph contains chat-src-1/chat-gen-1/chat-edge-1');
+
+  // 3) run turn → budget gate rewrites limit to remaining ($0.01) → run created + settles
+  const chatTurn2Res = await fetch(`${chatBase}/${chatSid}/messages`, {
+    method: 'POST',
+    headers: chatHeaders(`e2e-chat-turn2-${suffix}`),
+    body: JSON.stringify({ content: '运行一下' }),
+  });
+  const chatTurn2 = await chatTurn2Res.json();
+  if (chatTurn2Res.status !== 200) fail('PR-4 turn 2 (run)', { status: chatTurn2Res.status, chatTurn2 });
+  if (!chatTurn2.run?.id) fail('PR-4 turn 2 missing run', chatTurn2);
+  if (chatTurn2.budgetRejected) fail('PR-4 turn 2 unexpectedly budget-rejected', chatTurn2);
+  const chatRunId = chatTurn2.run.id;
+  const chatRunEstimate = chatTurn2.run.estimateMicrounits;
+  ok(`PR-4 turn 2 「运行」→ run ${chatRunId.slice(0, 8)}… estimate=${chatRunEstimate}µ`);
+
+  let chatRunFinal = null;
+  for (let i = 0; i < 50; i++) {
+    const g = await fetch(`${base}/api/workspaces/${chatWs}/runs/${chatRunId}`, {
+      headers: { cookie: jarChat.header(), 'x-request-id': `e2e-chat-run-poll-${suffix}-${i}` },
+    });
+    chatRunFinal = await g.json();
+    const st = chatRunFinal.status ?? chatRunFinal.run?.status;
+    if (['SUCCEEDED', 'FAILED_FINAL', 'FAILED_RETRYABLE', 'CANCELED'].includes(st)) break;
+    await sleep(250);
+  }
+  const chatRunStatus = chatRunFinal?.status ?? chatRunFinal?.run?.status;
+  if (chatRunStatus !== 'SUCCEEDED') fail('PR-4 run did not succeed', chatRunFinal);
+  ok('PR-4 agent run settled → SUCCEEDED');
+
+  const chatSessGet1 = await fetch(`${chatBase}/${chatSid}`, {
+    headers: chatHeaders(`e2e-chat-sessget1-${suffix}`),
+  });
+  const chatSessDetail1 = await chatSessGet1.json();
+  if (chatSessGet1.status !== 200) fail('PR-4 get session', { status: chatSessGet1.status });
+  if (chatSessDetail1.spentMicrounits !== chatRunEstimate || chatSessDetail1.spentMicrounits <= 0) {
+    fail('PR-4 session spentMicrounits did not accumulate run estimate', chatSessDetail1);
+  }
+  if (!Array.isArray(chatSessDetail1.messages) || chatSessDetail1.messages.length !== 4) {
+    fail('PR-4 session expected 4 messages (2 user + 2 assistant)', chatSessDetail1.messages?.length);
+  }
+  ok(`PR-4 session spentMicrounits=${chatSessDetail1.spentMicrounits}µ accumulated`);
+
+  // 4) budget exhausted → run rejected, no batch, graph untouched
+  const chatTurn3Res = await fetch(`${chatBase}/${chatSid}/messages`, {
+    method: 'POST',
+    headers: chatHeaders(`e2e-chat-turn3-${suffix}`),
+    body: JSON.stringify({ content: '再运行一次' }),
+  });
+  const chatTurn3 = await chatTurn3Res.json();
+  if (chatTurn3Res.status !== 200) fail('PR-4 turn 3 (over budget)', { status: chatTurn3Res.status, chatTurn3 });
+  if (chatTurn3.budgetRejected !== true) fail('PR-4 turn 3 expected budgetRejected=true', chatTurn3);
+  if (chatTurn3.run) fail('PR-4 turn 3 unexpected run', chatTurn3.run);
+  if (chatTurn3.batchId) fail('PR-4 turn 3 unexpected batchId (no commands should survive)', chatTurn3);
+  const chatWfGet2 = await fetch(chatWfUrl, { headers: chatHeaders(`e2e-chat-wfget2-${suffix}`) });
+  const chatWfDraft2 = await chatWfGet2.json();
+  if ((chatWfDraft2.graph?.nodes ?? []).length !== 2) {
+    fail('PR-4 graph changed on budget-rejected turn', chatWfDraft2.graph);
+  }
+  const chatSessGet2 = await fetch(`${chatBase}/${chatSid}`, {
+    headers: chatHeaders(`e2e-chat-sessget2-${suffix}`),
+  });
+  const chatSessDetail2 = await chatSessGet2.json();
+  if (chatSessDetail2.spentMicrounits !== chatSessDetail1.spentMicrounits) {
+    fail('PR-4 spentMicrounits changed on rejected turn', chatSessDetail2);
+  }
+  ok('PR-4 turn 3 budget gate: budgetRejected=true, no run, graph + spend unchanged');
+
+  // 5) undo the turn-1 batch by batchId → graph rolls back to empty
+  const chatUndo = await fetch(`${chatWfUrl}/commands/undo`, {
+    method: 'POST',
+    headers: chatHeaders(`e2e-chat-undo-${suffix}`),
+    body: JSON.stringify({ ifRevision: chatWfDraft2.revisionNumber, batchId: chatBatch1 }),
+  });
+  const chatUndoJson = await chatUndo.json();
+  if (chatUndo.status !== 200) fail('PR-4 undo agent batch', { status: chatUndo.status, chatUndoJson });
+  if ((chatUndoJson.graph?.nodes ?? []).length !== 0) {
+    fail('PR-4 undo did not restore empty graph', chatUndoJson.graph);
+  }
+  ok('PR-4 commands/undo {batchId} rolled the agent build batch back to 0 nodes');
+
+  // 6) cross-tenant: user B (different workspace) cannot read the session
+  const chatXRes = await fetch(`${chatBase}/${chatSid}`, {
+    headers: { cookie: jarB.header(), 'x-request-id': `e2e-chat-xtenant-${suffix}` },
+  });
+  if (chatXRes.status !== 403 && chatXRes.status !== 404) {
+    fail('PR-4 expected cross-tenant 403/404', { status: chatXRes.status });
+  }
+  ok(`PR-4 cross-tenant session read → ${chatXRes.status}`);
+
+  console.log('E2E PASS: V2 PR-4 chat agent (session/turn/graph/run/budget gate/undo/cross-tenant)');
 }
 
 main().catch((err) => {

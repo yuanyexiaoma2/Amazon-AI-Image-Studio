@@ -63,6 +63,13 @@ import {
   VariantRunSchema,
   CreditAdjustRequestSchema,
 } from './variants.js';
+import {
+  ChatSessionSchema,
+  ChatMessageSchema,
+  CreateChatSessionRequestSchema,
+  PostChatMessageRequestSchema,
+  PostChatMessageResponseSchema,
+} from './chat.js';
 import YAML from 'yaml';
 
 extendZodWithOpenApi(z);
@@ -586,6 +593,93 @@ registry.registerPath({
   path: '/api/workspaces/{workspaceId}/exports/{bundleId}/download-url',
   summary: 'Short-lived ZIP download URL',
   responses: { 200: { description: 'OK' } },
+});
+
+const ChatSessionListResponseSchema = z.object({ items: z.array(ChatSessionSchema) });
+const ChatSessionDetailResponseSchema = ChatSessionSchema.extend({
+  messages: z.array(ChatMessageSchema),
+});
+
+registry.register('ChatSession', ChatSessionSchema);
+registry.register('ChatMessage', ChatMessageSchema);
+registry.register('CreateChatSessionRequest', CreateChatSessionRequestSchema);
+registry.register('PostChatMessageRequest', PostChatMessageRequestSchema);
+registry.register('PostChatMessageResponse', PostChatMessageResponseSchema);
+registry.register('ChatSessionListResponse', ChatSessionListResponseSchema);
+registry.register('ChatSessionDetailResponse', ChatSessionDetailResponseSchema);
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/projects/{projectId}/chat-sessions',
+  summary: 'Create chat agent session (V2 PR-4; WRITE role; optional workflowId + budgetLimit)',
+  request: {
+    body: { content: { 'application/json': { schema: CreateChatSessionRequestSchema } } },
+  },
+  responses: {
+    201: {
+      description: 'Created',
+      content: { 'application/json': { schema: ChatSessionSchema } },
+    },
+    403: {
+      description: 'Forbidden',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/workspaces/{workspaceId}/projects/{projectId}/chat-sessions',
+  summary: 'List chat sessions (?workflowId= filter)',
+  responses: {
+    200: {
+      description: 'OK',
+      content: { 'application/json': { schema: ChatSessionListResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/workspaces/{workspaceId}/projects/{projectId}/chat-sessions/{sessionId}',
+  summary: 'Get chat session (fields flattened) + messages array (?limit<=200)',
+  responses: {
+    200: {
+      description: 'OK',
+      content: { 'application/json': { schema: ChatSessionDetailResponseSchema } },
+    },
+    404: {
+      description: 'Not found',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/workspaces/{workspaceId}/projects/{projectId}/chat-sessions/{sessionId}/messages',
+  summary: 'Agent turn (synchronous): reply + JSON command batch + session budget gate (502 CHAT_AUTH_FAILED / 503 CHAT_UNAVAILABLE)',
+  request: {
+    body: { content: { 'application/json': { schema: PostChatMessageRequestSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Turn applied',
+      content: { 'application/json': { schema: PostChatMessageResponseSchema } },
+    },
+    404: {
+      description: 'Not found',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    502: {
+      description: 'Chat provider auth failed',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    503: {
+      description: 'Chat provider unavailable',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+  },
 });
 
 const generator = new OpenApiGeneratorV3(registry.definitions);

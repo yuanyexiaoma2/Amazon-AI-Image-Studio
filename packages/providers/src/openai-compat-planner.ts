@@ -2,9 +2,9 @@
  * OpenAI-compatible Shot Plan Provider (V2 planner agent).
  *
  * Drafts selling-point-aware shot briefs from the owner's intent + confirmed
- * Truth Pack facts via any OpenAI-compatible `chat/completions` endpoint.
- * Primary target: kie.ai (`POST {KIE_BASE_URL}/api/v1/chat/completions`) so a
- * single KIE_API_KEY powers both image generation and the planner LLM.
+ * Truth Pack facts via the shared kie chat client (`./kie-chat.ts`).
+ * Primary target: kie.ai so a single KIE_API_KEY powers both image generation
+ * and the planner LLM.
  *
  * Safety design:
  * - Deterministic fields (slot set, orderIndex, aspectRatio, targetPixels,
@@ -23,22 +23,27 @@ import type {
   ShotPlanDraftResult,
   ShotPlanProvider,
 } from './ports.js';
+import {
+  ChatProviderError,
+  KIE_DEFAULT_BASE_URL,
+  KIE_DEFAULT_LLM_MODEL,
+  extractJsonObject,
+  kieChatCompletion,
+  type ChatErrorClass,
+  type KieChatConfig,
+} from './kie-chat.js';
 
-export type PlannerErrorClass =
-  | 'AUTH'
-  | 'VALIDATION'
-  | 'RATE_LIMIT'
-  | 'TRANSIENT'
-  | 'TIMEOUT'
-  | 'UNKNOWN';
+export {
+  extractJsonObject,
+  kieChatPathForModel,
+  KIE_DEFAULT_BASE_URL,
+} from './kie-chat.js';
 
-export class PlannerProviderError extends Error {
-  constructor(
-    readonly errorClass: PlannerErrorClass,
-    message: string,
-    readonly httpStatus?: number,
-  ) {
-    super(message);
+export type PlannerErrorClass = ChatErrorClass;
+
+export class PlannerProviderError extends ChatProviderError {
+  constructor(errorClass: PlannerErrorClass, message: string, httpStatus?: number) {
+    super(errorClass, message, httpStatus);
     this.name = 'PlannerProviderError';
   }
 }
@@ -47,9 +52,9 @@ export type OpenAiCompatPlannerConfig = {
   apiKey: string;
   /** Default https://api.kie.ai (no trailing slash). */
   baseUrl?: string;
-  /** Chat completions path. Default /api/v1/chat/completions (kie unified). */
+  /** Chat completions path. Default /{model}/v1/chat/completions (kie Market). */
   chatPath?: string;
-  /** Model ID, e.g. gemini/gemini-2.5-flash (kie provider/model convention). */
+  /** Model ID, e.g. gemini-3-flash (kie provider/model convention). */
   model?: string;
   timeoutMs?: number;
   /** Provider label reported in results/audit, e.g. kie-llm-shot-plan. */
@@ -58,20 +63,7 @@ export type OpenAiCompatPlannerConfig = {
   fetchImpl?: typeof fetch;
 };
 
-export const KIE_DEFAULT_BASE_URL = 'https://api.kie.ai';
-export const KIE_DEFAULT_PLANNER_MODEL = 'gemini-3-flash';
-const DEFAULT_TIMEOUT_MS = 60_000;
-
-/**
- * kie.ai LLM chat endpoint shape (docs.kie.ai/market/gemini/*):
- * POST {baseUrl}/{model-slug}/v1/chat/completions — model in the PATH,
- * OpenAI-compatible body. NOT the unified /api/v1/chat/completions
- * (returns "feature not supported" for LLMs).
- */
-export function kieChatPathForModel(model: string): string {
-  const slug = model.trim().replace(/^\/+|\/+$/g, '');
-  return `/${slug}/v1/chat/completions`;
-}
+export const KIE_DEFAULT_PLANNER_MODEL = KIE_DEFAULT_LLM_MODEL;
 
 /** Creative fields the LLM is allowed to fill, per slot+orderIndex. */
 const LlmBriefSchema = z.object({
@@ -128,52 +120,14 @@ export function buildPlannerPrompt(request: ShotPlanDraftRequest, template: Temp
 export const PLANNER_SYSTEM_PROMPT =
   'You are an Amazon product-image art director. You draft truthful, conversion-focused shot plans and output strict JSON only.';
 
-/** Extract the first JSON object from raw model text (tolerates stray prose/fences). */
-export function extractJsonObject(raw: string): unknown {
-  const cleaned = raw.replace(/```(?:json)?/gi, '').trim();
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
-  if (start < 0 || end <= start) {
-    throw new PlannerProviderError('VALIDATION', 'Planner LLM returned no JSON object');
-  }
-  try {
-    return JSON.parse(cleaned.slice(start, end + 1));
-  } catch (e) {
-    throw new PlannerProviderError(
-      'VALIDATION',
-      `Planner LLM returned unparseable JSON: ${(e as Error).message}`,
-    );
-  }
-}
-
-function normalizeHttpError(status: number, bodyText: string): PlannerProviderError {
-  if (status === 401 || status === 403) {
-    return new PlannerProviderError('AUTH', `Planner LLM auth failed (${status})`, status);
-  }
-  if (status === 429) {
-    return new PlannerProviderError('RATE_LIMIT', 'Planner LLM rate limited (429)', status);
-  }
-  if (status === 400 || status === 404) {
-    return new PlannerProviderError(
-      'VALIDATION',
-      `Planner LLM rejected request (${status}): ${bodyText.slice(0, 200)}`,
-      status,
-    );
-  }
-  if (status >= 500) {
-    return new PlannerProviderError('TRANSIENT', `Planner LLM server error (${status})`, status);
-  }
-  return new PlannerProviderError('UNKNOWN', `Planner LLM unexpected status ${status}`, status);
-}
-
 export class OpenAiCompatShotPlanProvider implements ShotPlanProvider {
   readonly name: string;
   private readonly config: {
     apiKey: string;
     baseUrl: string;
-    chatPath: string;
+    chatPath?: string;
     model: string;
-    timeoutMs: number;
+    timeoutMs?: number;
     fetchImpl: typeof fetch;
   };
 
@@ -185,16 +139,15 @@ export class OpenAiCompatShotPlanProvider implements ShotPlanProvider {
     this.config = {
       apiKey: config.apiKey,
       baseUrl: (config.baseUrl ?? KIE_DEFAULT_BASE_URL).replace(/\/+$/, ''),
-      chatPath: config.chatPath ?? kieChatPathForModel(model),
+      chatPath: config.chatPath,
       model,
-      timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      timeoutMs: config.timeoutMs,
       fetchImpl: config.fetchImpl ?? fetch,
     };
     this.name = config.providerName ?? 'openai-compat-shot-plan';
   }
 
   async draftPlan(request: ShotPlanDraftRequest): Promise<ShotPlanDraftResult> {
-    const started = Date.now();
     const template: TemplateEntry[] = [...DEFAULT_SEVEN_IMAGE_TEMPLATE];
     if (request.includePackage) {
       template.push({
@@ -209,69 +162,44 @@ export class OpenAiCompatShotPlanProvider implements ShotPlanProvider {
       });
     }
 
-    const url = `${this.config.baseUrl}${this.config.chatPath}`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.config.timeoutMs);
-    let res: Response;
+    const kieConfig: KieChatConfig = {
+      apiKey: this.config.apiKey,
+      baseUrl: this.config.baseUrl,
+      chatPath: this.config.chatPath,
+      model: this.config.model,
+      timeoutMs: this.config.timeoutMs,
+      fetchImpl: this.config.fetchImpl,
+    };
+
+    let completion;
     try {
-      res = await this.config.fetchImpl(url, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${this.config.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: this.config.model,
-          messages: [
-            { role: 'system', content: [{ type: 'text', text: PLANNER_SYSTEM_PROMPT }] },
-            {
-              role: 'user',
-              content: [{ type: 'text', text: buildPlannerPrompt(request, template) }],
-            },
-          ],
-          temperature: 0.7,
-          response_format: { type: 'json_object' },
-          stream: false,
-        }),
-        signal: controller.signal,
+      completion = await kieChatCompletion({
+        config: kieConfig,
+        messages: [
+          { role: 'system', content: PLANNER_SYSTEM_PROMPT },
+          { role: 'user', content: buildPlannerPrompt(request, template) },
+        ],
+        temperature: 0.7,
+        jsonMode: true,
       });
     } catch (e) {
-      if ((e as Error).name === 'AbortError') {
-        throw new PlannerProviderError(
-          'TIMEOUT',
-          `Planner LLM timed out after ${this.config.timeoutMs}ms`,
-        );
+      if (e instanceof ChatProviderError) {
+        throw new PlannerProviderError(e.errorClass, e.message, e.httpStatus);
       }
-      throw new PlannerProviderError(
-        'TRANSIENT',
-        `Planner LLM network error: ${(e as Error).message}`,
-      );
-    } finally {
-      clearTimeout(timer);
+      throw e;
     }
 
-    if (!res.ok) {
-      throw normalizeHttpError(res.status, await res.text().catch(() => ''));
+    let raw: unknown;
+    try {
+      raw = extractJsonObject(completion.text);
+    } catch (e) {
+      if (e instanceof ChatProviderError) {
+        throw new PlannerProviderError(e.errorClass, e.message, e.httpStatus);
+      }
+      throw e;
     }
 
-    const payload = (await res.json()) as {
-      // kie returns HTTP 200 with an error envelope on failures: {code, msg}
-      code?: number;
-      msg?: string;
-      choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }>;
-    };
-    if (typeof payload.code === 'number' && payload.code >= 400) {
-      throw normalizeHttpError(payload.code, payload.msg ?? '');
-    }
-    const rawContent = payload.choices?.[0]?.message?.content;
-    const text = Array.isArray(rawContent)
-      ? rawContent.map((p) => p.text ?? '').join('')
-      : rawContent;
-    if (!text) {
-      throw new PlannerProviderError('VALIDATION', 'Planner LLM returned empty content');
-    }
-
-    const parsed = LlmPlanSchema.safeParse(extractJsonObject(text));
+    const parsed = LlmPlanSchema.safeParse(raw);
     if (!parsed.success) {
       throw new PlannerProviderError(
         'VALIDATION',
@@ -286,7 +214,7 @@ export class OpenAiCompatShotPlanProvider implements ShotPlanProvider {
       provider: this.name,
       modelId: this.config.model,
       briefs: mergeWithTemplate(template, parsed.data),
-      latencyMs: Date.now() - started,
+      latencyMs: completion.latencyMs,
     };
   }
 }

@@ -99,3 +99,13 @@ export {
   type VariantDetail,
   type VariantRunDetail,
 } from './repositories/variants.js';
+
+export {
+  ChatRepository,
+  ChatNotFoundError,
+  type CreateChatSessionInput,
+  type AppendChatMessageInput,
+  type ChatBudgetState,
+  type ChatMessageContent,
+  type ChatSessionBudgetLimit,
+} from './repositories/chat.js';

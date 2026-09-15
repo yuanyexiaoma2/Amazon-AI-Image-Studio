@@ -135,7 +135,7 @@ components:
           maxLength: 255
         mimeType:
           type: string
-          enum: &a6
+          enum: &a7
             - image/png
             - image/jpeg
             - image/webp
@@ -197,7 +197,7 @@ components:
           format: uuid
         status:
           type: string
-          enum: &a7
+          enum: &a8
             - CREATED
             - UPLOADING
             - UPLOADED
@@ -207,7 +207,7 @@ components:
             - EXPIRED
         assetStatus:
           type: string
-          enum: &a8
+          enum: &a9
             - UPLOADING
             - PROCESSING
             - READY
@@ -246,7 +246,7 @@ components:
               type: integer
             status:
               type: string
-              enum: &a9
+              enum: &a10
                 - DRAFT
                 - PENDING_REVIEW
                 - APPROVED
@@ -293,7 +293,7 @@ components:
                     format: uuid
                   kind:
                     type: string
-                    enum: &a10
+                    enum: &a11
                       - LOCK
                       - ALLOW
                       - UNKNOWN
@@ -400,7 +400,7 @@ components:
               type: integer
             status:
               type: string
-              enum: &a11
+              enum: &a12
                 - DRAFT
                 - PENDING_REVIEW
                 - APPROVED
@@ -1897,7 +1897,7 @@ components:
               - tool
               - size
               - points
-          default: &a12 []
+          default: &a13 []
         coordinateSpace:
           type: string
           enum:
@@ -1924,7 +1924,7 @@ components:
               type: number
               minimum: 0
               maximum: 1
-          default: &a13 {}
+          default: &a14 {}
     UpdateMaskRequest:
       type: object
       properties:
@@ -2087,7 +2087,7 @@ components:
           default: amazon-main-us-v1
         slot:
           type: string
-          enum: &a14
+          enum: &a15
             - MAIN
             - FEATURE
             - DETAIL
@@ -2117,7 +2117,7 @@ components:
           format: uuid
         decision:
           type: string
-          enum: &a17
+          enum: &a18
             - APPROVE
             - REJECT
             - OVERRIDE_BLOCK
@@ -2154,7 +2154,7 @@ components:
         overallStatus:
           type: string
           nullable: true
-          enum: &a15
+          enum: &a16
             - PASS
             - REVIEW
             - BLOCK
@@ -2183,7 +2183,7 @@ components:
                 type: string
               status:
                 type: string
-                enum: &a16
+                enum: &a17
                   - PASS
                   - REVIEW
                   - FAIL
@@ -2238,7 +2238,7 @@ components:
                 format: uuid
               slot:
                 type: string
-                enum: &a18
+                enum: &a19
                   - MAIN
                   - FEATURE
                   - DETAIL
@@ -2257,7 +2257,7 @@ components:
           maxItems: 30
         marketplaceCode:
           type: string
-          enum: &a19
+          enum: &a20
             - US
             - CA
             - MX
@@ -2653,6 +2653,552 @@ components:
         - microunits
         - note
         - idempotencyKey
+    ChatSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        workflowId:
+          type: string
+          nullable: true
+          format: uuid
+        title:
+          type: string
+          nullable: true
+        budgetLimit:
+          type: object
+          nullable: true
+          properties:
+            currency:
+              type: string
+              minLength: 1
+              default: USD
+            amount:
+              type: number
+              minimum: 0
+          required:
+            - amount
+        spentMicrounits:
+          type: integer
+          minimum: 0
+        createdByUserId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+      required:
+        - id
+        - projectId
+        - workflowId
+        - title
+        - budgetLimit
+        - spentMicrounits
+        - createdByUserId
+        - createdAt
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: &a6
+            - USER
+            - ASSISTANT
+            - SYSTEM
+        content:
+          type: object
+          properties:
+            text:
+              type: string
+            commandsSummary:
+              type: object
+              properties:
+                count:
+                  type: integer
+                  minimum: 0
+                types:
+                  type: array
+                  items:
+                    type: string
+                degraded:
+                  type: boolean
+              required:
+                - count
+                - types
+          required:
+            - text
+        batchId:
+          type: string
+          nullable: true
+          format: uuid
+        provider:
+          type: string
+          nullable: true
+        modelId:
+          type: string
+          nullable: true
+        latencyMs:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+      required:
+        - id
+        - sessionId
+        - role
+        - content
+        - batchId
+        - provider
+        - modelId
+        - latencyMs
+        - createdAt
+    CreateChatSessionRequest:
+      type: object
+      properties:
+        workflowId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 128
+        budgetLimit:
+          type: object
+          properties:
+            currency:
+              type: string
+              minLength: 1
+              default: USD
+            amount:
+              type: number
+              minimum: 0
+          required:
+            - amount
+    PostChatMessageRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+      required:
+        - content
+    PostChatMessageResponse:
+      type: object
+      properties:
+        userMessage:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            sessionId:
+              type: string
+              format: uuid
+            role:
+              type: string
+              enum: *a6
+            content:
+              type: object
+              properties:
+                text:
+                  type: string
+                commandsSummary:
+                  type: object
+                  properties:
+                    count:
+                      type: integer
+                      minimum: 0
+                    types:
+                      type: array
+                      items:
+                        type: string
+                    degraded:
+                      type: boolean
+                  required:
+                    - count
+                    - types
+              required:
+                - text
+            batchId:
+              type: string
+              nullable: true
+              format: uuid
+            provider:
+              type: string
+              nullable: true
+            modelId:
+              type: string
+              nullable: true
+            latencyMs:
+              type: integer
+              nullable: true
+            createdAt:
+              type: string
+          required:
+            - id
+            - sessionId
+            - role
+            - content
+            - batchId
+            - provider
+            - modelId
+            - latencyMs
+            - createdAt
+        assistantMessage:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            sessionId:
+              type: string
+              format: uuid
+            role:
+              type: string
+              enum: *a6
+            content:
+              type: object
+              properties:
+                text:
+                  type: string
+                commandsSummary:
+                  type: object
+                  properties:
+                    count:
+                      type: integer
+                      minimum: 0
+                    types:
+                      type: array
+                      items:
+                        type: string
+                    degraded:
+                      type: boolean
+                  required:
+                    - count
+                    - types
+              required:
+                - text
+            batchId:
+              type: string
+              nullable: true
+              format: uuid
+            provider:
+              type: string
+              nullable: true
+            modelId:
+              type: string
+              nullable: true
+            latencyMs:
+              type: integer
+              nullable: true
+            createdAt:
+              type: string
+          required:
+            - id
+            - sessionId
+            - role
+            - content
+            - batchId
+            - provider
+            - modelId
+            - latencyMs
+            - createdAt
+        batchId:
+          type: string
+          nullable: true
+          format: uuid
+        run:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            projectId:
+              type: string
+              format: uuid
+            workflowRevisionId:
+              type: string
+              format: uuid
+            status:
+              type: string
+            estimateMicrounits:
+              type: integer
+            currency:
+              type: string
+            idempotencyKey:
+              type: string
+            scope:
+              nullable: true
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  nodeId:
+                    type: string
+                  status:
+                    type: string
+                  modelKey:
+                    type: string
+                  attempts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        attemptNo:
+                          type: integer
+                        status:
+                          type: string
+                        provider:
+                          type: string
+                        modelId:
+                          type: string
+                        progress:
+                          type: integer
+                        errorClass:
+                          type: string
+                          nullable: true
+                        errorMessage:
+                          type: string
+                          nullable: true
+                        createdAt:
+                          type: string
+                        requestSnapshot:
+                          type: object
+                          properties:
+                            operation:
+                              type: string
+                            nodeType:
+                              type: string
+                            width:
+                              type: number
+                            height:
+                              type: number
+                            aspectRatio:
+                              type: string
+                            resolutionTier:
+                              type: string
+                            targetRatio:
+                              type: string
+                            placement:
+                              type: string
+                            engineKey:
+                              type: string
+                            targetResolution:
+                              type: string
+                            inputFingerprint:
+                              type: string
+                      required:
+                        - id
+                        - attemptNo
+                        - status
+                        - provider
+                        - modelId
+                        - progress
+                        - createdAt
+                required:
+                  - id
+                  - nodeId
+                  - status
+                  - modelKey
+                  - attempts
+            createdAt:
+              type: string
+            updatedAt:
+              type: string
+          required:
+            - id
+            - projectId
+            - workflowRevisionId
+            - status
+            - estimateMicrounits
+            - currency
+            - idempotencyKey
+            - items
+            - createdAt
+            - updatedAt
+        budgetRejected:
+          type: boolean
+      required:
+        - userMessage
+        - assistantMessage
+    ChatSessionListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              projectId:
+                type: string
+                format: uuid
+              workflowId:
+                type: string
+                nullable: true
+                format: uuid
+              title:
+                type: string
+                nullable: true
+              budgetLimit:
+                type: object
+                nullable: true
+                properties:
+                  currency:
+                    type: string
+                    minLength: 1
+                    default: USD
+                  amount:
+                    type: number
+                    minimum: 0
+                required:
+                  - amount
+              spentMicrounits:
+                type: integer
+                minimum: 0
+              createdByUserId:
+                type: string
+                format: uuid
+              createdAt:
+                type: string
+            required:
+              - id
+              - projectId
+              - workflowId
+              - title
+              - budgetLimit
+              - spentMicrounits
+              - createdByUserId
+              - createdAt
+      required:
+        - items
+    ChatSessionDetailResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        workflowId:
+          type: string
+          nullable: true
+          format: uuid
+        title:
+          type: string
+          nullable: true
+        budgetLimit:
+          type: object
+          nullable: true
+          properties:
+            currency:
+              type: string
+              minLength: 1
+              default: USD
+            amount:
+              type: number
+              minimum: 0
+          required:
+            - amount
+        spentMicrounits:
+          type: integer
+          minimum: 0
+        createdByUserId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              sessionId:
+                type: string
+                format: uuid
+              role:
+                type: string
+                enum: *a6
+              content:
+                type: object
+                properties:
+                  text:
+                    type: string
+                  commandsSummary:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+                        minimum: 0
+                      types:
+                        type: array
+                        items:
+                          type: string
+                      degraded:
+                        type: boolean
+                    required:
+                      - count
+                      - types
+                required:
+                  - text
+              batchId:
+                type: string
+                nullable: true
+                format: uuid
+              provider:
+                type: string
+                nullable: true
+              modelId:
+                type: string
+                nullable: true
+              latencyMs:
+                type: integer
+                nullable: true
+              createdAt:
+                type: string
+            required:
+              - id
+              - sessionId
+              - role
+              - content
+              - batchId
+              - provider
+              - modelId
+              - latencyMs
+              - createdAt
+      required:
+        - id
+        - projectId
+        - workflowId
+        - title
+        - budgetLimit
+        - spentMicrounits
+        - createdByUserId
+        - createdAt
+        - messages
   parameters: {}
 paths:
   /api/register:
@@ -2740,7 +3286,7 @@ paths:
                   maxLength: 255
                 mimeType:
                   type: string
-                  enum: *a6
+                  enum: *a7
                 bytes:
                   type: integer
                   minimum: 0
@@ -2839,10 +3385,10 @@ paths:
                     format: uuid
                   status:
                     type: string
-                    enum: *a7
+                    enum: *a8
                   assetStatus:
                     type: string
-                    enum: *a8
+                    enum: *a9
                 required:
                   - uploadId
                   - assetId
@@ -2884,7 +3430,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a9
+                        enum: *a10
                       facts:
                         type: array
                         items:
@@ -2923,7 +3469,7 @@ paths:
                               format: uuid
                             kind:
                               type: string
-                              enum: *a10
+                              enum: *a11
                             path:
                               type: string
                             rule:
@@ -3037,7 +3583,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a9
+                        enum: *a10
                       facts:
                         type: array
                         items:
@@ -3076,7 +3622,7 @@ paths:
                               format: uuid
                             kind:
                               type: string
-                              enum: *a10
+                              enum: *a11
                             path:
                               type: string
                             rule:
@@ -3164,7 +3710,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a11
+                        enum: *a12
                       truthRevisionId:
                         type: string
                         format: uuid
@@ -3388,7 +3934,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a11
+                        enum: *a12
                       truthRevisionId:
                         type: string
                         format: uuid
@@ -3682,7 +4228,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a11
+                        enum: *a12
                       truthRevisionId:
                         type: string
                         format: uuid
@@ -3917,7 +4463,7 @@ paths:
                         type: integer
                       status:
                         type: string
-                        enum: *a11
+                        enum: *a12
                       truthRevisionId:
                         type: string
                         format: uuid
@@ -6222,7 +6768,7 @@ paths:
                       - tool
                       - size
                       - points
-                  default: *a12
+                  default: *a13
                 coordinateSpace:
                   type: string
                   enum:
@@ -6249,7 +6795,7 @@ paths:
                       type: number
                       minimum: 0
                       maximum: 1
-                  default: *a13
+                  default: *a14
       responses:
         "201":
           description: Created
@@ -6597,7 +7143,7 @@ paths:
                   default: amazon-main-us-v1
                 slot:
                   type: string
-                  enum: *a14
+                  enum: *a15
                 shotBriefId:
                   type: string
                   format: uuid
@@ -6638,7 +7184,7 @@ paths:
                   overallStatus:
                     type: string
                     nullable: true
-                    enum: *a15
+                    enum: *a16
                   rulePackKey:
                     type: string
                   rulePackVersion:
@@ -6664,7 +7210,7 @@ paths:
                           type: string
                         status:
                           type: string
-                          enum: *a16
+                          enum: *a17
                         severity:
                           type: string
                         nonWaivable:
@@ -6731,7 +7277,7 @@ paths:
                   overallStatus:
                     type: string
                     nullable: true
-                    enum: *a15
+                    enum: *a16
                   rulePackKey:
                     type: string
                   rulePackVersion:
@@ -6757,7 +7303,7 @@ paths:
                           type: string
                         status:
                           type: string
-                          enum: *a16
+                          enum: *a17
                         severity:
                           type: string
                         nonWaivable:
@@ -6816,7 +7362,7 @@ paths:
                   format: uuid
                 decision:
                   type: string
-                  enum: *a17
+                  enum: *a18
                 reason:
                   type: string
                   maxLength: 2000
@@ -6856,7 +7402,7 @@ paths:
                         format: uuid
                       slot:
                         type: string
-                        enum: *a18
+                        enum: *a19
                       variantCode:
                         type: string
                         maxLength: 40
@@ -6869,7 +7415,7 @@ paths:
                   maxItems: 30
                 marketplaceCode:
                   type: string
-                  enum: *a19
+                  enum: *a20
               required:
                 - items
       responses:
@@ -7025,3 +7571,646 @@ paths:
       responses:
         "200":
           description: OK
+  /api/workspaces/{workspaceId}/projects/{projectId}/chat-sessions:
+    post:
+      summary: Create chat agent session (V2 PR-4; WRITE role; optional workflowId +
+        budgetLimit)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workflowId:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                budgetLimit:
+                  type: object
+                  properties:
+                    currency:
+                      type: string
+                      minLength: 1
+                      default: USD
+                    amount:
+                      type: number
+                      minimum: 0
+                  required:
+                    - amount
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  workflowId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  title:
+                    type: string
+                    nullable: true
+                  budgetLimit:
+                    type: object
+                    nullable: true
+                    properties:
+                      currency:
+                        type: string
+                        minLength: 1
+                        default: USD
+                      amount:
+                        type: number
+                        minimum: 0
+                    required:
+                      - amount
+                  spentMicrounits:
+                    type: integer
+                    minimum: 0
+                  createdByUserId:
+                    type: string
+                    format: uuid
+                  createdAt:
+                    type: string
+                required:
+                  - id
+                  - projectId
+                  - workflowId
+                  - title
+                  - budgetLimit
+                  - spentMicrounits
+                  - createdByUserId
+                  - createdAt
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      requestId:
+                        type: string
+                      details:
+                        nullable: true
+                    required:
+                      - code
+                      - message
+                      - requestId
+                required:
+                  - error
+    get:
+      summary: List chat sessions (?workflowId= filter)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        projectId:
+                          type: string
+                          format: uuid
+                        workflowId:
+                          type: string
+                          nullable: true
+                          format: uuid
+                        title:
+                          type: string
+                          nullable: true
+                        budgetLimit:
+                          type: object
+                          nullable: true
+                          properties:
+                            currency:
+                              type: string
+                              minLength: 1
+                              default: USD
+                            amount:
+                              type: number
+                              minimum: 0
+                          required:
+                            - amount
+                        spentMicrounits:
+                          type: integer
+                          minimum: 0
+                        createdByUserId:
+                          type: string
+                          format: uuid
+                        createdAt:
+                          type: string
+                      required:
+                        - id
+                        - projectId
+                        - workflowId
+                        - title
+                        - budgetLimit
+                        - spentMicrounits
+                        - createdByUserId
+                        - createdAt
+                required:
+                  - items
+  /api/workspaces/{workspaceId}/projects/{projectId}/chat-sessions/{sessionId}:
+    get:
+      summary: Get chat session (fields flattened) + messages array (?limit<=200)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  projectId:
+                    type: string
+                    format: uuid
+                  workflowId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  title:
+                    type: string
+                    nullable: true
+                  budgetLimit:
+                    type: object
+                    nullable: true
+                    properties:
+                      currency:
+                        type: string
+                        minLength: 1
+                        default: USD
+                      amount:
+                        type: number
+                        minimum: 0
+                    required:
+                      - amount
+                  spentMicrounits:
+                    type: integer
+                    minimum: 0
+                  createdByUserId:
+                    type: string
+                    format: uuid
+                  createdAt:
+                    type: string
+                  messages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        sessionId:
+                          type: string
+                          format: uuid
+                        role:
+                          type: string
+                          enum: *a6
+                        content:
+                          type: object
+                          properties:
+                            text:
+                              type: string
+                            commandsSummary:
+                              type: object
+                              properties:
+                                count:
+                                  type: integer
+                                  minimum: 0
+                                types:
+                                  type: array
+                                  items:
+                                    type: string
+                                degraded:
+                                  type: boolean
+                              required:
+                                - count
+                                - types
+                          required:
+                            - text
+                        batchId:
+                          type: string
+                          nullable: true
+                          format: uuid
+                        provider:
+                          type: string
+                          nullable: true
+                        modelId:
+                          type: string
+                          nullable: true
+                        latencyMs:
+                          type: integer
+                          nullable: true
+                        createdAt:
+                          type: string
+                      required:
+                        - id
+                        - sessionId
+                        - role
+                        - content
+                        - batchId
+                        - provider
+                        - modelId
+                        - latencyMs
+                        - createdAt
+                required:
+                  - id
+                  - projectId
+                  - workflowId
+                  - title
+                  - budgetLimit
+                  - spentMicrounits
+                  - createdByUserId
+                  - createdAt
+                  - messages
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      requestId:
+                        type: string
+                      details:
+                        nullable: true
+                    required:
+                      - code
+                      - message
+                      - requestId
+                required:
+                  - error
+  /api/workspaces/{workspaceId}/projects/{projectId}/chat-sessions/{sessionId}/messages:
+    post:
+      summary: "Agent turn (synchronous): reply + JSON command batch + session budget
+        gate (502 CHAT_AUTH_FAILED / 503 CHAT_UNAVAILABLE)"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
+              required:
+                - content
+      responses:
+        "200":
+          description: Turn applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userMessage:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      sessionId:
+                        type: string
+                        format: uuid
+                      role:
+                        type: string
+                        enum: *a6
+                      content:
+                        type: object
+                        properties:
+                          text:
+                            type: string
+                          commandsSummary:
+                            type: object
+                            properties:
+                              count:
+                                type: integer
+                                minimum: 0
+                              types:
+                                type: array
+                                items:
+                                  type: string
+                              degraded:
+                                type: boolean
+                            required:
+                              - count
+                              - types
+                        required:
+                          - text
+                      batchId:
+                        type: string
+                        nullable: true
+                        format: uuid
+                      provider:
+                        type: string
+                        nullable: true
+                      modelId:
+                        type: string
+                        nullable: true
+                      latencyMs:
+                        type: integer
+                        nullable: true
+                      createdAt:
+                        type: string
+                    required:
+                      - id
+                      - sessionId
+                      - role
+                      - content
+                      - batchId
+                      - provider
+                      - modelId
+                      - latencyMs
+                      - createdAt
+                  assistantMessage:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      sessionId:
+                        type: string
+                        format: uuid
+                      role:
+                        type: string
+                        enum: *a6
+                      content:
+                        type: object
+                        properties:
+                          text:
+                            type: string
+                          commandsSummary:
+                            type: object
+                            properties:
+                              count:
+                                type: integer
+                                minimum: 0
+                              types:
+                                type: array
+                                items:
+                                  type: string
+                              degraded:
+                                type: boolean
+                            required:
+                              - count
+                              - types
+                        required:
+                          - text
+                      batchId:
+                        type: string
+                        nullable: true
+                        format: uuid
+                      provider:
+                        type: string
+                        nullable: true
+                      modelId:
+                        type: string
+                        nullable: true
+                      latencyMs:
+                        type: integer
+                        nullable: true
+                      createdAt:
+                        type: string
+                    required:
+                      - id
+                      - sessionId
+                      - role
+                      - content
+                      - batchId
+                      - provider
+                      - modelId
+                      - latencyMs
+                      - createdAt
+                  batchId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  run:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      projectId:
+                        type: string
+                        format: uuid
+                      workflowRevisionId:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                      estimateMicrounits:
+                        type: integer
+                      currency:
+                        type: string
+                      idempotencyKey:
+                        type: string
+                      scope:
+                        nullable: true
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            nodeId:
+                              type: string
+                            status:
+                              type: string
+                            modelKey:
+                              type: string
+                            attempts:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    format: uuid
+                                  attemptNo:
+                                    type: integer
+                                  status:
+                                    type: string
+                                  provider:
+                                    type: string
+                                  modelId:
+                                    type: string
+                                  progress:
+                                    type: integer
+                                  errorClass:
+                                    type: string
+                                    nullable: true
+                                  errorMessage:
+                                    type: string
+                                    nullable: true
+                                  createdAt:
+                                    type: string
+                                  requestSnapshot:
+                                    type: object
+                                    properties:
+                                      operation:
+                                        type: string
+                                      nodeType:
+                                        type: string
+                                      width:
+                                        type: number
+                                      height:
+                                        type: number
+                                      aspectRatio:
+                                        type: string
+                                      resolutionTier:
+                                        type: string
+                                      targetRatio:
+                                        type: string
+                                      placement:
+                                        type: string
+                                      engineKey:
+                                        type: string
+                                      targetResolution:
+                                        type: string
+                                      inputFingerprint:
+                                        type: string
+                                required:
+                                  - id
+                                  - attemptNo
+                                  - status
+                                  - provider
+                                  - modelId
+                                  - progress
+                                  - createdAt
+                          required:
+                            - id
+                            - nodeId
+                            - status
+                            - modelKey
+                            - attempts
+                      createdAt:
+                        type: string
+                      updatedAt:
+                        type: string
+                    required:
+                      - id
+                      - projectId
+                      - workflowRevisionId
+                      - status
+                      - estimateMicrounits
+                      - currency
+                      - idempotencyKey
+                      - items
+                      - createdAt
+                      - updatedAt
+                  budgetRejected:
+                    type: boolean
+                required:
+                  - userMessage
+                  - assistantMessage
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      requestId:
+                        type: string
+                      details:
+                        nullable: true
+                    required:
+                      - code
+                      - message
+                      - requestId
+                required:
+                  - error
+        "502":
+          description: Chat provider auth failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      requestId:
+                        type: string
+                      details:
+                        nullable: true
+                    required:
+                      - code
+                      - message
+                      - requestId
+                required:
+                  - error
+        "503":
+          description: Chat provider unavailable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      requestId:
+                        type: string
+                      details:
+                        nullable: true
+                    required:
+                      - code
+                      - message
+                      - requestId
+                required:
+                  - error

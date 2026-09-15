@@ -308,5 +308,22 @@ export function useWorkflowCommands(args: {
     void drainPending();
   }, [drainPending]);
 
-  return { applyNow, schedule, flush, undo, redo, reset };
+  /**
+   * An external actor (chat agent) mutated the workflow. Flush any pending
+   * debounced commands FIRST (awaited, so the user's unsent local edits are
+   * not silently dropped), then sync the optimistic-concurrency revision so
+   * the next batch does not 409. Flush failures follow the existing error
+   * path (rollback + onSettled inside flush); the revision is synced
+   * regardless because the caller applies the authoritative graph.
+   */
+  const applyExternal = useCallback(
+    async (revisionNumber: number): Promise<void> => {
+      const pending = flush();
+      if (pending) await pending.catch(() => undefined);
+      revisionRef.current = revisionNumber;
+    },
+    [flush, revisionRef],
+  );
+
+  return { applyNow, schedule, flush, undo, redo, reset, applyExternal };
 }
