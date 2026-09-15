@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { NODE_REGISTRY } from '@studio/domain';
 import {
   CHAT_AGENT_SYSTEM_PROMPT,
   ChatProviderError,
   FakeChatAgentProvider,
   KieChatAgentProvider,
+  buildNodeHandleDoc,
   createChatAgentProvider,
   resolveChatProviderKind,
   kieChatCompletion,
@@ -37,6 +39,31 @@ const GOOD_TURN = JSON.stringify({
   commands: [
     { type: 'addNode', nodeType: 'generate', nodeId: 'gen-1', position: { x: 10, y: 20 } },
   ],
+});
+
+describe('CHAT_AGENT_SYSTEM_PROMPT handle documentation', () => {
+  it('lists every palette node type with its registry input/output port ids', () => {
+    for (const def of NODE_REGISTRY.filter((n) => n.palette)) {
+      expect(CHAT_AGENT_SYSTEM_PROMPT).toContain(`- ${def.type}：`);
+      for (const port of [...def.inputPorts, ...def.outputPorts]) {
+        expect(CHAT_AGENT_SYSTEM_PROMPT).toContain(port.id);
+      }
+    }
+  });
+
+  it('embeds buildNodeHandleDoc() verbatim (no drift between doc and prompt)', () => {
+    expect(CHAT_AGENT_SYSTEM_PROMPT).toContain(buildNodeHandleDoc());
+  });
+
+  it('per-port ids appear on the line of their own node type', () => {
+    const lines = CHAT_AGENT_SYSTEM_PROMPT.split('\n');
+    for (const def of NODE_REGISTRY.filter((n) => n.palette)) {
+      const line = lines.find((l) => l.startsWith(`- ${def.type}：`));
+      expect(line, `prompt line for ${def.type}`).toBeDefined();
+      for (const port of def.inputPorts) expect(line).toContain(port.id);
+      for (const port of def.outputPorts) expect(line).toContain(port.id);
+    }
+  });
 });
 
 describe('resolveChatProviderKind / createChatAgentProvider', () => {

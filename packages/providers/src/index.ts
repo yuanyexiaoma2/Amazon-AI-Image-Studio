@@ -102,6 +102,7 @@ export {
   ChatWorkflowCommandSchema,
   ChatAgentTurnOutputSchema,
   CHAT_AGENT_SYSTEM_PROMPT,
+  buildNodeHandleDoc,
   createChatAgentProvider,
   resolveChatProviderKind,
   type ChatAgentProvider,

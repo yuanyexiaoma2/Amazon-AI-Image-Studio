@@ -16,6 +16,7 @@
  */
 
 import { z } from 'zod';
+import { NODE_REGISTRY } from '@studio/domain';
 import {
   ChatProviderError,
   KIE_DEFAULT_BASE_URL,
@@ -115,13 +116,28 @@ export const ChatAgentTurnOutputSchema = z.object({
 
 // ─── kie LLM chat agent ─────────────────────────────────────────────────────
 
+/**
+ * Legal connect handles per node type, generated from the domain NODE_REGISTRY
+ * (single source of truth for edge validation) so the prompt can never drift
+ * from what the command layer will accept. Palette types only.
+ */
+export function buildNodeHandleDoc(): string {
+  return NODE_REGISTRY.filter((n) => n.palette)
+    .map((n) => {
+      const ins = n.inputPorts.map((p) => p.id).join('/') || '（无）';
+      const outs = n.outputPorts.map((p) => p.id).join('/') || '（无）';
+      return `- ${n.type}：输入端口 ${ins}；输出端口 ${outs}`;
+    })
+    .join('\n');
+}
+
 export const CHAT_AGENT_SYSTEM_PROMPT = `你是一个电商图片工作流画布助手。用户用中文描述需求，你输出严格的 JSON（不要 markdown 代码块）：
 {"reply": "给用户的中文回复", "commands": [画布命令...]}
 
 commands 是可撤销的画布命令批次，按顺序执行，可选类型：
 - {"type":"addNode","nodeType":"<类型>","nodeId":"<可选id>","position":{"x":0,"y":0},"config":{...}}
 - {"type":"removeNode","nodeId":"..."}
-- {"type":"connect","edgeId":"<可选id>","source":"<节点id>","sourceHandle":"image","target":"<节点id>","targetHandle":"references"}
+- {"type":"connect","edgeId":"<可选id>","source":"<节点id>","sourceHandle":"<源节点输出端口>","target":"<节点id>","targetHandle":"<目标节点输入端口>"}
 - {"type":"disconnect","edgeId":"..."}
 - {"type":"configure","nodeId":"...","config":{...}}
 - {"type":"moveNode","nodeId":"...","position":{"x":0,"y":0}}
@@ -132,7 +148,8 @@ commands 是可撤销的画布命令批次，按顺序执行，可选类型：
 - 只输出上述 JSON；纯聊天/解答时 commands 返回空数组。
 - 一批最多 20 条命令；run 命令最多一条且必须是最后一条。
 - 只能引用「当前画布」里存在的节点 id 与「可用资源/模型」里列出的素材和模型 key，不要编造。
-- 常用节点类型：source_image（源图）、generate（生图）、prompt、remove_background、replace_background、inpaint、outpaint、upscale。`;
+- connect 的 sourceHandle 必须取自 source 节点的「输出端口」，targetHandle 必须取自 target 节点的「输入端口」，只能用下表列出的端口名，不要编造：
+${buildNodeHandleDoc()}`;
 
 export type KieChatAgentConfig = KieChatConfig & {
   /** Provider label reported in meta, e.g. kie-llm-chat-agent. */
