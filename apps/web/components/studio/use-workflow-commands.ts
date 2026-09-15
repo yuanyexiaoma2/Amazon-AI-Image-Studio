@@ -308,5 +308,19 @@ export function useWorkflowCommands(args: {
     void drainPending();
   }, [drainPending]);
 
-  return { applyNow, schedule, flush, undo, redo, reset };
+  /**
+   * An external actor (chat agent) mutated the workflow. Drop any pending
+   * debounced commands — the graph the caller is about to apply is now
+   * authoritative — and sync the optimistic-concurrency revision so the next
+   * batch does not 409. The caller applies the new graph to canvas state.
+   */
+  const applyExternal = useCallback(
+    (revisionNumber: number) => {
+      void drainPending();
+      revisionRef.current = revisionNumber;
+    },
+    [drainPending, revisionRef],
+  );
+
+  return { applyNow, schedule, flush, undo, redo, reset, applyExternal };
 }

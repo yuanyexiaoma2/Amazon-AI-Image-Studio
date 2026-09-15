@@ -48,6 +48,7 @@ import {
   type MaskEditorState,
   type SelectedNodeInfo,
 } from './PropertiesPanel';
+import { ChatPanel } from './ChatPanel';
 import { AssetImage } from '../asset-image';
 import { NUMERIC_CONFIG_KEYS } from './config-options';
 
@@ -201,6 +202,7 @@ function StudioCanvasInner(props: {
   const [deleteHint, setDeleteHint] = useState<string | null>(null);
   const [runBusy, setRunBusy] = useState(false);
   const [narrow, setNarrow] = useState(false);
+  const [rightTab, setRightTab] = useState<'properties' | 'chat'>('properties');
   const revisionRef = useRef(0);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -253,6 +255,8 @@ function StudioCanvasInner(props: {
     onSettled: handleCommandResult,
   });
 
+  const getRevision = useCallback(() => revisionRef.current, []);
+
   const applyLocalSnapshot = useCallback(
     (snap: CanvasSnapshot) => {
       setNodes(snap.nodes);
@@ -262,6 +266,19 @@ function StudioCanvasInner(props: {
       setSelectedIds((prev) => prev.filter((id) => snap.nodes.some((n) => n.id === id)));
     },
     [setNodes, setEdges],
+  );
+
+  // Chat agent (or its undo) mutated the draft server-side: adopt the
+  // authoritative graph + revision so later local batches do not 409.
+  const handleGraphChanged = useCallback(
+    (graph: WorkflowGraph, revisionNumber: number) => {
+      commands.applyExternal(revisionNumber);
+      setDraft((prev) => (prev ? { ...prev, revisionNumber } : prev));
+      applyLocalSnapshot({ nodes: toFlowNodes(graph, workspaceId), edges: toFlowEdges(graph) });
+      setCmdError(null);
+      setStatus(`画布助手已更新画布 · 修订 ${revisionNumber}`);
+    },
+    [commands, applyLocalSnapshot, workspaceId],
   );
 
   const makeRollback = useCallback(
@@ -850,7 +867,10 @@ function StudioCanvasInner(props: {
           onConnect={onConnect}
           isValidConnection={isValidConnection}
           nodeTypes={nodeTypes}
-          onSelectionChange={({ nodes: sel }) => setSelectedIds(sel.map((n) => n.id))}
+          onSelectionChange={({ nodes: sel }) => {
+            setSelectedIds(sel.map((n) => n.id));
+            if (sel.length > 0) setRightTab('properties');
+          }}
           fitView
           deleteKeyCode={['Backspace', 'Delete']}
           multiSelectionKeyCode="Shift"
@@ -921,24 +941,55 @@ function StudioCanvasInner(props: {
         )}
       </div>
 
-      <aside className="studio-aside studio-aside-right">
-        <PropertiesPanel
-          workspaceId={workspaceId}
-          selected={selectedInfo}
-          options={configOptions}
-          sourceAssetVersionId={sourceAssetVersionId}
-          draftRevision={draft?.revisionNumber ?? null}
-          runBusy={runBusy}
-          onConfigChange={updateSelectedConfig}
-          onRunNode={(id) => void runNode(id)}
-          onOpenMaskEditor={() => void openMaskEditor()}
-          maskEditor={maskEditor}
-          maskEditorMaskId={
-            typeof selectedConfig.maskId === 'string' ? selectedConfig.maskId : null
-          }
-          onMaskSaved={onMaskSaved}
-          onMaskClose={() => setMaskEditor(null)}
-        />
+      <aside className="studio-aside studio-aside-right studio-aside-flex">
+        <div className="studio-tabs" role="tablist" aria-label="右侧面板切换">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={rightTab === 'properties'}
+            className={rightTab === 'properties' ? 'btn btn-primary' : 'btn'}
+            onClick={() => setRightTab('properties')}
+          >
+            属性
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={rightTab === 'chat'}
+            className={rightTab === 'chat' ? 'btn btn-primary' : 'btn'}
+            onClick={() => setRightTab('chat')}
+          >
+            助手
+          </button>
+        </div>
+        <div className={rightTab === 'properties' ? undefined : 'studio-tab-hidden'}>
+          <PropertiesPanel
+            workspaceId={workspaceId}
+            selected={selectedInfo}
+            options={configOptions}
+            sourceAssetVersionId={sourceAssetVersionId}
+            draftRevision={draft?.revisionNumber ?? null}
+            runBusy={runBusy}
+            onConfigChange={updateSelectedConfig}
+            onRunNode={(id) => void runNode(id)}
+            onOpenMaskEditor={() => void openMaskEditor()}
+            maskEditor={maskEditor}
+            maskEditorMaskId={
+              typeof selectedConfig.maskId === 'string' ? selectedConfig.maskId : null
+            }
+            onMaskSaved={onMaskSaved}
+            onMaskClose={() => setMaskEditor(null)}
+          />
+        </div>
+        <div className={rightTab === 'chat' ? 'chat-panel' : 'studio-tab-hidden'}>
+          <ChatPanel
+            workspaceId={workspaceId}
+            projectId={projectId}
+            workflowId={draft?.workflowId ?? null}
+            getRevision={getRevision}
+            onGraphChanged={handleGraphChanged}
+          />
+        </div>
       </aside>
 
       <TaskDrawer workspaceId={workspaceId} projectId={projectId} ready={draft !== null} onRunAll={runAll} />
