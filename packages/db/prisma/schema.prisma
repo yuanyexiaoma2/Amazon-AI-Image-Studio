@@ -198,6 +198,7 @@ model Workspace {
   workflows           Workflow[]
   workflowDrafts      WorkflowDraft[]
   workflowRevisions   WorkflowRevision[]
+  workflowCommandBatches WorkflowCommandBatch[]
   generationRuns      GenerationRun[]
   generationItems     GenerationItem[]
   generationAttempts  GenerationAttempt[]
@@ -611,6 +612,7 @@ model Workflow {
   currentRevision WorkflowRevision?  @relation("WorkflowCurrentRevision", fields: [workspaceId, currentRevisionId], references: [workspaceId, id], onDelete: SetNull)
   draft           WorkflowDraft?
   revisions       WorkflowRevision[] @relation("WorkflowRevisions")
+  commandBatches  WorkflowCommandBatch[]
 
   @@unique([workspaceId, id])
   @@index([workspaceId, projectId])
@@ -655,6 +657,34 @@ model WorkflowRevision {
   @@unique([workspaceId, id])
   @@unique([workspaceId, workflowId, revision])
   @@map("workflow_revisions")
+}
+
+// ─── V2 PR-2: canvas command batches ─────────────────────────────────────────
+
+/// Applied canvas command batch (V2 PR-2). Idempotent by (workflow_id, batch_id);
+/// before/after graphs + undone_at power server-side undo/redo.
+model WorkflowCommandBatch {
+  id                   String    @id @db.Uuid
+  workspaceId          String    @map("workspace_id") @db.Uuid
+  workflowId           String    @map("workflow_id") @db.Uuid
+  /// Client-generated idempotency key (uuid) for the whole batch.
+  batchId              String    @map("batch_id") @db.Uuid
+  actorUserId          String    @map("actor_user_id") @db.Uuid
+  commandsJson         Json      @map("commands_json")
+  beforeGraphJson      Json      @map("before_graph_json")
+  afterGraphJson       Json      @map("after_graph_json")
+  baseRevisionNumber   Int       @map("base_revision_number")
+  resultRevisionNumber Int       @map("result_revision_number")
+  undoneAt             DateTime? @map("undone_at") @db.Timestamptz
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  workflow  Workflow  @relation(fields: [workspaceId, workflowId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workflowId, batchId])
+  @@index([workflowId, createdAt])
+  @@map("workflow_command_batches")
 }
 
 // ─── W5-A: Node results / fingerprint / STALE ────────────────────────────────

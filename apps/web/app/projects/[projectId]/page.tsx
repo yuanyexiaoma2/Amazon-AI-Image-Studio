@@ -283,6 +283,27 @@ function ProjectDetailInner() {
     router.push(`/projects/${projectId}/studio?workspaceId=${workspaceId}`);
   }
 
+  async function createBlankCanvas() {
+    if (!workspaceId || !projectId) return;
+    setMsg('正在创建空白画布…');
+    const res = await fetch(
+      `/api/workspaces/${workspaceId}/projects/${projectId}/workflows`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: '空白画布' }),
+      },
+    );
+    const json = await res.json();
+    if (!res.ok) {
+      setMsg(json?.error?.message ?? '创建空白画布失败');
+      return;
+    }
+    router.push(
+      `/projects/${projectId}/studio?workspaceId=${workspaceId}&workflowId=${json.workflowId}`,
+    );
+  }
+
   if (!workspaceId) {
     return <p>缺少 workspaceId 查询参数。请从 /projects 打开。</p>;
   }
@@ -301,6 +322,10 @@ function ProjectDetailInner() {
         <a href={`/projects/${projectId}/review?workspaceId=${workspaceId}`} style={{ color: '#9db7ff' }}>
           审核 / QA / 导出 →
         </a>
+        {' · '}
+        <button type="button" onClick={createBlankCanvas}>
+          新建空白画布
+        </button>
       </div>
       <h1>项目素材 + Truth Pack（产品真相包） + Shot Plan（拍摄计划）</h1>
       <p style={{ opacity: 0.75 }}>
