@@ -21,8 +21,8 @@ export function SiteHeader() {
 
   return (
     <header className="site-header">
-      <Link href="/" style={{ color: 'var(--text)', textDecoration: 'none' }}>
-        <strong>Amazon AI Image Studio</strong>
+      <Link href="/" className="site-brand">
+        Amazon AI Image Studio
       </Link>
       <nav className="site-nav">
         {loading ? null : me ? (

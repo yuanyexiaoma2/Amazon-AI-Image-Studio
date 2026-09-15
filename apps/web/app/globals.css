@@ -917,3 +917,40 @@ code {
   object-fit: contain;
   display: block;
 }
+
+/* home page */
+.home-lead {
+  font-size: var(--font-size-lg);
+  color: var(--text-muted);
+  max-width: 640px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-3);
+}
+
+.card-link {
+  display: block;
+  color: var(--text);
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.card-link:hover {
+  text-decoration: none;
+  border-color: var(--accent-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.card-link-title {
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+}
+
+.card-link-desc {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}

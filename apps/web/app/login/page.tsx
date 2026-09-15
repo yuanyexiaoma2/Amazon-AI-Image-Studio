@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Button, ErrorBanner, Input } from '@/components/ui';
@@ -31,32 +32,38 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="container">
-      <h1>登录</h1>
-      <form onSubmit={onSubmit} className="stack" style={{ maxWidth: 360 }}>
-        <label>
-          邮箱
-          <Input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </label>
-        <label>
-          密码
-          <Input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </label>
-        {error ? <ErrorBanner message={error} /> : null}
-        <Button type="submit" variant="primary" size="lg" disabled={loading}>
-          {loading ? '登录中…' : '登录'}
-        </Button>
-      </form>
+    <div className="auth-wrap">
+      <div className="auth-card">
+        <h1 className="auth-title">登录</h1>
+        <p className="auth-sub">登录 Amazon AI Image Studio 继续工作</p>
+        <form onSubmit={onSubmit} className="stack">
+          <label className="form-field">
+            邮箱
+            <Input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </label>
+          <label className="form-field">
+            密码
+            <Input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          {error ? <ErrorBanner message={error} /> : null}
+          <Button type="submit" variant="primary" size="lg" disabled={loading}>
+            {loading ? '登录中…' : '登录'}
+          </Button>
+        </form>
+        <p className="auth-alt">
+          还没有账号？<Link href="/register">注册</Link>
+        </p>
+      </div>
     </div>
   );
 }
