@@ -878,7 +878,7 @@ function StudioCanvasInner(props: {
           multiSelectionKeyCode="Shift"
           proOptions={{ hideAttribution: true }}
         >
-          <Background gap={18} color="var(--border)" />
+          <Background gap={18} color="var(--canvas-dot)" />
           <MiniMap pannable zoomable style={{ background: 'var(--surface)' }} />
           <Controls />
           <Panel position="top-left">

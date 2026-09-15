@@ -318,8 +318,8 @@ function ReviewInner() {
           <Button aria-label="通过所选报告" onClick={() => void decide('APPROVE')}>
             通过
           </Button>
-          <Button onClick={() => void decide('REJECT')}>驳回</Button>
-          <Button onClick={() => void decide('OVERRIDE_BLOCK')}>覆盖 BLOCK</Button>
+          <Button variant="danger" onClick={() => void decide('REJECT')}>驳回</Button>
+          <Button variant="danger" onClick={() => void decide('OVERRIDE_BLOCK')}>覆盖 BLOCK</Button>
           <Button onClick={() => void decide('REVOKE')}>撤销</Button>
           <Button variant="primary" onClick={() => void exportLeft()}>
             导出所选

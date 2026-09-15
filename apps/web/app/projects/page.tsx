@@ -73,11 +73,11 @@ function ProjectsInner() {
       {projects.length === 0 ? (
         <EmptyState>暂无项目 — 输入 SKU 与名称创建第一个项目。</EmptyState>
       ) : (
-        <ul className="stack" style={{ gap: 'var(--space-2)', paddingLeft: 18 }}>
+        <ul className="stack" style={{ gap: 'var(--space-2)', paddingLeft: 0, listStyle: 'none' }}>
           {projects.map((p) => (
-            <li key={p.id}>
+            <li key={p.id} className="card" style={{ padding: 'var(--space-3) var(--space-4)' }}>
               <Link href={projectHref(`/projects/${p.id}`)}>
-                {p.sku} — {p.name}
+                <strong>{p.sku}</strong> — {p.name}
               </Link>
             </li>
           ))}

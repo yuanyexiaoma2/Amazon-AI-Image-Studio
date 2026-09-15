@@ -8,6 +8,7 @@ import type {
 /**
  * V2 PR-1 — shared UI primitives on top of globals.css component classes.
  * No runtime CSS-in-JS; styling lives in `app/globals.css` tokens/classes.
+ * PR-5: added `danger` button variant for destructive actions.
  */
 
 function cx(...parts: Array<string | false | null | undefined>): string {
@@ -16,7 +17,7 @@ function cx(...parts: Array<string | false | null | undefined>): string {
 
 export function Button(
   props: ButtonHTMLAttributes<HTMLButtonElement> & {
-    variant?: 'default' | 'primary';
+    variant?: 'default' | 'primary' | 'danger';
     size?: 'md' | 'lg';
   },
 ) {
@@ -24,7 +25,13 @@ export function Button(
   return (
     <button
       type={type ?? 'button'}
-      className={cx('btn', variant === 'primary' && 'btn-primary', size === 'lg' && 'btn-lg', className)}
+      className={cx(
+        'btn',
+        variant === 'primary' && 'btn-primary',
+        variant === 'danger' && 'btn-danger',
+        size === 'lg' && 'btn-lg',
+        className,
+      )}
       {...rest}
     />
   );
