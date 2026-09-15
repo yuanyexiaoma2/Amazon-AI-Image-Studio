@@ -270,9 +270,11 @@ function StudioCanvasInner(props: {
 
   // Chat agent (or its undo) mutated the draft server-side: adopt the
   // authoritative graph + revision so later local batches do not 409.
+  // applyExternal first flushes pending debounced edits (async) so they are
+  // not silently dropped, then resyncs the optimistic-concurrency revision.
   const handleGraphChanged = useCallback(
     (graph: WorkflowGraph, revisionNumber: number) => {
-      commands.applyExternal(revisionNumber);
+      void commands.applyExternal(revisionNumber);
       setDraft((prev) => (prev ? { ...prev, revisionNumber } : prev));
       applyLocalSnapshot({ nodes: toFlowNodes(graph, workspaceId), edges: toFlowEdges(graph) });
       setCmdError(null);
