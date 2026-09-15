@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Button, EmptyState, ErrorBanner, Input, Spinner } from '@/components/ui';
 import { useWorkspace } from '@/lib/use-workspace';
 
 type Project = { id: string; sku: string; name: string; status: string };
 
-export default function ProjectsPage() {
+function ProjectsInner() {
   const { workspaceId, loading: wsLoading, projectHref } = useWorkspace();
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -84,5 +84,13 @@ export default function ProjectsPage() {
         </ul>
       )}
     </div>
+  );
+}
+
+export default function ProjectsPage() {
+  return (
+    <Suspense fallback={<div className="container" role="status">正在加载项目…</div>}>
+      <ProjectsInner />
+    </Suspense>
   );
 }
