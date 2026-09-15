@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { Button } from '@/components/ui';
 
 type Brief = {
   id: string;
@@ -148,23 +149,21 @@ function WizardInner() {
   }, [workspace]);
 
   if (!workspaceId) {
-    return <p style={{ padding: 24 }}>缺少 workspaceId 查询参数。请从项目页打开向导。</p>;
+    return <p className="container">缺少 workspaceId 查询参数。请从项目页打开向导。</p>;
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 880, margin: '0 auto' }}>
+    <div className="container" style={{ maxWidth: 880 }}>
       <p>
-        <a href={`/projects/${projectId}?workspaceId=${workspaceId}`} style={{ color: '#9db7ff' }}>
-          ← 返回项目
-        </a>
+        <a href={`/projects/${projectId}?workspaceId=${workspaceId}`}>← 返回项目</a>
       </p>
       <h1>意图向导：一句话 → 一套图的计划</h1>
-      <p style={{ opacity: 0.75 }}>
+      <p className="muted">
         第 1 步填意图 → 第 2 步 AI 规划卖点与场景 → 第 3 步批准并物化到画布。前提：Truth Pack 已批准。
       </p>
 
       {isAdmin && workspace && (
-        <p style={{ fontSize: 13, opacity: 0.85 }}>
+        <p className="muted" style={{ fontSize: 'var(--font-size-sm)' }}>
           <label style={{ cursor: 'pointer' }}>
             <input
               type="checkbox"
@@ -176,16 +175,16 @@ function WizardInner() {
         </p>
       )}
 
-      <section style={{ marginBottom: 20 }}>
-        <h2 style={{ fontSize: 16 }}>第 1 步 · 你的意图</h2>
+      <section style={{ marginBottom: 'var(--space-5)' }}>
+        <h2>第 1 步 · 你的意图</h2>
         <textarea
           value={intent}
           onChange={(e) => setIntent(e.target.value)}
           placeholder={INTENT_PLACEHOLDER}
           rows={7}
-          style={{ width: '100%', padding: 10, fontSize: 14 }}
+          className="input"
         />
-        <p style={{ fontSize: 13 }}>
+        <p style={{ fontSize: 'var(--font-size-sm)', marginTop: 'var(--space-2)' }}>
           <label>
             <input
               type="checkbox"
@@ -195,14 +194,14 @@ function WizardInner() {
             包含包装图（PACKAGE 槽位）
           </label>
         </p>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="lg"
           onClick={() => void generate()}
           disabled={busy !== null}
-          style={{ padding: '10px 20px', fontSize: 15 }}
         >
           {busy === 'generate' ? 'AI 规划中…' : '第 2 步 · AI 生成拍摄计划'}
-        </button>
+        </Button>
       </section>
 
       <p aria-live="polite">
@@ -211,23 +210,14 @@ function WizardInner() {
 
       {plan?.revision && (
         <section>
-          <h2 style={{ fontSize: 16 }}>
+          <h2>
             第 3 步 · 检查计划（修订 #{plan.revision.revision}
             {provider ? ` · ${provider}` : ''}
             {approved ? ' · 已批准' : ''}）
           </h2>
-          <ol style={{ paddingLeft: 20 }}>
+          <ol className="stack" style={{ paddingLeft: 0, gap: 'var(--space-3)' }}>
             {plan.revision.briefs.map((b) => (
-              <li
-                key={b.id}
-                style={{
-                  marginBottom: 14,
-                  padding: 12,
-                  border: '1px solid #2a3a5c',
-                  borderRadius: 8,
-                  listStyle: 'none',
-                }}
-              >
+              <li key={b.id} className="card" style={{ listStyle: 'none' }}>
                 <div>
                   <strong>
                     #{b.orderIndex} {b.slot}
@@ -235,7 +225,7 @@ function WizardInner() {
                   <code>{b.constraints.aspectRatio}</code> — {b.purpose}
                 </div>
                 {b.copy.length > 0 && (
-                  <div style={{ fontSize: 13, marginTop: 6 }}>
+                  <div style={{ fontSize: 'var(--font-size-sm)', marginTop: 6 }}>
                     文案：
                     {b.copy.map((c, i) => (
                       <span key={i} style={{ marginRight: 8 }}>
@@ -244,7 +234,7 @@ function WizardInner() {
                     ))}
                   </div>
                 )}
-                <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
+                <div className="muted" style={{ fontSize: 'var(--font-size-xs)', marginTop: 6 }}>
                   必须：{b.must.join('；')}
                   <br />
                   禁止：{b.mustNot.join('；')}
@@ -252,29 +242,24 @@ function WizardInner() {
               </li>
             ))}
           </ol>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="row">
             {!approved && (
-              <button
-                type="button"
-                onClick={() => void approve()}
-                disabled={busy !== null}
-                style={{ padding: '10px 20px' }}
-              >
+              <Button onClick={() => void approve()} disabled={busy !== null} size="lg">
                 {busy === 'approve' ? '批准中…' : '批准计划'}
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="lg"
               onClick={() => void materialize()}
               disabled={!approved || busy !== null}
-              style={{ padding: '10px 20px' }}
             >
               {busy === 'materialize' ? '物化中…' : '物化到画布 →'}
-            </button>
+            </Button>
             {!approved && (
-              <button type="button" onClick={() => void generate()} disabled={busy !== null}>
+              <Button onClick={() => void generate()} disabled={busy !== null}>
                 不满意，重新生成
-              </button>
+              </Button>
             )}
           </div>
         </section>
@@ -285,7 +270,7 @@ function WizardInner() {
 
 export default function WizardPage() {
   return (
-    <Suspense fallback={<p style={{ padding: 24 }}>加载中…</p>}>
+    <Suspense fallback={<p className="container">加载中…</p>}>
       <WizardInner />
     </Suspense>
   );
