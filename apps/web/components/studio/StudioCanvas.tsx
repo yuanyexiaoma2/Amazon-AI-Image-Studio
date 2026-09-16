@@ -229,6 +229,13 @@ function StudioCanvasInner(props: {
   edgesRef.current = edges;
   draftRef.current = draft;
 
+  // Re-offer starter templates whenever the canvas becomes empty again (e.g.
+  // after undoing a template batch) — "dismissed" only sticks while the
+  // canvas stays empty (空白画布 choice).
+  useEffect(() => {
+    if (nodes.length > 0 && starterDismissed) setStarterDismissed(false);
+  }, [nodes.length, starterDismissed]);
+
   const palette = useMemo(() => listPaletteNodeTypes(), []);
 
   const { uploadAsset } = useAssetUpload(workspaceId, projectId);
