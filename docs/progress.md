@@ -725,4 +725,6 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 **不修仅记录：** tabbit 浏览器此前在本地 dev app 有旧 Auth.js 会话，验证未登录路径时已将其登出（用户浏览器侧状态变化）；验证数据残留 dev DB（PR6 smoke workflow、默认项目画布 revision 8）；模板应用非乐观更新（等服务端往返后落图，保证画布以服务端为准）。
 
+**上线后修复（所有者试用反馈）：** 画布选中节点触发 React「Maximum update depth exceeded」死循环 —— 内联 `onSelectionChange` 每次渲染生成新引用，xyflow SelectionListener effect 反复触发 `setSelectedIds`（新数组）。修为稳定 `useCallback` + 内容相同则不 setState（commit `e5bb914`，tabbit 复测选中/取消 0 报错）。另：hydration mismatch 警告来自通义浏览器扩展注入 `<html>` 属性（diff 证据 `className="tongyi-design-pc"`），非应用问题。
+
 **Status:** **DONE**（不标 VERIFIED — 待 V2 rule 12b 全新上下文复审 + 所有者合并）。
