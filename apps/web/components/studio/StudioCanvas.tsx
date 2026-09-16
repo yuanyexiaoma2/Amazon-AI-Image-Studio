@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent } from 'react';
 import Link from 'next/link';
 import {
   ReactFlow,
@@ -83,6 +83,27 @@ function nodeLabelZh(type: string): string {
   return NODE_LABEL_ZH[type] ?? getNodeDefinition(type)?.label ?? type;
 }
 
+const PORT_LABEL_ZH: Record<string, string> = {
+  image: '图片',
+  images: '图片集',
+  mask: '蒙版',
+  prompt: '提示词',
+  truth: '产品真相',
+  references: '参考图',
+  shotBrief: '分镜简报',
+};
+
+/** Node-card affordances provided by StudioCanvasInner (upload / hints). */
+type NodeActionContextValue = {
+  uploadIntoNode: (nodeId: string) => void;
+  missingPorts: (nodeId: string) => string[];
+};
+
+const NodeActionContext = createContext<NodeActionContextValue>({
+  uploadIntoNode: () => {},
+  missingPorts: () => [],
+});
+
 function toFlowNodes(graph: WorkflowGraph, workspaceId: string): Node[] {
   return graph.nodes.map((n) => ({
     id: n.id,
@@ -143,6 +164,7 @@ function StudioNodeView(props: NodeProps) {
   const nodeType = String((props.data as { nodeType?: string }).nodeType ?? '');
   const def = getNodeDefinition(nodeType);
   const label = String((props.data as { label?: string }).label ?? nodeType);
+  const actions = useContext(NodeActionContext);
   const data = props.data as {
     workspaceId?: string;
     config?: Record<string, unknown>;
@@ -151,6 +173,11 @@ function StudioNodeView(props: NodeProps) {
     nodeType === 'source_image' && typeof data.config?.assetVersionId === 'string'
       ? (data.config.assetVersionId as string)
       : null;
+  const promptText =
+    nodeType === 'prompt' && typeof data.config?.text === 'string'
+      ? data.config.text.trim()
+      : '';
+  const missing = actions.missingPorts(props.id);
   return (
     <div className={props.selected ? 'studio-node studio-node-selected' : 'studio-node'}>
       {def?.inputPorts.map((p, i) => (
@@ -174,6 +201,30 @@ function StudioNodeView(props: NodeProps) {
             alt={label}
           />
         </div>
+      ) : null}
+      {nodeType === 'source_image' && !sourceVersionId ? (
+        <button
+          type="button"
+          className="btn studio-node-upload nodrag"
+          onClick={(e) => {
+            e.stopPropagation();
+            actions.uploadIntoNode(props.id);
+          }}
+        >
+          上传图片
+        </button>
+      ) : null}
+      {nodeType === 'prompt' ? (
+        <div className={promptText ? 'studio-node-preview' : 'studio-node-preview faint'}>
+          {promptText
+            ? promptText.length > 60
+              ? `${promptText.slice(0, 60)}…`
+              : promptText
+            : '点选我，在右侧写提示词'}
+        </div>
+      ) : null}
+      {missing.length > 0 ? (
+        <div className="studio-node-missing">缺连线：{missing.join(' / ')}</div>
       ) : null}
       {def?.outputPorts.map((p, i) => (
         <Handle
@@ -598,9 +649,7 @@ function StudioCanvasInner(props: {
     addNodeAt(type);
   }
 
-  function updateSelectedConfig(key: string, raw: string) {
-    const id = selectedIds[0];
-    if (!id) return;
+  function updateNodeConfig(id: string, key: string, raw: string) {
     const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
     let nextConfig: Record<string, unknown> = { schemaVersion: 1 };
     const nextNodes = nodesRef.current.map((n) => {
@@ -624,6 +673,73 @@ function StudioCanvasInner(props: {
       makeRollback(snapshot),
     );
   }
+
+  function updateSelectedConfig(key: string, raw: string) {
+    const id = selectedIds[0];
+    if (!id) return;
+    updateNodeConfig(id, key, raw);
+  }
+
+  // PR-6 node-card upload: 「上传图片」 button on an empty source_image node.
+  const nodeFileInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingUploadNodeRef = useRef<string | null>(null);
+  const uploadIntoNode = useCallback((nodeId: string) => {
+    pendingUploadNodeRef.current = nodeId;
+    nodeFileInputRef.current?.click();
+  }, []);
+
+  async function onNodeFilePicked(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    const nodeId = pendingUploadNodeRef.current;
+    pendingUploadNodeRef.current = null;
+    if (!file || !nodeId) return;
+    setUploadNotice(`正在上传 ${file.name}…`);
+    try {
+      const asset = await uploadAsset(file, (m) => setUploadNotice(`${file.name} — ${m}`));
+      if (asset.status === 'REJECTED') {
+        setUploadNotice(`${file.name} 未通过检查（REJECTED）— 请更换图片`);
+        return;
+      }
+      if (asset.versionId) updateNodeConfig(nodeId, 'assetVersionId', asset.versionId);
+      setUploadNotice(
+        asset.status === 'READY' ? `已上传 ${file.name}` : `已上传 ${file.name}，处理中…`,
+      );
+    } catch {
+      setUploadNotice(`上传失败：${file.name}`);
+    }
+  }
+
+  // Required-but-unconnected input ports per node (drives 缺连线 hints).
+  const missingPortsByNode = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const n of nodes) {
+      const nodeType = String((n.data as { nodeType?: string }).nodeType ?? '');
+      const def = getNodeDefinition(nodeType);
+      if (!def) continue;
+      const missing = def.inputPorts
+        .filter((p) => p.required)
+        .filter(
+          (p) =>
+            !edges.some(
+              (e) =>
+                e.target === n.id &&
+                (e.targetHandle ? e.targetHandle === p.id : def.inputPorts.length === 1),
+            ),
+        )
+        .map((p) => PORT_LABEL_ZH[p.id] ?? p.id);
+      if (missing.length > 0) map.set(n.id, missing);
+    }
+    return map;
+  }, [nodes, edges]);
+
+  const nodeActions = useMemo<NodeActionContextValue>(
+    () => ({
+      uploadIntoNode,
+      missingPorts: (nodeId) => missingPortsByNode.get(nodeId) ?? [],
+    }),
+    [uploadIntoNode, missingPortsByNode],
+  );
 
   const handleUndoRedo = useCallback(
     async (direction: 'undo' | 'redo') => {
@@ -1030,6 +1146,14 @@ function StudioCanvasInner(props: {
         onDragOver={onCanvasDragOver}
         onDrop={onCanvasDrop}
       >
+        <input
+          ref={nodeFileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          style={{ display: 'none' }}
+          onChange={(e) => void onNodeFilePicked(e)}
+        />
+        <NodeActionContext.Provider value={nodeActions}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -1090,10 +1214,11 @@ function StudioCanvasInner(props: {
             </div>
           </Panel>
         </ReactFlow>
+        </NodeActionContext.Provider>
         {draft !== null && nodes.length === 0 && !starterDismissed && (
           <div className="starter-overlay">
             <div className="starter-panel" role="dialog" aria-label="画布起始模板">
-              <div style={{ fontWeight: 700 }}>画布是空的 — 从一个模板开始</div>
+              <div style={{ fontWeight: 700 }}>三步出图：选模板 → 在节点上上传图片、写提示词 → ▶ 运行整图</div>
               <div className="starter-grid">
                 {STARTER_TEMPLATES.map((t) => (
                   <button
@@ -1106,6 +1231,9 @@ function StudioCanvasInner(props: {
                     <span className="starter-card-desc">{t.description}</span>
                   </button>
                 ))}
+              </div>
+              <div className="faint" style={{ fontSize: 'var(--font-size-sm)' }}>
+                也可以直接把图片文件拖进画布，或从左侧节点库拖节点进来。
               </div>
             </div>
           </div>
