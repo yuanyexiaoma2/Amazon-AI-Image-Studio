@@ -115,6 +115,57 @@ export const NUMERIC_CONFIG_KEYS: ReadonlySet<string> = new Set([
   'strength',
 ]);
 
+/**
+ * Config keys whose Zod schema is `.nullable()` — clearing the field means
+ * "unset", i.e. `null` (not `''`, which would fail e.g. uuid checks).
+ */
+export const NULLABLE_CONFIG_KEYS: ReadonlySet<string> = new Set([
+  'assetVersionId',
+  'truthRevisionId',
+  'shotBriefId',
+  'slot',
+  'maskId',
+  'briefSlot',
+  'sourcePlanRevisionId',
+  'seed',
+  'briefOrderIndex',
+]);
+
+export type CoercedConfigEdit = { action: 'set'; value: unknown } | { action: 'delete' };
+
+/**
+ * PR-6-08 — coerce a raw form-field string into a config value.
+ * Empty string is NOT blindly mapped to null: nullable keys get null, numeric
+ * keys drop the key (Zod default refills, e.g. count → 2), and plain string
+ * keys keep '' (legal per schema). Non-numeric garbage in a numeric field
+ * also drops the key so the default applies.
+ */
+export function coerceConfigValue(key: string, raw: string): CoercedConfigEdit {
+  if (raw === '') {
+    if (NULLABLE_CONFIG_KEYS.has(key)) return { action: 'set', value: null };
+    if (NUMERIC_CONFIG_KEYS.has(key)) return { action: 'delete' };
+    return { action: 'set', value: '' };
+  }
+  if (NUMERIC_CONFIG_KEYS.has(key)) {
+    const n = Number(raw);
+    return Number.isNaN(n) ? { action: 'delete' } : { action: 'set', value: n };
+  }
+  return { action: 'set', value: raw };
+}
+
+/** Apply one field edit to a config object (non-mutating). */
+export function applyConfigEdit(
+  prev: Record<string, unknown>,
+  key: string,
+  raw: string,
+): Record<string, unknown> {
+  const next = { ...prev };
+  const edit = coerceConfigValue(key, raw);
+  if (edit.action === 'delete') delete next[key];
+  else next[key] = edit.value;
+  return next;
+}
+
 export const OPTION_LABEL_ZH: Record<string, string> = {
   auto: '自动',
   precise: '精细',

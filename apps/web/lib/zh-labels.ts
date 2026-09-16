@@ -104,3 +104,142 @@ export const EXPORT_STATUS_ZH: Record<string, string> = {
   BLOCKED: '已阻止',
   FAILED: '失败',
 };
+
+/** Node type ids → 通俗中文（画布节点卡片 + 报错文案共用）。 */
+export const NODE_TYPE_ZH: Record<string, string> = {
+  source_image: '参考图',
+  product_truth: '产品图',
+  prompt: '提示词',
+  remove_background: '抠图',
+  generate: '生成',
+  replace_background: '换背景',
+  inpaint: '局部重绘',
+  outpaint: '扩图',
+  upscale: '高清放大',
+  qa_gate: '质检',
+  approval_selector: '人工挑选',
+  export: '导出',
+};
+
+/** Node config field keys → 中文（报错文案里的字段名）。 */
+export const CONFIG_FIELD_ZH: Record<string, string> = {
+  text: '提示词内容',
+  negative: '反向提示词',
+  locale: '语言地区',
+  slot: '槽位',
+  count: '数量',
+  seed: '种子',
+  fidelity: '保真度',
+  lightBlend: '光线融合',
+  strength: '强度',
+  ratio: '比例',
+  resolution: '分辨率',
+  modelKey: '模型',
+  engineKey: '引擎',
+  targetResolution: '目标分辨率',
+  targetRatio: '目标比例',
+  placement: '放置',
+  policyKey: '策略',
+  assetVersionId: '素材版本',
+  truthRevisionId: '产品图修订',
+  shotBriefId: '分镜说明',
+  maskId: '蒙版',
+  namingPreset: '命名预设',
+  format: '格式',
+  requiredRole: '所需角色',
+  subjectHint: '主体提示',
+  edgeMode: '边缘模式',
+  briefSlot: '分镜槽位',
+  briefOrderIndex: '分镜顺序',
+  sourcePlanRevisionId: '来源分镜修订',
+  schemaVersion: '配置版本',
+};
+
+/**
+ * Command 错误码 → 中文。只收录真实存在的码：
+ * domain WorkflowCommandErrorCode（packages/domain/src/workflow-commands.ts）
+ * 及其包含的 GraphIssueCode（packages/domain/src/workflow-graph.ts）。
+ */
+export const COMMAND_ERROR_CODE_ZH: Record<string, string> = {
+  INVALID_NODE_CONFIG: '节点配置不正确',
+  NODE_NOT_FOUND: '节点不存在',
+  EDGE_NOT_FOUND: '连线不存在',
+  RUN_NOT_LAST: '运行命令必须放在最后',
+  DUPLICATE_NODE_ID: '节点编号重复',
+  DUPLICATE_EDGE_ID: '连线编号重复',
+  NODE_TYPE_NOT_IN_PALETTE: '该节点类型不能手动添加',
+  UNKNOWN_NODE_TYPE: '未知的节点类型',
+  UNKNOWN_SOURCE_HANDLE: '未知的输出端口',
+  UNKNOWN_TARGET_HANDLE: '未知的输入端口',
+  PORT_TYPE_MISMATCH: '端口类型不匹配',
+  SELF_LOOP: '节点不能连自己',
+  DUPLICATE_EDGE: '连线重复',
+  CROSS_LAYER_BACK_EDGE: '不允许从后往前连线',
+  CYCLE: '连线会形成循环',
+  MULTI_INCOMING: '该端口只能连一条线',
+  MISSING_NODE: '连线指向了不存在的节点',
+  EXPORT_REQUIRES_APPROVED: '导出前需要先通过人工挑选',
+};
+
+const RECEIVED_ZH: Record<string, string> = {
+  null: '空值',
+  undefined: '空值',
+  number: '数字',
+  string: '文字',
+  boolean: '布尔值',
+  array: '数组',
+  object: '对象',
+};
+
+/** Common Zod issue messages → 中文；返回 null 表示没有匹配的已知模式。 */
+function zodMessageZh(message: string): string | null {
+  let m = /^Expected (\w+), received (\w+)$/.exec(message);
+  if (m) {
+    const expected = m[1] === 'string' ? '文字' : m[1] === 'number' ? '数字' : m[1];
+    return `需要${expected}，收到了${RECEIVED_ZH[m[2]] ?? m[2]}`;
+  }
+  m = /^String must contain at most (\d+) character/.exec(message);
+  if (m) return `最多 ${m[1]} 个字`;
+  m = /^String must contain at least (\d+) character/.exec(message);
+  if (m) return `至少 ${m[1]} 个字`;
+  m = /^Number must be greater than or equal to (.+)$/.exec(message);
+  if (m) return `不能小于 ${m[1]}`;
+  m = /^Number must be less than or equal to (.+)$/.exec(message);
+  if (m) return `不能大于 ${m[1]}`;
+  if (/^Number must be an integer$/.test(message)) return '必须是整数';
+  if (/^Invalid uuid$/i.test(message)) return '需要选择一项（编号格式不对）';
+  if (/^Invalid enum value\./.test(message)) return '选项不在允许范围内';
+  if (/^Required$/.test(message)) return '必填项缺失';
+  return null;
+}
+
+/** `text: Expected string, received null` → `提示词内容：需要文字，收到了空值`。 */
+function configIssueZh(issue: string): string {
+  const m = /^([\w.]*): ([\s\S]+)$/.exec(issue);
+  if (!m) return `配置未通过检查：${issue}`;
+  const field = m[1] ? (CONFIG_FIELD_ZH[m[1]] ?? m[1]) : '配置';
+  const reason = zodMessageZh(m[2]);
+  return reason ? `${field}：${reason}` : `配置未通过检查：${issue}`;
+}
+
+/**
+ * PR-6-08 — 把服务端 command 报错（`command[0] (CODE): …` 机器前缀 + 英文
+ * zod 消息）翻成给用户看的中文。无法识别的内容保留原文。
+ */
+export function formatCommandErrorZh(message: string): string {
+  const head = /^command\[(\d+)\] \(([A-Z_]+)\): ([\s\S]+)$/.exec(message);
+  if (!head) return message;
+  const code = head[2];
+  const detail = head[3];
+  const codeZh = COMMAND_ERROR_CODE_ZH[code] ?? code;
+  const cfg = /^Invalid config for ([\w-]+): ([\s\S]+)$/.exec(detail);
+  if (code === 'INVALID_NODE_CONFIG' && cfg) {
+    const nodeZh = NODE_TYPE_ZH[cfg[1]] ?? cfg[1];
+    const issues = cfg[2]
+      .split('; ')
+      .map(configIssueZh)
+      .join('；');
+    return `${codeZh}（${nodeZh}）— ${issues}`;
+  }
+  return `${codeZh} — ${detail}`;
+}

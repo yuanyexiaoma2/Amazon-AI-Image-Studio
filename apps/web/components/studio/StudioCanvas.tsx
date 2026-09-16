@@ -27,6 +27,7 @@ import '@xyflow/react/dist/style.css';
 import {
   listPaletteNodeTypes,
   validateEdge,
+  arePortTypesCompatible,
   getNodeDefinition,
   type WorkflowGraph,
   type GraphEdge,
@@ -57,31 +58,16 @@ import {
 } from './PropertiesPanel';
 import { ChatPanel } from './ChatPanel';
 import { AssetImage } from '../asset-image';
-import { NUMERIC_CONFIG_KEYS } from './config-options';
-import { zh, RUN_STATUS_ZH } from '@/lib/zh-labels';
+import { applyConfigEdit } from './config-options';
+import { zh, RUN_STATUS_ZH, NODE_TYPE_ZH, CONFIG_FIELD_ZH, formatCommandErrorZh } from '@/lib/zh-labels';
 
 type CanvasSnapshot = { nodes: Node[]; edges: Edge[] };
 
 /** Result of a whole-canvas run, shared by the toolbar button and TaskDrawer. */
 type RunAllOutcome = { message: string; authRequired: boolean };
 
-const NODE_LABEL_ZH: Record<string, string> = {
-  source_image: '参考图',
-  product_truth: '产品图',
-  prompt: '提示词',
-  remove_background: '抠图',
-  generate: '生成',
-  replace_background: '换背景',
-  inpaint: '局部重绘',
-  outpaint: '扩图',
-  upscale: '高清放大',
-  qa_gate: '质检',
-  approval_selector: '人工挑选',
-  export: '导出',
-};
-
 function nodeLabelZh(type: string): string {
-  return NODE_LABEL_ZH[type] ?? getNodeDefinition(type)?.label ?? type;
+  return NODE_TYPE_ZH[type] ?? getNodeDefinition(type)?.label ?? type;
 }
 
 const PORT_LABEL_ZH: Record<string, string> = {
@@ -287,7 +273,27 @@ function StudioCanvasInner(props: {
     if (nodes.length > 0 && starterDismissed) setStarterDismissed(false);
   }, [nodes.length, starterDismissed]);
 
-  const palette = useMemo(() => listPaletteNodeTypes(), []);
+  // 常用优先排序（不按 registry 顺序）；未列出的类型排最后。
+  const palette = useMemo(() => {
+    const order = [
+      'source_image',
+      'prompt',
+      'product_truth',
+      'generate',
+      'remove_background',
+      'replace_background',
+      'inpaint',
+      'outpaint',
+      'upscale',
+      'qa_gate',
+      'export',
+    ];
+    const rank = (t: string) => {
+      const i = order.indexOf(t);
+      return i === -1 ? order.length : i;
+    };
+    return [...listPaletteNodeTypes()].sort((a, b) => rank(a.type) - rank(b.type));
+  }, []);
 
   const { uploadAsset } = useAssetUpload(workspaceId, projectId);
 
@@ -319,16 +325,18 @@ function StudioCanvasInner(props: {
     }
     if (f.kind === 'run-failed') {
       // Graph commands were persisted server-side; only the run failed (e.g. 402).
-      setCmdError(f.message);
-      setStatus(`运行失败：${f.message}`);
+      const reason = formatCommandErrorZh(f.message);
+      setCmdError(reason);
+      setStatus(`运行失败：${reason}`);
       if (f.revisionNumber !== undefined) {
         const rev = f.revisionNumber;
         setDraft((prev) => (prev ? { ...prev, revisionNumber: rev } : prev));
       }
       return;
     }
-    setCmdError(f.message);
-    setStatus(`命令失败：${f.message}`);
+    const reason = formatCommandErrorZh(f.message);
+    setCmdError(reason);
+    setStatus(`操作失败：${reason}`);
   }, []);
 
   const commands = useWorkflowCommands({
@@ -625,24 +633,84 @@ function StudioCanvasInner(props: {
         x: 80 + nodesRef.current.length * 24,
         y: 80 + nodesRef.current.length * 16,
       };
+      // Auto-select: the new node becomes the only selection so the properties
+      // panel is immediately editable.
+      const previouslySelected = nodesRef.current.filter((n) => n.selected);
       const next: Node = {
         id,
         type: 'studio',
         position: pos,
+        selected: true,
         data: { label: nodeLabelZh(type), nodeType: type, config, workspaceId },
       };
       const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
-      const nextNodes = [...nodesRef.current, next];
+      const nextNodes = [...nodesRef.current.map((n) => ({ ...n, selected: false })), next];
+      // Auto-connect: when exactly one node was selected, wire its first
+      // compatible output into the new node's first unconnected required input
+      // (port metadata + domain validateEdge; silently skip when nothing fits).
+      let autoEdge: Edge | null = null;
+      let connectCmd: WorkflowCommand | null = null;
+      const sourceNode = previouslySelected.length === 1 ? previouslySelected[0] : null;
+      const sourceDef = sourceNode
+        ? getNodeDefinition(String((sourceNode.data as { nodeType?: string }).nodeType ?? ''))
+        : undefined;
+      const targetDef = getNodeDefinition(type);
+      if (sourceNode && sourceDef && targetDef) {
+        const graph = fromFlow(nextNodes, edgesRef.current);
+        for (const inPort of targetDef.inputPorts) {
+          if (!inPort.required) continue;
+          const occupied = edgesRef.current.some(
+            (e) => e.target === id && (e.targetHandle ? e.targetHandle === inPort.id : true),
+          );
+          if (occupied) continue;
+          const outPort = sourceDef.outputPorts.find((o) =>
+            arePortTypesCompatible(o.type, inPort.type),
+          );
+          if (!outPort) continue;
+          const edgeId = `e-${sourceNode.id}-${outPort.id}-${id}-${inPort.id}-${Date.now()}`;
+          const candidate: GraphEdge = {
+            id: edgeId,
+            source: sourceNode.id,
+            target: id,
+            sourceHandle: outPort.id,
+            targetHandle: inPort.id,
+          };
+          if (!validateEdge(graph, candidate).ok) continue;
+          autoEdge = {
+            id: edgeId,
+            source: sourceNode.id,
+            target: id,
+            sourceHandle: outPort.id,
+            targetHandle: inPort.id,
+          };
+          connectCmd = {
+            type: 'connect',
+            edgeId,
+            source: sourceNode.id,
+            sourceHandle: outPort.id,
+            target: id,
+            targetHandle: inPort.id,
+          };
+          break;
+        }
+      }
       setNodes(nextNodes);
       nodesRef.current = nextNodes;
+      setSelectedIds((prev) => (prev.length === 1 && prev[0] === id ? prev : [id]));
+      if (autoEdge) {
+        const nextEdges = [...edgesRef.current, autoEdge];
+        setEdges(nextEdges);
+        edgesRef.current = nextEdges;
+      }
+      const batch: WorkflowCommand[] = [
+        { type: 'addNode', nodeType: type, nodeId: id, position: pos, config },
+        ...(connectCmd ? [connectCmd] : []),
+      ];
       void commands
-        .applyNow(
-          [{ type: 'addNode', nodeType: type, nodeId: id, position: pos, config }],
-          makeRollback(snapshot),
-        )
+        .applyNow(batch, makeRollback(snapshot))
         .then(handleCommandResult);
     },
-    [setNodes, commands, handleCommandResult, makeRollback, workspaceId],
+    [setNodes, setEdges, commands, handleCommandResult, makeRollback, workspaceId],
   );
 
   function addNode(type: string) {
@@ -651,25 +719,31 @@ function StudioCanvasInner(props: {
 
   function updateNodeConfig(id: string, key: string, raw: string) {
     const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
-    let nextConfig: Record<string, unknown> = { schemaVersion: 1 };
+    let nextConfig: Record<string, unknown> | null = null;
     const nextNodes = nodesRef.current.map((n) => {
       if (n.id !== id) return n;
       const nodeType = String((n.data as { nodeType?: string }).nodeType ?? '');
       const prev = {
         ...((n.data as { config?: Record<string, unknown> }).config ?? { schemaVersion: 1 }),
       };
-      let value: unknown = raw;
-      if (raw === '') value = null;
-      else if (NUMERIC_CONFIG_KEYS.has(key)) value = Number(raw);
-      prev[key] = value;
-      const validated = validateNodeConfig(nodeType, prev);
-      nextConfig = (validated.ok ? validated.config : prev) as Record<string, unknown>;
+      const validated = validateNodeConfig(nodeType, applyConfigEdit(prev, key, raw));
+      if (!validated.ok) {
+        // Still invalid after coercion: keep the node's last valid config and
+        // do not schedule a dirty config to the server (avoids 400 popups).
+        return n;
+      }
+      nextConfig = validated.config as Record<string, unknown>;
       return { ...n, data: { ...n.data, config: nextConfig } };
     });
+    if (!nextConfig) {
+      setStatus(`「${CONFIG_FIELD_ZH[key] ?? key}」的取值无效，已保留原值`);
+      return;
+    }
+    const config = nextConfig;
     setNodes(nextNodes);
     nodesRef.current = nextNodes;
     commands.schedule(
-      [{ type: 'configure', nodeId: id, config: nextConfig }],
+      [{ type: 'configure', nodeId: id, config }],
       makeRollback(snapshot),
     );
   }
@@ -761,8 +835,9 @@ function StudioCanvasInner(props: {
         setStatus('冲突 — 未覆盖');
         return;
       }
-      setCmdError(result.message);
-      setStatus(`操作失败：${result.message}`);
+      const reason = formatCommandErrorZh(result.message);
+      setCmdError(reason);
+      setStatus(`操作失败：${reason}`);
     },
     [commands, applyDraft],
   );
@@ -951,7 +1026,9 @@ function StudioCanvasInner(props: {
     }
     return {
       message:
-        r.failure.kind === 'conflict' ? '冲突 — 请加载远端' : `运行失败：${r.failure.message}`,
+        r.failure.kind === 'conflict'
+          ? '冲突 — 请加载远端'
+          : `运行失败：${formatCommandErrorZh(r.failure.message)}`,
       authRequired: false,
     };
   }, [commands, handleCommandResult]);
@@ -984,10 +1061,25 @@ function StudioCanvasInner(props: {
         .then((r) => {
           handleCommandResult(r);
           if (r.ok) {
+            // Select the key node: the batch's first 参考图 (source_image),
+            // falling back to the first added node.
+            const pick =
+              r.batch.graph.nodes.find((n) => n.type === 'source_image') ??
+              r.batch.graph.nodes[0];
+            const flowNodes = toFlowNodes(r.batch.graph, workspaceId).map((n) => ({
+              ...n,
+              selected: n.id === pick?.id,
+            }));
             applyLocalSnapshot({
-              nodes: toFlowNodes(r.batch.graph, workspaceId),
+              nodes: flowNodes,
               edges: toFlowEdges(r.batch.graph),
             });
+            if (pick) {
+              const pickId = pick.id;
+              setSelectedIds((prev) =>
+                prev.length === 1 && prev[0] === pickId ? prev : [pickId],
+              );
+            }
             setStatus(`已应用模板 · 修订 ${r.batch.revisionNumber}`);
             setTimeout(() => void fitView({ padding: 0.2, duration: 200 }), 50);
           } else {
@@ -1107,7 +1199,7 @@ function StudioCanvasInner(props: {
   const errorBar = edgeError
     ? `非法连线已阻止：${edgeError}`
     : cmdError
-      ? `命令错误：${cmdError}`
+      ? `操作失败：${cmdError}`
       : null;
 
   return (
