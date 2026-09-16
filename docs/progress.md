@@ -711,6 +711,7 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | PR-6-05 | 撤销后模板卡回归 | DONE | 撤销模板批次回到空画布时重新提供起步模板（commit `2bfb0f4`） |
 | PR-6-06 | 节点级上手引导 | DONE | 空 source_image 节点卡片内直接显示「上传图片」按钮（nodrag，走共享上传管线）；prompt 节点显示文本预览（60 字截断）或「点选我，在右侧写提示词」；缺必填连线的节点显示「缺连线：X / Y」（PORT_LABEL_ZH）；空画布 overlay 改「三步出图」文案（commit `b82f6ba`；tsc + web 单测 42 passed 复绿，视觉验收归所有者） |
 | PR-6-07 | 全界面中文化 | DONE | 节点/端口/面板/页面全部通俗中文（参考图=Source Image、产品图=Product Truth/Truth Pack、高清放大=Upscale、质检=QA Gate…），删除节点卡片上的英文类型 id 字幕（commit 9703b3c） |
+| PR-6-08 | 配置空值报错修复 + 画布交互优化 | DONE | 修复 `INVALID_NODE_CONFIG`（清空 prompt text 等字段时 '' 被一律转 null → zod optional 不放行 null → 服务端 400）：新增纯函数 `coerceConfigValue`/`applyConfigEdit`（config-options.ts）——可空字段清空→null、数字字段清空/垃圾→删 key 回 Zod 默认（count→2）、字符串字段清空→''；coerce 后仍不合法则不 schedule、保留节点上个合法 config。command 报错中文化（`formatCommandErrorZh` + `COMMAND_ERROR_CODE_ZH`/`CONFIG_FIELD_ZH`/`NODE_TYPE_ZH`，zh-labels.ts），展示「操作失败：<中文原因>」，去掉 `command[0] (CODE):` 前缀。交互：addNodeAt 新增节点自动唯一选中；起步模板应用后自动选中批次第一个参考图节点；单选节点时添加节点自动把兼容输出连到新节点的第一个未连线必填输入（`arePortTypesCompatible`+`validateEdge`，同一命令批次）；节点库按常用优先排序。tsc/lint/test 三绿（web 单测 54 passed，新增 coerce-config-value 7 条 + command-error-zh 5 条）（commit `74813bd`） |
 
 ### PR-6 commands / evidence (implementer)
 
