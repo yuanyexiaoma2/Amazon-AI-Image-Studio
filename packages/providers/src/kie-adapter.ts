@@ -189,6 +189,57 @@ function qualityFromTier(tier?: string): 'basic' | 'high' {
   return 'basic';
 }
 
+/** '1K' | '2K' | '4K' passthrough for nano-banana-pro / gpt-image-2 `resolution`. */
+function resolutionFromTier(tier?: string): '1K' | '2K' | '4K' {
+  const t = (tier ?? '').toUpperCase();
+  if (t === '1K' || t === '4K') return t;
+  return '2K';
+}
+
+/**
+ * Per-model capabilities for kie Market models beyond the Seedream pair
+ * (docs.kie.ai OpenAPI 确认，见 domain model-registry.ts 对应条目注释）。
+ */
+const KIE_FAMILY_CAPABILITIES: Record<string, Omit<ModelCapabilities, 'modelId'>> = {
+  'nano-banana-pro': {
+    operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+    ratios: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
+    resolutionTiers: ['1K', '2K', '4K'],
+    maxReferenceImages: 8,
+    maxOutputs: 4,
+    supportsSeed: false,
+    supportsWebhook: true,
+  },
+  'gpt-image-2-text-to-image': {
+    operations: ['GENERATE'],
+    ratios: ['1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16'],
+    resolutionTiers: ['1K', '2K'],
+    maxReferenceImages: 0,
+    maxOutputs: 4,
+    supportsSeed: false,
+    supportsWebhook: true,
+  },
+  'gpt-image-2-image-to-image': {
+    operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+    ratios: ['1:1', '9:16', '16:9', '4:3', '3:4'],
+    resolutionTiers: ['1K', '2K'],
+    maxReferenceImages: 16,
+    maxOutputs: 4,
+    supportsSeed: false,
+    supportsWebhook: true,
+  },
+};
+
+/**
+ * 每模型预估 credits（预算门用）。nano-banana-pro：1K/2K=18、4K=24（第三方双源）；
+ * gpt-image-2 官方未公布，保守占位 10。未收录的模型回退到 env 配置默认值。
+ */
+const KIE_MODEL_CREDIT_ESTIMATES: Record<string, (tier?: string) => number> = {
+  'nano-banana-pro': (tier) => (resolutionFromTier(tier) === '4K' ? 24 : 18),
+  'gpt-image-2-text-to-image': () => 10,
+  'gpt-image-2-image-to-image': () => 10,
+};
+
 type RecordInfoData = {
   taskId?: string;
   model?: string;
@@ -225,10 +276,13 @@ export class KieImageProviderAdapter implements ImageProviderAdapter {
       this.config.editModelId,
       KIE_DOCUMENTED_GENERATE_MODEL,
       KIE_DOCUMENTED_EDIT_MODEL,
+      ...Object.keys(KIE_FAMILY_CAPABILITIES),
     ]);
     if (!known.has(modelId)) {
       throw new ProviderAdapterError('VALIDATION', `Unknown kie model ${modelId}`, 400);
     }
+    const family = KIE_FAMILY_CAPABILITIES[modelId];
+    if (family) return { modelId, ...family };
     const isEdit = modelId === this.config.editModelId || modelId.includes('image-to-image');
     return {
       modelId,
@@ -246,7 +300,11 @@ export class KieImageProviderAdapter implements ImageProviderAdapter {
 
   async estimateCost(request: NormalizedImageRequest): Promise<MoneyEstimate> {
     const count = request.count ?? 1;
-    const credits = this.config.estimatedCreditsPerImage * count;
+    const perImage = request.modelId
+      ? (KIE_MODEL_CREDIT_ESTIMATES[request.modelId]?.(request.resolutionTier) ??
+        this.config.estimatedCreditsPerImage)
+      : this.config.estimatedCreditsPerImage;
+    const credits = perImage * count;
     const estimatedMicrounits = Math.round(
       credits * this.config.usdPerCredit * 1_000_000,
     );
@@ -561,14 +619,89 @@ export class KieImageProviderAdapter implements ImageProviderAdapter {
     return this.config.generateModelId;
   }
 
+  private referenceUrls(request: NormalizedImageRequest): string[] {
+    return (request.referenceAssets ?? [])
+      .map((a) => a.url)
+      .filter((u): u is string => typeof u === 'string' && u.length > 0);
+  }
+
+  private requireReferenceUrls(request: NormalizedImageRequest, what: string): string[] {
+    const urls = this.referenceUrls(request);
+    if (urls.length === 0) {
+      throw new ProviderAdapterError(
+        'VALIDATION',
+        `${what} 需要 referenceAssets[].url（图生图/编辑类操作必须带参考图）`,
+        400,
+      );
+    }
+    return urls;
+  }
+
   private buildCreateTaskBody(
     request: NormalizedImageRequest,
     modelId: string,
   ): Record<string, unknown> {
-    const isEdit = modelId.includes('image-to-image') || request.operation !== 'GENERATE';
+    const input = this.buildModelInput(request, modelId);
+    const body: Record<string, unknown> = {
+      model: modelId,
+      input,
+    };
+    if (request.callbackUrl) {
+      body.callBackUrl = request.callbackUrl;
+    }
+    return body;
+  }
+
+  /**
+   * Per-model-family `input` shapes (docs.kie.ai OpenAPI):
+   * - nano-banana-pro: prompt + image_input[] + aspect_ratio + resolution + output_format
+   * - gpt-image-2-*:   prompt + aspect_ratio + resolution（i2i 用 input_urls[]）
+   * - seedream/*:      prompt + aspect_ratio + quality（i2i 用 image_urls[]）
+   * - flux-2/*:        同 seedream，但 resolution 替代 quality
+   */
+  private buildModelInput(
+    request: NormalizedImageRequest,
+    modelId: string,
+  ): Record<string, unknown> {
+    const aspect = aspectFromRequest(request);
+    const isEditOp = request.operation !== 'GENERATE';
+
+    if (modelId === 'nano-banana-pro') {
+      return {
+        prompt: request.prompt.slice(0, 10000),
+        image_input: isEditOp
+          ? this.requireReferenceUrls(request, 'nano-banana-pro').slice(0, 8)
+          : this.referenceUrls(request).slice(0, 8),
+        aspect_ratio: aspect,
+        resolution: resolutionFromTier(request.resolutionTier),
+        output_format: 'png',
+      };
+    }
+
+    if (modelId.startsWith('gpt-image-2')) {
+      const isI2I = modelId.includes('image-to-image');
+      if (isEditOp && !isI2I) {
+        throw new ProviderAdapterError(
+          'VALIDATION',
+          '该模型只支持文生图 — 编辑类操作请改用 gpt-image-2-image-to-image',
+          400,
+        );
+      }
+      const input: Record<string, unknown> = {
+        prompt: request.prompt.slice(0, 20000),
+        aspect_ratio: aspect,
+        resolution: resolutionFromTier(request.resolutionTier),
+      };
+      if (isI2I) {
+        input.input_urls = this.requireReferenceUrls(request, 'gpt-image-2 图片编辑').slice(0, 16);
+      }
+      return input;
+    }
+
+    const isEdit = modelId.includes('image-to-image') || isEditOp;
     const input: Record<string, unknown> = {
       prompt: request.prompt.slice(0, 5000),
-      aspect_ratio: aspectFromRequest(request),
+      aspect_ratio: aspect,
       quality: qualityFromTier(request.resolutionTier),
       output_format: 'png',
       nsfw_checker: false,
@@ -579,26 +712,9 @@ export class KieImageProviderAdapter implements ImageProviderAdapter {
       input.resolution = qualityFromTier(request.resolutionTier) === 'high' ? '2K' : '1K';
     }
     if (isEdit) {
-      const urls = (request.referenceAssets ?? [])
-        .map((a) => a.url)
-        .filter((u): u is string => typeof u === 'string' && u.length > 0);
-      if (urls.length === 0) {
-        throw new ProviderAdapterError(
-          'VALIDATION',
-          'Edit operations require referenceAssets[].url for kie image-to-image',
-          400,
-        );
-      }
-      input.image_urls = urls.slice(0, 10);
+      input.image_urls = this.requireReferenceUrls(request, 'kie image-to-image').slice(0, 10);
     }
-    const body: Record<string, unknown> = {
-      model: modelId,
-      input,
-    };
-    if (request.callbackUrl) {
-      body.callBackUrl = request.callbackUrl;
-    }
-    return body;
+    return input;
   }
 
   private parseResultUrls(resultJson?: string): string[] {

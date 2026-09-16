@@ -111,6 +111,80 @@ export const KIE_EDIT_MODEL: ModelRegistryEntry = {
 export const KIE_MODEL_REGISTRY: ModelRegistryEntry[] = [KIE_GENERATE_MODEL, KIE_EDIT_MODEL];
 
 /**
+ * Google Nano Banana Pro（docs.kie.ai/market/google/pro-image-to-image，OpenAPI 确认）。
+ * 单一 modelId 同时支持文生图与图生图（image_input ≤8 张，30MB/张）。
+ * 价格：1K/2K ≈ 18 credits、4K ≈ 24 credits（第三方双源印证，kie 官网价格页区域不可达）；
+ * estimatedUnitCost 取上限 $0.12 以便预算门保守。
+ */
+export const KIE_NANO_BANANA_PRO_MODEL: ModelRegistryEntry = {
+  key: 'kie-nano-banana-pro',
+  provider: 'kie',
+  modelId: 'nano-banana-pro',
+  displayName: 'Google Nano Banana Pro',
+  enabled: true,
+  operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+  // 文档另支持 'auto'（模型自选比例），UI 只给显式比例。
+  ratios: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
+  resolutionTiers: ['1K', '2K', '4K'],
+  maxReferenceImages: 8,
+  maxOutputs: 4,
+  supportsSeed: false,
+  supportsWebhook: true,
+  pricing: { currency: 'USD', unit: 'image', estimatedUnitCost: 0.12 },
+  configVersion: 1,
+};
+
+/**
+ * GPT Image 2 文生图（docs.kie.ai/market/gpt/gpt-image-2-text-to-image，OpenAPI 确认）。
+ * 文档比例有 16 档但与 resolution 有组合限制（1:1 不能 4K；2K 不支持 5:4/4:5/3:1/1:3/9:21），
+ * 这里只登记 1K/2K 全兼容的 7 个常用比例，避免 UI 给出会 400 的组合。
+ * 价格官方未确认（callback 示例 creditsConsumed:3）；estimatedUnitCost 为保守占位 $0.05。
+ */
+export const KIE_GPT_IMAGE_2_GENERATE_MODEL: ModelRegistryEntry = {
+  key: 'kie-gpt-image-2-generate',
+  provider: 'kie',
+  modelId: 'gpt-image-2-text-to-image',
+  displayName: 'GPT Image 2 (text-to-image)',
+  enabled: true,
+  operations: ['GENERATE'],
+  ratios: ['1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16'],
+  resolutionTiers: ['1K', '2K'],
+  maxReferenceImages: 0,
+  maxOutputs: 4,
+  supportsSeed: false,
+  supportsWebhook: true,
+  pricing: { currency: 'USD', unit: 'image', estimatedUnitCost: 0.05 },
+  configVersion: 1,
+};
+
+/**
+ * GPT Image 2 图生图（docs.kie.ai/market/gpt/gpt-image-2-image-to-image，OpenAPI 确认）。
+ * input_urls ≤16 张（10MB/张）；i2i 可用比例只有 6 档（含 auto），登记 5 个显式比例。
+ */
+export const KIE_GPT_IMAGE_2_EDIT_MODEL: ModelRegistryEntry = {
+  key: 'kie-gpt-image-2-edit',
+  provider: 'kie',
+  modelId: 'gpt-image-2-image-to-image',
+  displayName: 'GPT Image 2 (image-to-image)',
+  enabled: true,
+  operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+  ratios: ['1:1', '9:16', '16:9', '4:3', '3:4'],
+  resolutionTiers: ['1K', '2K'],
+  maxReferenceImages: 16,
+  maxOutputs: 4,
+  supportsSeed: false,
+  supportsWebhook: true,
+  pricing: { currency: 'USD', unit: 'image', estimatedUnitCost: 0.05 },
+  configVersion: 1,
+};
+
+export const KIE_EXTENDED_MODEL_REGISTRY: ModelRegistryEntry[] = [
+  KIE_NANO_BANANA_PRO_MODEL,
+  KIE_GPT_IMAGE_2_GENERATE_MODEL,
+  KIE_GPT_IMAGE_2_EDIT_MODEL,
+];
+
+/**
  * Active registry for the configured IMAGE_PROVIDER.
  * Fake stays available for CI; kie entries use documented Market model IDs only.
  */
@@ -119,7 +193,11 @@ export function resolveModelRegistry(
 ): ModelRegistryEntry[] {
   const p = provider.trim().toLowerCase();
   if (p === 'kie' || p === 'kie.ai' || p === 'kieai') {
-    return [...KIE_MODEL_REGISTRY, ...DEFAULT_MODEL_REGISTRY.map((m) => ({ ...m, enabled: false }))];
+    return [
+      ...KIE_MODEL_REGISTRY,
+      ...KIE_EXTENDED_MODEL_REGISTRY,
+      ...DEFAULT_MODEL_REGISTRY.map((m) => ({ ...m, enabled: false })),
+    ];
   }
   return DEFAULT_MODEL_REGISTRY;
 }

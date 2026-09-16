@@ -105,6 +105,9 @@ export const MODEL_KEY_ZH: Record<string, string> = {
   'default-upscale': '演示引擎（高清放大）',
   'kie-seedream-5-pro-generate': 'Seedream 5 Pro（文生图）',
   'kie-seedream-5-pro-edit': 'Seedream 5 Pro（图片编辑）',
+  'kie-nano-banana-pro': 'Nano Banana Pro（谷歌）',
+  'kie-gpt-image-2-generate': 'GPT Image 2（文生图）',
+  'kie-gpt-image-2-edit': 'GPT Image 2（图片编辑）',
 };
 
 export function modelLabelZh(model: { key: string; displayName?: string }): string {
