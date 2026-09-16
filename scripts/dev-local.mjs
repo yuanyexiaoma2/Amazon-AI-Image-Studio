@@ -49,11 +49,14 @@ for (const [key, value] of Object.entries(defaults)) {
   if (env[key] === undefined) env[key] = value;
 }
 
-const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+const isWin = process.platform === 'win32';
+const pnpm = isWin ? 'pnpm.cmd' : 'pnpm';
 const child = spawn(pnpm, ['--filter', '@studio/web', 'dev'], {
   cwd: root,
   env,
   stdio: 'inherit',
+  // Windows: spawning a .cmd shim without a shell throws EINVAL on modern Node.
+  shell: isWin,
 });
 
 child.on('exit', (code, signal) => {
