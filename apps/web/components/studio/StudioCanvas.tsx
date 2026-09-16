@@ -240,6 +240,13 @@ function StudioCanvasInner(props: {
 
   const { uploadAsset } = useAssetUpload(workspaceId, projectId);
 
+  const handleSelectionChange = useCallback(({ nodes: sel }: { nodes: Array<{ id: string }> }) => {
+    setSelectedIds((prev) => {
+      if (prev.length === sel.length && prev.every((id, i) => id === sel[i].id)) return prev;
+      return sel.map((n) => n.id);
+    });
+  }, []);
+
   const getWorkflowId = useCallback(() => draftRef.current?.workflowId ?? null, []);
 
   const handleCommandResult = useCallback((result: CommandResult) => {
@@ -1031,9 +1038,7 @@ function StudioCanvasInner(props: {
           onConnect={onConnect}
           isValidConnection={isValidConnection}
           nodeTypes={nodeTypes}
-          onSelectionChange={({ nodes: sel }) => {
-            setSelectedIds(sel.map((n) => n.id));
-          }}
+          onSelectionChange={handleSelectionChange}
           fitView
           deleteKeyCode={['Backspace', 'Delete']}
           multiSelectionKeyCode="Shift"
