@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from 'react';
+import Link from 'next/link';
 import {
   ReactFlow,
   Background,
@@ -44,6 +45,12 @@ import {
 } from './use-workflow-commands';
 import { useConfigOptions } from './use-config-options';
 import {
+  STARTER_TEMPLATES,
+  buildStarterTemplateCommands,
+  type StarterTemplateId,
+} from './starter-templates';
+import { IMAGE_FILE_RE, useAssetUpload } from '@/lib/use-asset-upload';
+import {
   PropertiesPanel,
   type MaskEditorState,
   type SelectedNodeInfo,
@@ -53,6 +60,9 @@ import { AssetImage } from '../asset-image';
 import { NUMERIC_CONFIG_KEYS } from './config-options';
 
 type CanvasSnapshot = { nodes: Node[]; edges: Edge[] };
+
+/** Result of a whole-canvas run, shared by the toolbar button and TaskDrawer. */
+type RunAllOutcome = { message: string; authRequired: boolean };
 
 const NODE_LABEL_ZH: Record<string, string> = {
   source_image: '源图（Source Image）',
@@ -188,7 +198,7 @@ function StudioCanvasInner(props: {
   belowStepper?: boolean;
 }) {
   const { workspaceId, projectId, workflowId: requestedWorkflowId, belowStepper } = props;
-  const { fitView } = useReactFlow();
+  const { fitView, screenToFlowPosition } = useReactFlow();
   const [draft, setDraft] = useState<WorkflowDraftPayload | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -202,7 +212,13 @@ function StudioCanvasInner(props: {
   const [deleteHint, setDeleteHint] = useState<string | null>(null);
   const [runBusy, setRunBusy] = useState(false);
   const [narrow, setNarrow] = useState(false);
+  const [narrowDismissed, setNarrowDismissed] = useState(false);
   const [rightTab, setRightTab] = useState<'properties' | 'chat'>('properties');
+  const [starterDismissed, setStarterDismissed] = useState(false);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [runAllBusy, setRunAllBusy] = useState(false);
+  const [runAllMsg, setRunAllMsg] = useState<RunAllOutcome | null>(null);
+  const [drawerExpanded, setDrawerExpanded] = useState(false);
   const revisionRef = useRef(0);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -214,6 +230,8 @@ function StudioCanvasInner(props: {
   draftRef.current = draft;
 
   const palette = useMemo(() => listPaletteNodeTypes(), []);
+
+  const { uploadAsset } = useAssetUpload(workspaceId, projectId);
 
   const getWorkflowId = useCallback(() => draftRef.current?.workflowId ?? null, []);
 
@@ -532,31 +550,38 @@ function StudioCanvasInner(props: {
     [onEdgesChange, commands, handleCommandResult, makeRollback],
   );
 
+  const addNodeAt = useCallback(
+    (type: string, position?: { x: number; y: number }) => {
+      const id = `n-${type}-${Date.now()}`;
+      const config = isWorkflowNodeConfigType(type)
+        ? (defaultNodeConfig(type) as Record<string, unknown>)
+        : { schemaVersion: 1 };
+      const pos = position ?? {
+        x: 80 + nodesRef.current.length * 24,
+        y: 80 + nodesRef.current.length * 16,
+      };
+      const next: Node = {
+        id,
+        type: 'studio',
+        position: pos,
+        data: { label: nodeLabelZh(type), nodeType: type, config, workspaceId },
+      };
+      const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+      const nextNodes = [...nodesRef.current, next];
+      setNodes(nextNodes);
+      nodesRef.current = nextNodes;
+      void commands
+        .applyNow(
+          [{ type: 'addNode', nodeType: type, nodeId: id, position: pos, config }],
+          makeRollback(snapshot),
+        )
+        .then(handleCommandResult);
+    },
+    [setNodes, commands, handleCommandResult, makeRollback, workspaceId],
+  );
+
   function addNode(type: string) {
-    const id = `n-${type}-${Date.now()}`;
-    const config = isWorkflowNodeConfigType(type)
-      ? (defaultNodeConfig(type) as Record<string, unknown>)
-      : { schemaVersion: 1 };
-    const position = {
-      x: 80 + nodesRef.current.length * 24,
-      y: 80 + nodesRef.current.length * 16,
-    };
-    const next: Node = {
-      id,
-      type: 'studio',
-      position,
-      data: { label: nodeLabelZh(type), nodeType: type, config, workspaceId },
-    };
-    const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
-    const nextNodes = [...nodesRef.current, next];
-    setNodes(nextNodes);
-    nodesRef.current = nextNodes;
-    void commands
-      .applyNow(
-        [{ type: 'addNode', nodeType: type, nodeId: id, position, config }],
-        makeRollback(snapshot),
-      )
-      .then(handleCommandResult);
+    addNodeAt(type);
   }
 
   function updateSelectedConfig(key: string, raw: string) {
@@ -772,7 +797,7 @@ function StudioCanvasInner(props: {
     [commands, handleCommandResult],
   );
 
-  const runAll = useCallback(async (): Promise<string> => {
+  const runAll = useCallback(async (): Promise<RunAllOutcome> => {
     const r = await commands.applyNow([
       {
         type: 'run',
@@ -784,10 +809,141 @@ function StudioCanvasInner(props: {
     ]);
     handleCommandResult(r);
     if (r.ok) {
-      return r.batch.run ? `运行 ${r.batch.run.status}（${r.batch.run.id.slice(0, 8)}…）` : '运行已提交';
+      return {
+        message: r.batch.run
+          ? `运行 ${r.batch.run.status}（${r.batch.run.id.slice(0, 8)}…）`
+          : '运行已提交',
+        authRequired: false,
+      };
     }
-    return r.failure.kind === 'conflict' ? '冲突 — 请加载远端' : `运行失败：${r.failure.message}`;
+    if (r.failure.status === 401) {
+      return { message: '生图需要登录账号', authRequired: true };
+    }
+    return {
+      message:
+        r.failure.kind === 'conflict' ? '冲突 — 请加载远端' : `运行失败：${r.failure.message}`,
+      authRequired: false,
+    };
   }, [commands, handleCommandResult]);
+
+  // Shared whole-canvas run trigger (toolbar button + TaskDrawer button).
+  const triggerRunAll = useCallback(async () => {
+    setRunAllBusy(true);
+    setRunAllMsg(null);
+    setDrawerExpanded(true);
+    try {
+      setRunAllMsg(await runAll());
+    } finally {
+      setRunAllBusy(false);
+    }
+  }, [runAll]);
+
+  // Starter templates: one applyNow batch (one undo step), then adopt the
+  // authoritative graph from the response and fit the view.
+  const applyTemplate = useCallback(
+    (templateId: StarterTemplateId) => {
+      if (templateId === 'blank') {
+        setStarterDismissed(true);
+        return;
+      }
+      setStarterDismissed(true);
+      setStatus('正在应用模板…');
+      const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+      void commands
+        .applyNow(buildStarterTemplateCommands(templateId), makeRollback(snapshot))
+        .then((r) => {
+          handleCommandResult(r);
+          if (r.ok) {
+            applyLocalSnapshot({
+              nodes: toFlowNodes(r.batch.graph, workspaceId),
+              edges: toFlowEdges(r.batch.graph),
+            });
+            setStatus(`已应用模板 · 修订 ${r.batch.revisionNumber}`);
+            setTimeout(() => void fitView({ padding: 0.2, duration: 200 }), 50);
+          } else {
+            setStarterDismissed(false);
+          }
+        });
+    },
+    [commands, handleCommandResult, makeRollback, applyLocalSnapshot, workspaceId, fitView],
+  );
+
+  const onCanvasDragOver = useCallback((ev: ReactDragEvent<HTMLDivElement>) => {
+    const types = ev.dataTransfer.types;
+    if (types.includes('application/studio-node') || types.includes('Files')) {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'copy';
+    }
+  }, []);
+
+  const onCanvasDrop = useCallback(
+    (ev: ReactDragEvent<HTMLDivElement>) => {
+      const position = screenToFlowPosition({ x: ev.clientX, y: ev.clientY });
+      const nodeType = ev.dataTransfer.getData('application/studio-node');
+      if (nodeType) {
+        ev.preventDefault();
+        if (getNodeDefinition(nodeType)?.palette) addNodeAt(nodeType, position);
+        return;
+      }
+      const file = [...ev.dataTransfer.files].find((f) => IMAGE_FILE_RE.test(f.name));
+      if (!file) return;
+      ev.preventDefault();
+      void (async () => {
+        setUploadNotice(`正在上传 ${file.name}…`);
+        try {
+          const asset = await uploadAsset(file, (m) => setUploadNotice(`${file.name} — ${m}`));
+          if (asset.status === 'REJECTED') {
+            setUploadNotice(`${file.name} 未通过检查（REJECTED）— 请更换图片`);
+            return;
+          }
+          const id = `n-source_image-${Date.now()}`;
+          const config = {
+            ...(defaultNodeConfig('source_image') as Record<string, unknown>),
+            assetVersionId: asset.versionId,
+          };
+          const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+          const next: Node = {
+            id,
+            type: 'studio',
+            position,
+            data: {
+              label: nodeLabelZh('source_image'),
+              nodeType: 'source_image',
+              config,
+              workspaceId,
+            },
+          };
+          const nextNodes = [...nodesRef.current, next];
+          setNodes(nextNodes);
+          nodesRef.current = nextNodes;
+          const r = await commands.applyNow(
+            [{ type: 'addNode', nodeType: 'source_image', nodeId: id, position, config }],
+            makeRollback(snapshot),
+          );
+          handleCommandResult(r);
+          if (r.ok) {
+            setUploadNotice(
+              asset.versionId
+                ? `${file.name} 已上传并绑定到源图节点`
+                : `${file.name} 已上传，素材仍在处理中 — 稍后可在属性面板选择素材版本`,
+            );
+          }
+        } catch (e) {
+          setUploadNotice(`上传失败：${e instanceof Error ? e.message : String(e)}`);
+        }
+      })();
+    },
+    [
+      screenToFlowPosition,
+      uploadAsset,
+      addNodeAt,
+      commands,
+      handleCommandResult,
+      makeRollback,
+      setNodes,
+      workspaceId,
+    ],
+  );
 
   async function openMaskEditor() {
     const fromSelected =
@@ -818,17 +974,6 @@ function StudioCanvasInner(props: {
     setStatus(`蒙版已保存 ${id.slice(0, 8)}…`);
   }
 
-  if (narrow) {
-    return (
-      <main className="container" role="main" aria-labelledby="studio-narrow-title">
-        <h1 id="studio-narrow-title">Studio（画布）</h1>
-        <p role="alert" className="banner-warn">
-          仅桌面端画布编辑器。最小宽度 1280px — 当前视口不支持完整画布编辑。请旋转设备或加宽浏览器窗口。
-        </p>
-      </main>
-    );
-  }
-
   const errorBar = edgeError
     ? `非法连线已阻止：${edgeError}`
     : cmdError
@@ -846,21 +991,31 @@ function StudioCanvasInner(props: {
           节点库
         </div>
         <div className="faint" style={{ fontSize: 'var(--font-size-xs)', marginBottom: 'var(--space-2)' }}>
-          11 种 MVP 节点 · Zod 配置（W3-05）
+          11 种 MVP 节点 · 点击添加或拖到画布 · 也可直接拖入图片文件
         </div>
         {palette.map((n) => (
           <button
             key={n.type}
             type="button"
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData('application/studio-node', n.type);
+              e.dataTransfer.effectAllowed = 'copy';
+            }}
             onClick={() => addNode(n.type)}
             className="palette-btn"
+            title="点击添加，或拖拽到画布指定位置"
           >
             {nodeLabelZh(n.type)}
           </button>
         ))}
       </aside>
 
-      <div className="studio-canvas-wrap">
+      <div
+        className="studio-canvas-wrap"
+        onDragOver={onCanvasDragOver}
+        onDrop={onCanvasDrop}
+      >
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -871,7 +1026,6 @@ function StudioCanvasInner(props: {
           nodeTypes={nodeTypes}
           onSelectionChange={({ nodes: sel }) => {
             setSelectedIds(sel.map((n) => n.id));
-            if (sel.length > 0) setRightTab('properties');
           }}
           fitView
           deleteKeyCode={['Backspace', 'Delete']}
@@ -896,6 +1050,15 @@ function StudioCanvasInner(props: {
               <button type="button" className="btn" onClick={() => redo()} title="Ctrl/Cmd+Y">
                 重做
               </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={runAllBusy || !draft}
+                onClick={() => void triggerRunAll()}
+                title="运行整张图画布（Fake · 预算 $5）"
+              >
+                {runAllBusy ? '启动中…' : '▶ 运行整图'}
+              </button>
               <button type="button" className="btn" onClick={() => copySelected()} title="Ctrl/Cmd+C">
                 复制
               </button>
@@ -915,15 +1078,71 @@ function StudioCanvasInner(props: {
             </div>
           </Panel>
         </ReactFlow>
+        {draft !== null && nodes.length === 0 && !starterDismissed && (
+          <div className="starter-overlay">
+            <div className="starter-panel" role="dialog" aria-label="画布起始模板">
+              <div style={{ fontWeight: 700 }}>画布是空的 — 从一个模板开始</div>
+              <div className="starter-grid">
+                {STARTER_TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="starter-card"
+                    onClick={() => applyTemplate(t.id)}
+                  >
+                    <span className="starter-card-title">{t.title}</span>
+                    <span className="starter-card-desc">{t.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        {narrow && !narrowDismissed && (
+          <div
+            className="banner-warn canvas-overlay"
+            role="alert"
+            style={{
+              top: 12,
+              left: 'auto',
+              maxWidth: 380,
+              display: 'flex',
+              gap: 'var(--space-2)',
+              justifyContent: 'space-between',
+              zIndex: 11,
+            }}
+          >
+            <span>视口宽度不足 1280px — 画布编辑可能显示不完整，建议加宽浏览器窗口。</span>
+            <button type="button" className="btn" onClick={() => setNarrowDismissed(true)}>
+              关闭
+            </button>
+          </div>
+        )}
+        {uploadNotice && (
+          <div
+            className="banner-info canvas-overlay"
+            role="status"
+            style={{ bottom: 12, display: 'flex', justifyContent: 'space-between', zIndex: 11 }}
+          >
+            <span>{uploadNotice}</span>
+            <button type="button" className="btn" onClick={() => setUploadNotice(null)}>
+              关闭
+            </button>
+          </div>
+        )}
         {errorBar && (
-          <div className="banner-error canvas-overlay" style={{ bottom: 12 }}>
+          <div className="banner-error canvas-overlay" style={{ bottom: uploadNotice ? 56 : 12 }}>
             {errorBar}
           </div>
         )}
         {deleteHint && (
           <div
             className="banner-info canvas-overlay"
-            style={{ bottom: errorBar ? 56 : 12, display: 'flex', justifyContent: 'space-between' }}
+            style={{
+              bottom: errorBar || uploadNotice ? 56 : 12,
+              display: 'flex',
+              justifyContent: 'space-between',
+            }}
           >
             <span>{deleteHint}</span>
             <button type="button" className="btn" onClick={() => setDeleteHint(null)}>
@@ -994,7 +1213,17 @@ function StudioCanvasInner(props: {
         </div>
       </aside>
 
-      <TaskDrawer workspaceId={workspaceId} projectId={projectId} ready={draft !== null} onRunAll={runAll} />
+      <TaskDrawer
+        workspaceId={workspaceId}
+        projectId={projectId}
+        ready={draft !== null}
+        expanded={drawerExpanded}
+        onToggleExpanded={() => setDrawerExpanded((v) => !v)}
+        onExpand={() => setDrawerExpanded(true)}
+        busy={runAllBusy}
+        msg={runAllMsg}
+        onRunAll={triggerRunAll}
+      />
     </div>
   );
 }
@@ -1004,9 +1233,15 @@ function TaskDrawer(props: {
   workspaceId: string;
   projectId: string;
   ready: boolean;
-  onRunAll: () => Promise<string>;
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  onExpand: () => void;
+  busy: boolean;
+  msg: RunAllOutcome | null;
+  onRunAll: () => Promise<void>;
 }) {
-  const { workspaceId, projectId, ready, onRunAll } = props;
+  const { workspaceId, projectId, ready, expanded, onToggleExpanded, onExpand, busy, msg, onRunAll } =
+    props;
   const [runs, setRuns] = useState<
     Array<{
       id: string;
@@ -1027,8 +1262,6 @@ function TaskDrawer(props: {
       }>;
     }>
   >([]);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
   const [events, setEvents] = useState<string[]>([]);
 
   const refresh = useCallback(async () => {
@@ -1066,16 +1299,14 @@ function TaskDrawer(props: {
     };
   }, [workspaceId, projectId, refresh]);
 
+  // Auto-expand while anything is queued/running.
+  useEffect(() => {
+    if (runs.some((r) => r.status === 'RUNNING' || r.status === 'QUEUED')) onExpand();
+  }, [runs, onExpand]);
+
   async function runAll() {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const message = await onRunAll();
-      setMsg(message);
-      await refresh();
-    } finally {
-      setBusy(false);
-    }
+    await onRunAll();
+    await refresh();
   }
 
   async function cancelRun(runId: string) {
@@ -1104,9 +1335,26 @@ function TaskDrawer(props: {
         <button type="button" className="btn" onClick={() => void refresh()}>
           刷新
         </button>
-        {msg && <span style={{ opacity: 0.85 }}>{msg}</span>}
+        {msg && (
+          <span style={{ opacity: 0.85 }}>
+            {msg.authRequired ? (
+              <>
+                生图需要登录账号 — <Link href="/login">去登录</Link>
+              </>
+            ) : (
+              msg.message
+            )}
+          </span>
+        )}
+        <span style={{ marginLeft: 'auto' }}>
+          <button type="button" className="btn" onClick={onToggleExpanded}>
+            {expanded ? '收起 ▾' : `展开 ▴（${runs.length} 个运行）`}
+          </button>
+        </span>
       </div>
-      <div className="stack" style={{ gap: 6, maxHeight: 160, overflow: 'auto' }}>
+      {!expanded ? null : (
+        <>
+          <div className="stack" style={{ gap: 6, maxHeight: 160, overflow: 'auto' }}>
         {runs.length === 0 && (
           <div role="status" className="faint">暂无运行 — 排队 / 运行中 / 成功 / 失败会显示在这里。</div>
         )}
@@ -1150,11 +1398,13 @@ function TaskDrawer(props: {
             })}
           </div>
         ))}
-      </div>
-      {events.length > 0 && (
-        <div className="faint" style={{ fontSize: 'var(--font-size-xs)' }}>
-          SSE: {events[0]}
-        </div>
+          </div>
+          {events.length > 0 && (
+            <div className="faint" style={{ fontSize: 'var(--font-size-xs)' }}>
+              SSE: {events[0]}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

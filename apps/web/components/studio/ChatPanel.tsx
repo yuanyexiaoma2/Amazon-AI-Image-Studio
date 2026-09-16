@@ -13,6 +13,7 @@
  * commands/undo endpoint.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import type { ChatMessage, ChatSession } from '@studio/contracts';
 import { microunitsToAmount, type WorkflowGraph } from '@studio/domain';
 import { Badge, Button, EmptyState, ErrorBanner, Spinner, type BadgeTone } from '../ui';
@@ -62,6 +63,7 @@ export function ChatPanel(props: {
   const [undoBusyId, setUndoBusyId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [authRequired, setAuthRequired] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const msgsRef = useRef<HTMLDivElement | null>(null);
 
@@ -71,6 +73,7 @@ export function ChatPanel(props: {
     if (!workflowId) return;
     setLoading(true);
     setError(null);
+    setAuthRequired(false);
     setHint(null);
     setSession(null);
     setMessages([]);
@@ -143,6 +146,7 @@ export function ChatPanel(props: {
     if (!content || !session || sending) return;
     setSending(true);
     setError(null);
+    setAuthRequired(false);
     setHint(null);
     try {
       const res = await fetch(`${base}/${session.id}/messages`, {
@@ -153,13 +157,20 @@ export function ChatPanel(props: {
       const json = await res.json().catch(() => null);
       if (!res.ok) {
         const code = json?.error?.code as string | undefined;
-        setError(
-          code === 'CHAT_AUTH_FAILED'
-            ? '画布助手认证失败（CHAT_AUTH_FAILED）— 请检查 LLM Provider 密钥配置。'
-            : code === 'CHAT_UNAVAILABLE'
-              ? '画布助手暂不可用（CHAT_UNAVAILABLE）— 请稍后重试。'
-              : `发送失败：${json?.error?.message ?? res.status}`,
-        );
+        if (res.status === 401) {
+          // LOCAL_MODE: browsing needs no login; generation/chat turns do.
+          setAuthRequired(true);
+          setError('生图需要登录账号');
+        } else {
+          setAuthRequired(false);
+          setError(
+            code === 'CHAT_AUTH_FAILED'
+              ? '画布助手认证失败（CHAT_AUTH_FAILED）— 请检查 LLM Provider 密钥配置。'
+              : code === 'CHAT_UNAVAILABLE'
+                ? '画布助手暂不可用（CHAT_UNAVAILABLE）— 请稍后重试。'
+                : `发送失败：${json?.error?.message ?? res.status}`,
+          );
+        }
         // The USER message is persisted even when the turn fails — resync.
         const detailRes = await fetch(`${base}/${session.id}`);
         const detail = await detailRes.json().catch(() => null);
@@ -258,9 +269,14 @@ export function ChatPanel(props: {
           </span>
         )}
       </div>
-      {error && (
-        <ErrorBanner message={error} onRetry={session ? undefined : () => void initSession()} />
-      )}
+      {error &&
+        (authRequired ? (
+          <p role="alert" className="banner-error">
+            生图需要登录账号 — <Link href="/login">去登录</Link>
+          </p>
+        ) : (
+          <ErrorBanner message={error} onRetry={session ? undefined : () => void initSession()} />
+        ))}
       {hint && (
         <p role="status" className="banner-info">
           {hint}

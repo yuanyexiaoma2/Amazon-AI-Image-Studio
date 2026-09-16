@@ -651,6 +651,65 @@ code {
   background: var(--surface);
 }
 
+/* PR-6: empty-canvas starter template overlay */
+.starter-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.starter-panel {
+  pointer-events: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-4);
+  width: min(560px, 92%);
+}
+
+.starter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.starter-card {
+  text-align: left;
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  display: grid;
+  gap: var(--space-1);
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.starter-card:hover {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft-bg);
+}
+
+.starter-card-title {
+  font-weight: 600;
+}
+
+.starter-card-desc {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
 /* xyflow (React Flow) chrome on the light canvas */
 .react-flow {
   background: var(--canvas-bg);

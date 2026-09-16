@@ -7,6 +7,7 @@ import { Badge, Button, EmptyState, Spinner } from '@/components/ui';
 import { AssetImage } from '@/components/asset-image';
 import { ProjectStepper } from '@/components/project-stepper';
 import { useWorkspace } from '@/lib/use-workspace';
+import { useAssetUpload } from '@/lib/use-asset-upload';
 
 type Asset = {
   id: string;
@@ -68,7 +69,7 @@ function ProjectDetailInner() {
   const [shotPlan, setShotPlan] = useState<ShotPlan | null>(null);
   const [workflowCount, setWorkflowCount] = useState(0);
   const [msg, setMsg] = useState<string>('');
-  const [uploading, setUploading] = useState(false);
+  const { uploadAsset, uploading } = useAssetUpload(workspaceId, projectId);
 
   const ready = Boolean(workspaceId && projectId);
 
@@ -100,61 +101,11 @@ function ProjectDetailInner() {
   );
 
   async function onFile(file: File) {
-    if (!workspaceId || !projectId) return;
-    setUploading(true);
-    setMsg('正在预签名…');
     try {
-      const mimeType =
-        file.type === 'image/png' || file.type === 'image/jpeg' || file.type === 'image/webp'
-          ? file.type
-          : 'image/png';
-      const presign = await fetch(`/api/workspaces/${workspaceId}/uploads/presign`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          projectId,
-          filename: file.name,
-          mimeType,
-          bytes: file.size,
-        }),
-      });
-      const pJson = await presign.json();
-      if (!presign.ok) throw new Error(pJson?.error?.message ?? '预签名失败');
-
-      setMsg('正在上传到对象存储…');
-      const put = await fetch(pJson.uploadUrl, {
-        method: 'PUT',
-        headers: pJson.headers ?? { 'Content-Type': mimeType },
-        body: file,
-      });
-      if (!put.ok) throw new Error(`S3 PUT 失败：${put.status}`);
-
-      setMsg('正在完成并检查…');
-      const complete = await fetch(
-        `/api/workspaces/${workspaceId}/uploads/${pJson.uploadId}/complete`,
-        {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ completionKey: `ui-${pJson.uploadId}` }),
-        },
-      );
-      const cJson = await complete.json();
-      if (!complete.ok) throw new Error(cJson?.error?.message ?? '完成失败');
-
-      for (let i = 0; i < 30; i++) {
-        const res = await fetch(`/api/workspaces/${workspaceId}/assets/${pJson.assetId}`);
-        const asset = await res.json();
-        if (asset.status === 'READY' || asset.status === 'REJECTED') {
-          setMsg(`素材 ${asset.status}`);
-          break;
-        }
-        await new Promise((r) => setTimeout(r, 500));
-      }
+      await uploadAsset(file, setMsg);
       await refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
-    } finally {
-      setUploading(false);
     }
   }
 

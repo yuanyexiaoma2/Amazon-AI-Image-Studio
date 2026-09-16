@@ -209,6 +209,14 @@ export function PropertiesPanel(props: {
                         </option>
                       ))}
                     </select>
+                  ) : f.kind === 'textarea' ? (
+                    <textarea
+                      className="input"
+                      rows={6}
+                      value={current}
+                      placeholder={f.placeholder}
+                      onChange={(e) => onConfigChange(f.key, e.target.value)}
+                    />
                   ) : (
                     <input
                       className="input"

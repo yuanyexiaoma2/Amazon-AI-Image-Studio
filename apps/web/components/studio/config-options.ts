@@ -16,14 +16,19 @@ export type ConfigFieldSource =
 export type ConfigFieldMeta = {
   key: string;
   label: string;
-  kind: 'text' | 'number' | 'select' | 'async';
+  kind: 'text' | 'number' | 'select' | 'async' | 'textarea';
   /** Static options for kind === 'select'. */
   options?: string[];
   /** Async data source for kind === 'async'. */
   source?: ConfigFieldSource;
   /** Operation filter for source === 'models' (undefined = list all). */
   modelOperation?: 'GENERATE' | 'INPAINT' | 'OUTPAINT' | 'UPSCALE';
+  /** Placeholder shown when the field is empty (textarea/text). */
+  placeholder?: string;
 };
+
+/** PR-6: 4-part scaffold placeholder for the prompt node's text field. */
+export const PROMPT_TEXT_PLACEHOLDER = '只改：…\n不改：…\n场景示例：…\n商业约束：…';
 
 export const CONFIG_FIELD_META: Record<string, ConfigFieldMeta[]> = {
   source_image: [
@@ -33,7 +38,7 @@ export const CONFIG_FIELD_META: Record<string, ConfigFieldMeta[]> = {
     { key: 'truthRevisionId', label: 'Truth 修订', kind: 'async', source: 'truthRevision' },
   ],
   prompt: [
-    { key: 'text', label: '提示词', kind: 'text' },
+    { key: 'text', label: '提示词', kind: 'textarea', placeholder: PROMPT_TEXT_PLACEHOLDER },
     { key: 'negative', label: '反向提示词', kind: 'text' },
     { key: 'locale', label: '语言地区', kind: 'text' },
     { key: 'shotBriefId', label: '镜头简报', kind: 'async', source: 'shotBriefs' },
