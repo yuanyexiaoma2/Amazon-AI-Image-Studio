@@ -52,7 +52,7 @@ describe('config option builders (V2 PR-2 dropdowns)', () => {
     expect(buildModelOptions(models, 'UPSCALE').map((o) => o.value)).toEqual(['up']);
     expect(buildModelOptions(models, 'INPAINT')[0]).toEqual({
       value: 'gen',
-      label: 'gen · Generator',
+      label: 'Generator',
     });
   });
 

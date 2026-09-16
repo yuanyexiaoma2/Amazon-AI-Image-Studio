@@ -98,6 +98,19 @@ export const PROVIDER_ZH: Record<string, string> = {
   fake: '演示',
 };
 
+/** 生图模型 key → 中文显示名（模型品牌名保留原文）。 */
+export const MODEL_KEY_ZH: Record<string, string> = {
+  'primary-image-generate': '演示模型（文生图）',
+  'primary-image-edit': '演示模型（图片编辑）',
+  'default-upscale': '演示引擎（高清放大）',
+  'kie-seedream-5-pro-generate': 'Seedream 5 Pro（文生图）',
+  'kie-seedream-5-pro-edit': 'Seedream 5 Pro（图片编辑）',
+};
+
+export function modelLabelZh(model: { key: string; displayName?: string }): string {
+  return MODEL_KEY_ZH[model.key] ?? model.displayName ?? model.key;
+}
+
 export const EXPORT_STATUS_ZH: Record<string, string> = {
   PENDING: '处理中',
   READY: '就绪',

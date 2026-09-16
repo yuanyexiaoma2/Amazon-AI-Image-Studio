@@ -4,7 +4,7 @@
  * Kept free of React/fetch so the builders are unit-testable.
  */
 
-import { zh, REVISION_STATUS_ZH, SLOT_ZH } from '@/lib/zh-labels';
+import { zh, REVISION_STATUS_ZH, SLOT_ZH, modelLabelZh } from '@/lib/zh-labels';
 
 export type SelectOption = { value: string; label: string };
 
@@ -52,8 +52,13 @@ export const CONFIG_FIELD_META: Record<string, ConfigFieldMeta[]> = {
   ],
   generate: [
     { key: 'modelKey', label: '模型', kind: 'async', source: 'models', modelOperation: 'GENERATE' },
-    { key: 'ratio', label: '比例', kind: 'text' },
-    { key: 'resolution', label: '分辨率', kind: 'select', options: ['1K', '2K', '4K'] },
+    {
+      key: 'ratio',
+      label: '比例',
+      kind: 'select',
+      options: ['1:1', '4:3', '3:4', '16:9', '9:16', '2:3', '3:2', '21:9', '4:5'],
+    },
+    { key: 'resolution', label: '清晰度', kind: 'select', options: ['1K', '2K', '4K'] },
     { key: 'count', label: '数量', kind: 'number' },
     { key: 'seed', label: '种子', kind: 'number' },
   ],
@@ -241,12 +246,15 @@ export type ModelOptionItem = {
   key: string;
   displayName: string;
   operations: string[];
+  ratios?: string[];
+  resolutionTiers?: string[];
+  pricing?: { currency: string; unit: string; estimatedUnitCost: number };
 };
 
 export function buildModelOptions(models: ModelOptionItem[], operation?: string): SelectOption[] {
   return models
     .filter((m) => !operation || m.operations.includes(operation))
-    .map((m) => ({ value: m.key, label: `${m.key} · ${m.displayName}` }));
+    .map((m) => ({ value: m.key, label: modelLabelZh(m) }));
 }
 
 /** Keep the stored value selectable even when it is not in the fetched list. */

@@ -58,8 +58,8 @@ import {
 } from './PropertiesPanel';
 import { ChatPanel } from './ChatPanel';
 import { AssetImage } from '../asset-image';
-import { applyConfigEdit } from './config-options';
-import { zh, RUN_STATUS_ZH, NODE_TYPE_ZH, CONFIG_FIELD_ZH, formatCommandErrorZh } from '@/lib/zh-labels';
+import { applyConfigEdit, type ModelOptionItem } from './config-options';
+import { zh, RUN_STATUS_ZH, NODE_TYPE_ZH, CONFIG_FIELD_ZH, formatCommandErrorZh, modelLabelZh } from '@/lib/zh-labels';
 
 type CanvasSnapshot = { nodes: Node[]; edges: Edge[] };
 
@@ -88,11 +88,15 @@ const PORT_LABEL_ZH: Record<string, string> = {
 type NodeActionContextValue = {
   uploadIntoNode: (nodeId: string) => void;
   missingPorts: (nodeId: string) => string[];
+  updateConfig: (nodeId: string, key: string, raw: string) => void;
+  models: ModelOptionItem[] | null;
 };
 
 const NodeActionContext = createContext<NodeActionContextValue>({
   uploadIntoNode: () => {},
   missingPorts: () => [],
+  updateConfig: () => {},
+  models: null,
 });
 
 function toFlowNodes(graph: WorkflowGraph, workspaceId: string): Node[] {
@@ -235,6 +239,9 @@ function StudioNodeView(props: NodeProps) {
             : '点选我，在右侧写提示词'}
         </div>
       ) : null}
+      {nodeType === 'generate' ? (
+        <GenerateNodeControls nodeId={props.id} config={data.config} />
+      ) : null}
       {def && def.inputPorts.length > 0 ? (
         <div className="studio-node-ports">
           {def.inputPorts.map((p) => (
@@ -273,6 +280,87 @@ function StudioNodeView(props: NodeProps) {
       ) : null}
       {missing.length > 0 ? (
         <div className="studio-node-missing">缺连线：{missing.join(' / ')}</div>
+      ) : null}
+    </div>
+  );
+}
+
+const RESOLUTION_ZH: Record<string, string> = {
+  '1K': '标准（1K）',
+  '2K': '高清（2K）',
+  '4K': '超清（4K）',
+};
+
+const FALLBACK_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
+const FALLBACK_RESOLUTIONS = ['1K', '2K', '4K'];
+
+function withCurrentValue(options: string[], current: string): string[] {
+  return current && !options.includes(current) ? [current, ...options] : options;
+}
+
+/** 生成节点卡片内联控件：模型 / 比例 / 清晰度（比例与清晰度跟随所选模型的能力）。 */
+function GenerateNodeControls(props: { nodeId: string; config?: Record<string, unknown> }) {
+  const actions = useContext(NodeActionContext);
+  const cfg = props.config ?? {};
+  const modelKey = typeof cfg.modelKey === 'string' ? cfg.modelKey : '';
+  const ratio = typeof cfg.ratio === 'string' && cfg.ratio ? cfg.ratio : '1:1';
+  const resolution = typeof cfg.resolution === 'string' && cfg.resolution ? cfg.resolution : '2K';
+  const models = (actions.models ?? []).filter((m) => m.operations.includes('GENERATE'));
+  const current = models.find((m) => m.key === modelKey);
+  const ratioOptions = withCurrentValue(current?.ratios ?? FALLBACK_RATIOS, ratio);
+  const resolutionOptions = withCurrentValue(
+    current?.resolutionTiers ?? FALLBACK_RESOLUTIONS,
+    resolution,
+  );
+  return (
+    <div className="studio-node-controls nodrag" onClick={(e) => e.stopPropagation()}>
+      <label className="studio-node-field">
+        <span>模型</span>
+        <select
+          value={modelKey}
+          onChange={(e) => actions.updateConfig(props.nodeId, 'modelKey', e.target.value)}
+        >
+          {actions.models === null ? <option value={modelKey}>加载中…</option> : null}
+          {actions.models !== null && !current && modelKey ? (
+            <option value={modelKey}>{modelLabelZh({ key: modelKey })}（不可用）</option>
+          ) : null}
+          {models.map((m) => (
+            <option key={m.key} value={m.key}>
+              {modelLabelZh(m)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="studio-node-field">
+        <span>比例</span>
+        <select
+          value={ratio}
+          onChange={(e) => actions.updateConfig(props.nodeId, 'ratio', e.target.value)}
+        >
+          {ratioOptions.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="studio-node-field">
+        <span>清晰度</span>
+        <select
+          value={resolution}
+          onChange={(e) => actions.updateConfig(props.nodeId, 'resolution', e.target.value)}
+        >
+          {resolutionOptions.map((r) => (
+            <option key={r} value={r}>
+              {RESOLUTION_ZH[r] ?? r}
+            </option>
+          ))}
+        </select>
+      </label>
+      {current?.pricing ? (
+        <div className="studio-node-cost faint">
+          约 ${current.pricing.estimatedUnitCost}/张
+        </div>
       ) : null}
     </div>
   );
@@ -537,6 +625,23 @@ function StudioCanvasInner(props: {
     sourceAssetVersionId,
     activeNodeId: selectedInfo?.id ?? null,
   });
+
+  // 模型注册表加载后，把生成节点上已不可用的模型（例如切换到 kie 后被禁用的
+  // 演示模型）自动改成第一个可用模型，保证「运行整图」开箱即用。
+  const modelsForFix = configOptions.models;
+  useEffect(() => {
+    if (!modelsForFix || modelsForFix.length === 0) return;
+    const genModels = modelsForFix.filter((m) => m.operations.includes('GENERATE'));
+    if (genModels.length === 0) return;
+    for (const n of nodesRef.current) {
+      if (String((n.data as { nodeType?: string }).nodeType ?? '') !== 'generate') continue;
+      const cfg = (n.data as { config?: Record<string, unknown> }).config ?? {};
+      const mk = typeof cfg.modelKey === 'string' ? cfg.modelKey : '';
+      if (!genModels.some((m) => m.key === mk)) {
+        updateNodeConfig(n.id, 'modelKey', genModels[0].key);
+      }
+    }
+  }, [modelsForFix]);
 
   const isValidConnection = useCallback((connection: Connection | Edge) => {
     if (!connection.source || !connection.target) return false;
@@ -911,8 +1016,10 @@ function StudioCanvasInner(props: {
     () => ({
       uploadIntoNode,
       missingPorts: (nodeId) => missingPortsByNode.get(nodeId) ?? [],
+      updateConfig: (nodeId, key, raw) => updateNodeConfig(nodeId, key, raw),
+      models: configOptions.models,
     }),
-    [uploadIntoNode, missingPortsByNode],
+    [uploadIntoNode, missingPortsByNode, configOptions.models],
   );
 
   const handleUndoRedo = useCallback(
