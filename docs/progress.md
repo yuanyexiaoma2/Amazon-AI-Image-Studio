@@ -710,6 +710,7 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | PR-6-04 | 一键启动 | DONE | `pnpm dev:local`（`scripts/dev-local.mjs`：加载根 .env 不回显、注入 LOCAL_MODE+INLINE 缺省值不覆盖已有；Windows spawn EINVAL 修复 commit `bcd6116`）；README/.env.example 文档 |
 | PR-6-05 | 撤销后模板卡回归 | DONE | 撤销模板批次回到空画布时重新提供起步模板（commit `2bfb0f4`） |
 | PR-6-06 | 节点级上手引导 | DONE | 空 source_image 节点卡片内直接显示「上传图片」按钮（nodrag，走共享上传管线）；prompt 节点显示文本预览（60 字截断）或「点选我，在右侧写提示词」；缺必填连线的节点显示「缺连线：X / Y」（PORT_LABEL_ZH）；空画布 overlay 改「三步出图」文案（commit `b82f6ba`；tsc + web 单测 42 passed 复绿，视觉验收归所有者） |
+| PR-6-07 | 全界面中文化 | DONE | 节点/端口/面板/页面全部通俗中文（参考图=Source Image、产品图=Product Truth/Truth Pack、高清放大=Upscale、质检=QA Gate…），删除节点卡片上的英文类型 id 字幕（commit 9703b3c） |
 
 ### PR-6 commands / evidence (implementer)
 
