@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { ChatMessage, ChatSession } from '@studio/contracts';
 import { microunitsToAmount, type WorkflowGraph } from '@studio/domain';
+import { zh, COMMAND_TYPE_ZH, RUN_STATUS_ZH } from '@/lib/zh-labels';
 import { Badge, Button, EmptyState, ErrorBanner, Spinner, type BadgeTone } from '../ui';
 
 const DEFAULT_SESSION_TITLE = '画布助手';
@@ -34,11 +35,13 @@ function runTone(status: string): BadgeTone {
   return 'default';
 }
 
-/** "addNode, addNode, connect" → "addNode×2、connect". */
+/** 命令类型列表 → 中文摘要，如「添加节点×2、连线」。 */
 function summarizeTypes(types: string[]): string {
   const counts = new Map<string, number>();
   for (const t of types) counts.set(t, (counts.get(t) ?? 0) + 1);
-  return [...counts.entries()].map(([t, n]) => (n > 1 ? `${t}×${n}` : t)).join('、');
+  return [...counts.entries()]
+    .map(([t, n]) => (n > 1 ? `${zh(COMMAND_TYPE_ZH, t)}×${n}` : zh(COMMAND_TYPE_ZH, t)))
+    .join('、');
 }
 
 export function ChatPanel(props: {
@@ -165,9 +168,9 @@ export function ChatPanel(props: {
           setAuthRequired(false);
           setError(
             code === 'CHAT_AUTH_FAILED'
-              ? '画布助手认证失败（CHAT_AUTH_FAILED）— 请检查 LLM Provider 密钥配置。'
+              ? '画布助手认证失败 — 请检查助手模型的密钥配置。'
               : code === 'CHAT_UNAVAILABLE'
-                ? '画布助手暂不可用（CHAT_UNAVAILABLE）— 请稍后重试。'
+                ? '画布助手暂不可用 — 请稍后重试。'
                 : `发送失败：${json?.error?.message ?? res.status}`,
           );
         }
@@ -317,7 +320,7 @@ export function ChatPanel(props: {
                         </Badge>
                       )}
                       {runInfo && (
-                        <Badge tone={runTone(runInfo.status)}>运行 {runInfo.status}</Badge>
+                        <Badge tone={runTone(runInfo.status)}>运行{zh(RUN_STATUS_ZH, runInfo.status)}</Badge>
                       )}
                       {extra.budgetRejected === true && (
                         <Badge tone="warn">预算不足，未执行运行</Badge>
@@ -335,7 +338,7 @@ export function ChatPanel(props: {
                   )}
                   {errObj && (
                     <div style={{ color: 'var(--danger-text)', marginTop: 4 }}>
-                      命令执行失败：{errObj.code ?? 'ERROR'} — {errObj.message ?? ''}
+                      命令执行失败：{errObj.code ?? '未知错误'} — {errObj.message ?? ''}
                     </div>
                   )}
                 </div>

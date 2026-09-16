@@ -48,7 +48,7 @@ export function useAssetUpload(workspaceId: string | null, projectId: string | n
           headers: pJson.headers ?? { 'Content-Type': mimeType },
           body: file,
         });
-        if (!put.ok) throw new Error(`S3 PUT 失败：${put.status}`);
+        if (!put.ok) throw new Error(`上传到存储失败（${put.status}）`);
 
         onProgress?.('正在完成并检查…');
         const complete = await fetch(
@@ -70,7 +70,7 @@ export function useAssetUpload(workspaceId: string | null, projectId: string | n
           if (typeof asset?.status === 'string') status = asset.status;
           if (typeof asset?.currentVersionId === 'string') versionId = asset.currentVersionId;
           if (asset?.status === 'READY' || asset?.status === 'REJECTED') {
-            onProgress?.(`素材 ${asset.status}`);
+            onProgress?.(asset.status === 'READY' ? '素材就绪' : '素材未通过检查');
             break;
           }
           await new Promise((r) => setTimeout(r, 500));

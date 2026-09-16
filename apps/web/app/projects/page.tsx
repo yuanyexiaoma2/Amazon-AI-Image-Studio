@@ -50,7 +50,7 @@ function ProjectsInner() {
   return (
     <div className="container">
       <h1>项目</h1>
-      <p className="muted">W2 素材库 + Truth Pack（产品真相包）入口。</p>
+      <p className="muted">素材库与产品图资料入口。</p>
       {error && <ErrorBanner message={error} />}
       {wsLoading && <Spinner label="正在解析工作空间…" />}
       <div className="row" style={{ marginBottom: 'var(--space-4)' }}>

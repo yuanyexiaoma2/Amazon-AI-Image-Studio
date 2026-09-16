@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { useMe } from '@/lib/use-me';
+import { zh, ROLE_ZH } from '@/lib/zh-labels';
 import { Badge, Button } from '@/components/ui';
 
 export function SiteHeader() {
@@ -22,13 +23,13 @@ export function SiteHeader() {
   return (
     <header className="site-header">
       <Link href="/" className="site-brand">
-        Amazon AI Image Studio
+        亚马逊 AI 生图工作台
       </Link>
       <nav className="site-nav">
         {loading ? null : me?.localMode ? (
           <>
             <Link href="/projects">项目</Link>
-            <Link href="/admin">Admin</Link>
+            <Link href="/admin">管理后台</Link>
             {workspace ? <Badge tone="accent">{workspace.name}</Badge> : null}
             <Badge>本地工作台</Badge>
             {me.authenticated ? (
@@ -42,10 +43,10 @@ export function SiteHeader() {
         ) : me ? (
           <>
             <Link href="/projects">项目</Link>
-            {isAdmin ? <Link href="/admin">Admin</Link> : null}
+            {isAdmin ? <Link href="/admin">管理后台</Link> : null}
             {workspace ? (
               <Badge tone="accent">
-                {workspace.name} · {workspace.role}
+                {workspace.name} · {zh(ROLE_ZH, workspace.role)}
               </Badge>
             ) : null}
             <span className="muted" style={{ fontSize: 'var(--font-size-sm)' }}>

@@ -23,7 +23,7 @@ describe('config option builders (V2 PR-2 dropdowns)', () => {
   it('buildTruthOptions maps the current revision or stays empty', () => {
     expect(buildTruthOptions(null)).toEqual([]);
     expect(buildTruthOptions({ id: 'rev-1', revision: 3, status: 'APPROVED' })).toEqual([
-      { value: 'rev-1', label: '修订 #3 · APPROVED' },
+      { value: 'rev-1', label: '修订 #3 · 已批准' },
     ]);
   });
 
@@ -33,7 +33,7 @@ describe('config option builders (V2 PR-2 dropdowns)', () => {
       { id: 'b1', slot: 'hero', purpose: '主图', orderIndex: 1 },
     ]);
     expect(options.map((o) => o.value)).toEqual(['b1', 'b2']);
-    expect(options[0].label).toBe('#1 hero · 主图');
+    expect(options[0].label).toBe('#1 主图 · 主图');
   });
 
   it('buildMaskOptions labels masks without a name field', () => {

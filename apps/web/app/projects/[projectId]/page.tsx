@@ -8,6 +8,7 @@ import { AssetImage } from '@/components/asset-image';
 import { ProjectStepper } from '@/components/project-stepper';
 import { useWorkspace } from '@/lib/use-workspace';
 import { useAssetUpload } from '@/lib/use-asset-upload';
+import { zh, ASSET_STATUS_ZH, REVISION_STATUS_ZH, SLOT_ZH } from '@/lib/zh-labels';
 
 type Asset = {
   id: string;
@@ -111,7 +112,7 @@ function ProjectDetailInner() {
 
   async function extract() {
     if (!workspaceId || !projectId || versionIds.length === 0) {
-      setMsg('请先上传一份 READY 素材');
+      setMsg('请先上传一份检查通过的素材');
       return;
     }
     const res = await fetch(
@@ -128,7 +129,7 @@ function ProjectDetailInner() {
       return;
     }
     setPack(json.pack);
-    setMsg(`已通过 ${json.provider} 抽取`);
+    setMsg('抽取完成');
   }
 
   async function confirmAll() {
@@ -173,14 +174,14 @@ function ProjectDetailInner() {
       return;
     }
     setPack(json);
-    setMsg('Truth Pack 已批准');
+    setMsg('产品图资料已批准');
   }
 
 
   async function generateShotPlan() {
     if (!workspaceId || !projectId) return;
     if (!pack?.approvedRevisionId) {
-      setMsg('请先批准 Truth Pack');
+      setMsg('请先批准产品图资料');
       return;
     }
     const res = await fetch(
@@ -193,11 +194,11 @@ function ProjectDetailInner() {
     );
     const json = await res.json();
     if (!res.ok) {
-      setMsg(json?.error?.message ?? 'Shot Plan 生成失败');
+      setMsg(json?.error?.message ?? '分镜计划生成失败');
       return;
     }
     setShotPlan(json.plan);
-    setMsg(`已通过 ${json.provider} 起草 Shot Plan（${json.plan?.revision?.briefs?.length ?? 0} 条简报）`);
+    setMsg(`已起草分镜计划（${json.plan?.revision?.briefs?.length ?? 0} 条分镜说明）`);
   }
 
   async function approveShotPlan() {
@@ -212,17 +213,17 @@ function ProjectDetailInner() {
     );
     const json = await res.json();
     if (!res.ok) {
-      setMsg(json?.error?.message ?? 'Shot Plan 审批失败');
+      setMsg(json?.error?.message ?? '分镜计划批准失败');
       return;
     }
     setShotPlan(json);
-    setMsg('Shot Plan 已批准');
+    setMsg('分镜计划已批准');
   }
 
   async function materializeShotPlan() {
     if (!workspaceId || !projectId) return;
     if (!shotPlan?.approvedRevisionId) {
-      setMsg('请先批准 Shot Plan');
+      setMsg('请先批准分镜计划');
       return;
     }
     const res = await fetch(
@@ -238,7 +239,7 @@ function ProjectDetailInner() {
       setMsg(json?.error?.message ?? '物化失败');
       return;
     }
-    setMsg(`已物化 ${json.briefCount} 图工作流`);
+    setMsg(`已物化 ${json.briefCount} 张图的工作流`);
     router.push(`/projects/${projectId}/studio?workspaceId=${workspaceId}`);
   }
 
@@ -294,16 +295,16 @@ function ProjectDetailInner() {
           意图向导（一句话 → 一套图）→
         </Link>
         <Link href={projectHref(`/projects/${projectId}/studio`)}>
-          打开 Studio 画布 →
+          打开工作台画布 →
         </Link>
         <Link href={projectHref(`/projects/${projectId}/review`)}>
-          审核 / QA / 导出 →
+          审核 / 质检 / 导出 →
         </Link>
         <Button onClick={createBlankCanvas}>新建空白画布</Button>
       </div>
-      <h1>项目素材 + Truth Pack（产品真相包） + Shot Plan（拍摄计划）</h1>
+      <h1>项目素材 + 产品图资料 + 分镜计划</h1>
       <p className="muted">
-        上传 → 批准 Truth Pack → 生成 7 镜计划（Fake） → 批准 → 一键物化（W3-B2）。当前仅 Fake 模式。
+        上传素材 → 批准产品图资料 → 生成 7 个分镜（演示） → 批准 → 一键物化到画布。当前为演示模式。
       </p>
       <p>
         <strong>{msg}</strong>
@@ -337,7 +338,7 @@ function ProjectDetailInner() {
                   alt={a.originalFilename ?? a.id}
                 />
                 <span>
-                  {a.originalFilename ?? a.id} — <Badge>{a.status}</Badge>
+                  {a.originalFilename ?? a.id} — <Badge>{zh(ASSET_STATUS_ZH, a.status)}</Badge>
                   {a.currentVersionId ? ` · 版本 ${a.currentVersionId.slice(0, 8)}…` : ''}
                 </span>
               </li>
@@ -347,16 +348,16 @@ function ProjectDetailInner() {
       </section>
 
       <section id="truth-pack">
-        <h2>Truth Pack（产品真相包）</h2>
+        <h2>产品图资料</h2>
         <div className="row" style={{ marginBottom: 'var(--space-3)' }}>
-          <Button onClick={extract}>抽取（Fake Vision）</Button>
-          <Button onClick={confirmAll}>确认全部 EXTRACTED</Button>
+          <Button onClick={extract}>自动抽取（演示识别）</Button>
+          <Button onClick={confirmAll}>确认全部待确认条目</Button>
           <Button onClick={approve}>批准此修订</Button>
         </div>
         {pack?.revision ? (
           <div>
             <p>
-              修订 #{pack.revision.revision} — <Badge>{pack.revision.status}</Badge>
+              修订 #{pack.revision.revision} — <Badge>{zh(REVISION_STATUS_ZH, pack.revision.status)}</Badge>
               {pack.approvedRevisionId ? (
                 <>
                   {' '}
@@ -369,7 +370,7 @@ function ProjectDetailInner() {
             <ul>
               {pack.revision.facts.map((f) => (
                 <li key={f.id}>
-                  <strong>{f.key}</strong>: {JSON.stringify(f.value)} <code>{f.status}</code> (
+                  <strong>{f.key}</strong>: {JSON.stringify(f.value)} <code>{zh(REVISION_STATUS_ZH, f.status)}</code> (
                   {Math.round(f.confidence * 100)}%)
                 </li>
               ))}
@@ -389,22 +390,22 @@ function ProjectDetailInner() {
       </section>
 
       <section id="shot-plan" style={{ marginTop: 'var(--space-6)' }}>
-        <h2>Shot Plan（拍摄计划）（W3-A）</h2>
+        <h2>分镜计划</h2>
         <div className="row" style={{ marginBottom: 'var(--space-3)' }}>
           <Button onClick={generateShotPlan} disabled={!pack?.approvedRevisionId}>
-            生成 7 镜（Fake）
+            生成 7 个分镜（演示）
           </Button>
           <Button onClick={approveShotPlan} disabled={!shotPlan?.revision}>
-            批准 Shot Plan
+            批准分镜计划
           </Button>
           <Button onClick={materializeShotPlan} disabled={!shotPlan?.approvedRevisionId}>
-            物化 → Studio
+            物化到画布
           </Button>
         </div>
         {shotPlan?.revision ? (
           <div>
             <p>
-              修订 #{shotPlan.revision.revision} — <Badge>{shotPlan.revision.status}</Badge>
+              修订 #{shotPlan.revision.revision} — <Badge>{zh(REVISION_STATUS_ZH, shotPlan.revision.status)}</Badge>
               {shotPlan.approvedRevisionId ? (
                 <>
                   {' '}
@@ -413,25 +414,25 @@ function ProjectDetailInner() {
               ) : (
                 ''
               )}
-              {' · 真相 '}
+              {' · 产品图 '}
               <code>{shotPlan.revision.truthRevisionId.slice(0, 8)}…</code>
             </p>
             <ul>
               {shotPlan.revision.briefs.map((b) => (
                 <li key={b.id}>
-                  #{b.orderIndex} <strong>{b.slot}</strong>: {b.purpose}{' '}
+                  #{b.orderIndex} <strong>{zh(SLOT_ZH, b.slot)}</strong>: {b.purpose}{' '}
                   <code>{b.constraints.aspectRatio}</code>
                 </li>
               ))}
             </ul>
             {shotPlan.canvasPayload ? (
               <p className="muted">
-                canvasPayload 已就绪（{shotPlan.canvasPayload.briefs.length} 条有序简报） · 物化会校验 referencedAssetVersionIds
+                分镜数据已就绪（{shotPlan.canvasPayload.briefs.length} 条有序分镜说明） · 物化时会校验引用的素材版本
               </p>
             ) : null}
           </div>
         ) : (
-          <EmptyState>尚无 Shot Plan — 请先批准 Truth Pack，再生成。</EmptyState>
+          <EmptyState>还没有分镜计划 — 请先批准产品图资料，再生成。</EmptyState>
         )}
       </section>
 

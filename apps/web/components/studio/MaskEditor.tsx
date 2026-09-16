@@ -274,7 +274,7 @@ export function MaskEditor(props: Props) {
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <strong>蒙版编辑器（W5-03）</strong>
+        <strong>蒙版编辑器</strong>
         {props.onClose ? (
           <button type="button" className="btn" onClick={props.onClose}>
             关闭
@@ -365,7 +365,7 @@ export function MaskEditor(props: Props) {
         />
       </div>
       <div className="muted" style={{ fontSize: 'var(--font-size-xs)' }}>
-        源图 {props.sourceWidth}×{props.sourceHeight} · 笔划 {strokes.length} ·{' '}
+        参考图 {props.sourceWidth}×{props.sourceHeight} · 笔划 {strokes.length} ·{' '}
         {maskId ? `蒙版 ${maskId.slice(0, 8)}…` : '未保存'} · {status}
       </div>
     </div>

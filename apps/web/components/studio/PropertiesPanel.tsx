@@ -51,18 +51,18 @@ function hintFor(
         return '该项目还没有可用素材版本 — 请先在项目页上传素材。';
       return null;
     case 'truthRevision':
-      if (options.truthRevision === undefined) return 'Truth Pack 加载中…';
+      if (options.truthRevision === undefined) return '产品图资料加载中…';
       if (options.truthRevision === null)
-        return '尚无 Truth Pack 修订 — 请先在项目页抽取。';
+        return '还没有产品图资料 — 请先在项目页抽取。';
       return null;
     case 'shotBriefs':
-      if (options.briefs === null) return 'Shot Plan 加载中…';
+      if (options.briefs === null) return '分镜计划加载中…';
       if (options.briefs.length === 0)
-        return '该项目尚无 Shot Plan — 请先在项目页生成 7 镜计划。';
+        return '该项目还没有分镜计划 — 请先在项目页生成。';
       return null;
     case 'masks':
       if (!sourceAssetVersionId)
-        return '请先在 source_image 节点选择素材版本，蒙版列表随其联动。';
+        return '请先在「参考图」节点选择素材版本，蒙版列表随其联动。';
       if (options.masks === null) return '蒙版加载中…';
       if (options.masks.length === 0)
         return '该素材版本还没有蒙版 — 请用蒙版编辑器创建。';
@@ -133,14 +133,13 @@ export function PropertiesPanel(props: {
       <div style={{ fontWeight: 700, marginBottom: 'var(--space-2)' }}>节点属性</div>
       {!selected ? (
         <p className="faint" style={{ fontSize: 'var(--font-size-md)' }}>
-          选择节点以编辑其 Zod 配置外壳（仅 Fake — 不调用 Provider）。
+          点选画布上的节点，在这里编辑它的参数（演示模式，不会真的调用生图服务）。
         </p>
       ) : (
         <div style={{ fontSize: 'var(--font-size-md)' }}>
           <div>
             <strong>{selected.label}</strong>
           </div>
-          <div className="muted">类型：{selected.nodeType}</div>
           <div className="muted">
             位置：{Math.round(selected.position.x)}, {Math.round(selected.position.y)}
           </div>
@@ -152,7 +151,7 @@ export function PropertiesPanel(props: {
                 disabled={runBusy}
                 onClick={() => onRunNode(selected.id)}
               >
-                {runBusy ? '启动中…' : '运行此节点（Fake · 预算 $5）'}
+                {runBusy ? '启动中…' : '运行此节点（演示模式 · 预算 $5）'}
               </button>
             </div>
           )}
@@ -240,7 +239,7 @@ export function PropertiesPanel(props: {
                 打开蒙版编辑器
               </button>
               <div className="faint" style={{ fontSize: 'var(--font-size-xs)', marginTop: 'var(--space-1)' }}>
-                蒙版基于 source_image 的素材版本；保存后可在 replace_background / inpaint 的蒙版下拉中选择。
+                蒙版基于「参考图」节点的素材版本；保存后可在「换背景」「局部重绘」节点的蒙版下拉中选择。
               </div>
             </div>
           )}
@@ -263,7 +262,7 @@ export function PropertiesPanel(props: {
       <div className="faint" style={{ marginTop: 'var(--space-6)', fontSize: 'var(--font-size-xs)' }}>
         草稿修订：{draftRevision ?? '—'}
         <br />
-        变更经命令 API 同步 · 撤销/重做为服务端批次 · isValidConnection 预览
+        改动会自动保存到服务端 · 支持撤销/重做 · 连线前会先校验是否合法
       </div>
     </>
   );

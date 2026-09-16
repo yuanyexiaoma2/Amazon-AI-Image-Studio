@@ -35,7 +35,7 @@ export default function LoginPage() {
     <div className="auth-wrap">
       <div className="auth-card">
         <h1 className="auth-title">登录</h1>
-        <p className="auth-sub">登录 Amazon AI Image Studio 继续工作</p>
+        <p className="auth-sub">登录亚马逊 AI 生图工作台，继续工作</p>
         <form onSubmit={onSubmit} className="stack">
           <label className="form-field">
             邮箱

@@ -4,6 +4,8 @@
  * Kept free of React/fetch so the builders are unit-testable.
  */
 
+import { zh, REVISION_STATUS_ZH, SLOT_ZH } from '@/lib/zh-labels';
+
 export type SelectOption = { value: string; label: string };
 
 export type ConfigFieldSource =
@@ -35,13 +37,13 @@ export const CONFIG_FIELD_META: Record<string, ConfigFieldMeta[]> = {
     { key: 'assetVersionId', label: '素材版本', kind: 'async', source: 'assets' },
   ],
   product_truth: [
-    { key: 'truthRevisionId', label: 'Truth 修订', kind: 'async', source: 'truthRevision' },
+    { key: 'truthRevisionId', label: '产品图修订', kind: 'async', source: 'truthRevision' },
   ],
   prompt: [
     { key: 'text', label: '提示词', kind: 'textarea', placeholder: PROMPT_TEXT_PLACEHOLDER },
     { key: 'negative', label: '反向提示词', kind: 'text' },
     { key: 'locale', label: '语言地区', kind: 'text' },
-    { key: 'shotBriefId', label: '镜头简报', kind: 'async', source: 'shotBriefs' },
+    { key: 'shotBriefId', label: '分镜说明', kind: 'async', source: 'shotBriefs' },
     { key: 'slot', label: '槽位', kind: 'text' },
   ],
   remove_background: [
@@ -122,6 +124,10 @@ export const OPTION_LABEL_ZH: Record<string, string> = {
   bottom: '下',
   left: '左',
   right: '右',
+  OWNER: '所有者',
+  ADMIN: '管理员',
+  MEMBER: '成员',
+  REVIEWER: '审核员',
 };
 
 export type AssetOptionItem = {
@@ -150,7 +156,7 @@ export function buildTruthOptions(revision: TruthRevisionItem | null): SelectOpt
   return [
     {
       value: revision.id,
-      label: `修订 #${revision.revision} · ${revision.status}`,
+      label: `修订 #${revision.revision} · ${zh(REVISION_STATUS_ZH, revision.status)}`,
     },
   ];
 }
@@ -167,7 +173,7 @@ export function buildBriefOptions(briefs: BriefOptionItem[]): SelectOption[] {
     .sort((a, b) => a.orderIndex - b.orderIndex)
     .map((b) => ({
       value: b.id,
-      label: `#${b.orderIndex} ${b.slot} · ${b.purpose}`,
+      label: `#${b.orderIndex} ${zh(SLOT_ZH, b.slot)} · ${b.purpose}`,
     }));
 }
 

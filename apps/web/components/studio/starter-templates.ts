@@ -21,7 +21,7 @@ export const STARTER_TEMPLATES: ReadonlyArray<StarterTemplate> = [
   {
     id: 'hero',
     title: '主图直出',
-    description: '源图 + 提示词 + 产品真相 → 生成合规主图',
+    description: '参考图 + 提示词 + 产品图 → 生成合规主图',
   },
   {
     id: 'background',

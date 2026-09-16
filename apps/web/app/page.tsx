@@ -14,10 +14,10 @@ export default async function HomePage() {
 
   return (
     <div className="container">
-      <h1>Amazon AI Image Studio</h1>
+      <h1>亚马逊 AI 生图工作台</h1>
       <p className="home-lead">
-        注册 → 项目 → Truth Pack（产品真相包） → Shot Plan（拍摄计划） → <strong>物化</strong> →
-        Studio（画布），含节点配置与交互。当前仅 Fake 模式。
+        注册 → 建项目 → 上传素材、抽取产品图资料 → 生成分镜计划 → <strong>物化</strong>到工作台画布，
+        拖拽节点、连线、出图。当前为演示模式。
       </p>
       <div className="card-grid">
         <Link href="/register" className="card card-link">
@@ -30,11 +30,11 @@ export default async function HomePage() {
         </Link>
         <Link href="/projects" className="card card-link">
           <div className="card-link-title">项目</div>
-          <div className="card-link-desc">项目 / 素材 / Truth Pack（产品真相包）</div>
+          <div className="card-link-desc">项目 / 素材 / 产品图资料</div>
         </Link>
         <Link href="/projects" className="card card-link">
-          <div className="card-link-title">Studio 画布</div>
-          <div className="card-link-desc">打开项目后进入 Studio</div>
+          <div className="card-link-title">工作台画布</div>
+          <div className="card-link-desc">打开项目后进入工作台</div>
         </Link>
       </div>
       <p className="faint" style={{ marginTop: 'var(--space-6)', fontSize: 'var(--font-size-sm)' }}>

@@ -19,7 +19,7 @@ function StudioInner() {
   if (!workspaceId) {
     return (
       <main className="container" role="main">
-        <h1>Studio（画布）</h1>
+        <h1>工作台（画布）</h1>
         {wsLoading ? (
           <Spinner label="正在解析工作空间…" />
         ) : (

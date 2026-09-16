@@ -7,6 +7,16 @@ import { Button, EmptyState, ErrorBanner, Select, Spinner } from '@/components/u
 import { ProjectStepper } from '@/components/project-stepper';
 import { useWorkspace } from '@/lib/use-workspace';
 import { useAssetImage } from '@/lib/use-asset-image';
+import {
+  zh,
+  DECISION_ZH,
+  EXPORT_STATUS_ZH,
+  QA_FINDING_STATUS_ZH,
+  QA_OVERALL_ZH,
+  QA_SEVERITY_ZH,
+  ROLE_ZH,
+  SLOT_ZH,
+} from '@/lib/zh-labels';
 
 type Finding = {
   id: string;
@@ -134,7 +144,7 @@ function ReviewInner() {
       setMsg(json?.error?.message ?? '决策失败');
       return;
     }
-    setMsg(`已记录 ${decision}`);
+    setMsg(`已记录：${zh(DECISION_ZH, decision)}`);
     await refresh();
   }
 
@@ -153,7 +163,7 @@ function ReviewInner() {
       return;
     }
     setBundleId(json.id);
-    setMsg(`导出 ${json.status} ${json.id.slice(0, 8)}… zip=${json.zipSha256?.slice(0, 12) ?? '处理中'}`);
+    setMsg(`导出${zh(EXPORT_STATUS_ZH, json.status)} ${json.id.slice(0, 8)}… · 压缩包校验：${json.zipSha256?.slice(0, 12) ?? '处理中'}`);
   }
 
   async function download() {
@@ -171,7 +181,7 @@ function ReviewInner() {
     if (!report)
       return (
         <EmptyState>
-          尚未选择 QA 报告。请从 Studio 运行 Fake QA，或等待 evaluate 任务 — 新项目出现空状态是正常的。
+          尚未选择质检报告。请先在工作台画布运行质检，或等待自动检查完成 — 新项目暂时没有报告是正常的。
         </EmptyState>
       );
     const tone =
@@ -183,10 +193,10 @@ function ReviewInner() {
     return (
       <div>
         <h3>
-          {title} · <span style={{ color: tone }}>{report.overallStatus ?? report.status}</span>
+          {title} · <span style={{ color: tone }}>{zh(QA_OVERALL_ZH, report.overallStatus ?? report.status)}</span>
         </h3>
         <p className="muted" style={{ fontSize: 'var(--font-size-sm)' }}>
-          版本 {report.assetVersionId.slice(0, 8)}… · 槽位 {report.slot ?? '—'}
+          版本 {report.assetVersionId.slice(0, 8)}… · 槽位 {report.slot ? zh(SLOT_ZH, report.slot) : '—'}
         </p>
         <div
           className={
@@ -200,7 +210,7 @@ function ReviewInner() {
             (f.evidence?.regions ?? []).map((r, i) => (
               <div
                 key={`${f.id}-${i}`}
-                title={`${f.ruleId} ${f.status}`}
+                title={`${f.ruleId} ${zh(QA_FINDING_STATUS_ZH, f.status)}`}
                 className={`evidence-box ${
                   f.status === 'FAIL'
                     ? 'evidence-fail'
@@ -221,7 +231,8 @@ function ReviewInner() {
         <ul>
           {report.findings.map((f) => (
             <li key={f.id}>
-              <code>{f.ruleId}</code> <strong>{f.status}</strong> {f.severity}
+              <code>{f.ruleId}</code> <strong>{zh(QA_FINDING_STATUS_ZH, f.status)}</strong>{' '}
+              {zh(QA_SEVERITY_ZH, f.severity)}
               {f.nonWaivable ? ' · 不可豁免' : ''} — {f.message}
             </li>
           ))}
@@ -249,35 +260,35 @@ function ReviewInner() {
       <ProjectStepper projectId={projectId} input={{ hasQaReports: reports.length > 0 }} />
       <p className="row">
         <Link href={projectHref(`/projects/${projectId}`)}>← 项目</Link>
-        <Link href={projectHref(`/projects/${projectId}/studio`)}>Studio</Link>
+        <Link href={projectHref(`/projects/${projectId}/studio`)}>工作台</Link>
       </p>
-      <h1 id="review-title">审核 — QA 发现、对比、批准</h1>
+      <h1 id="review-title">审核 — 质检发现、对比与人工挑选</h1>
       <p className="muted" style={{ maxWidth: 720 }}>
         {leftReport?.disclaimer ??
-          '自动 QA 是发布前助手。qa_gate PASS 不等于人工批准。MAIN BLOCK 会阻止默认导出。'}
+          '自动质检只是上架前的助手。质检通过不等于人工批准；主图质检不通过会阻止默认导出。'}
       </p>
       <p aria-live="polite" role="status">
         <strong>{msg}</strong>
       </p>
-      {loading && <Spinner label="正在加载 QA 报告…" />}
+      {loading && <Spinner label="正在加载质检报告…" />}
       {loadError && <ErrorBanner message={loadError} onRetry={() => void refresh()} />}
       {!loading && !loadError && reports.length === 0 && (
         <EmptyState>
-          此项目尚无 QA 报告。请先在 Studio 生成候选图（Fake），再回到这里查看发现。
+          此项目还没有质检报告。请先在工作台画布生成候选图（演示模式），再回到这里查看质检发现。
         </EmptyState>
       )}
       <div className="row" style={{ marginBottom: 'var(--space-4)' }}>
         <label className="row">
           左侧{' '}
           <Select
-            aria-label="左侧 QA 报告"
+            aria-label="左侧质检报告"
             value={left}
             onChange={(e) => setLeft(e.target.value)}
             style={{ width: 'auto' }}
           >
             {reports.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.slot} {r.overallStatus ?? r.status} {r.id.slice(0, 8)}
+                {r.slot ? zh(SLOT_ZH, r.slot) : '—'} {zh(QA_OVERALL_ZH, r.overallStatus ?? r.status)} {r.id.slice(0, 8)}
               </option>
             ))}
           </Select>
@@ -285,7 +296,7 @@ function ReviewInner() {
         <label className="row">
           右侧{' '}
           <Select
-            aria-label="右侧对比 QA 报告"
+            aria-label="右侧对比质检报告"
             value={right}
             onChange={(e) => setRight(e.target.value)}
             style={{ width: 'auto' }}
@@ -293,7 +304,7 @@ function ReviewInner() {
             <option value="">—</option>
             {reports.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.slot} {r.overallStatus ?? r.status} {r.id.slice(0, 8)}
+                {r.slot ? zh(SLOT_ZH, r.slot) : '—'} {zh(QA_OVERALL_ZH, r.overallStatus ?? r.status)} {r.id.slice(0, 8)}
               </option>
             ))}
           </Select>
@@ -308,7 +319,7 @@ function ReviewInner() {
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="覆盖原因（OVERRIDE_BLOCK 必填）"
+          placeholder="填写原因（选择「强制通过」时必填）"
           aria-label="决策原因"
           rows={3}
           className="input"
@@ -319,24 +330,24 @@ function ReviewInner() {
             通过
           </Button>
           <Button variant="danger" onClick={() => void decide('REJECT')}>驳回</Button>
-          <Button variant="danger" onClick={() => void decide('OVERRIDE_BLOCK')}>覆盖 BLOCK</Button>
+          <Button variant="danger" onClick={() => void decide('OVERRIDE_BLOCK')}>强制通过</Button>
           <Button onClick={() => void decide('REVOKE')}>撤销</Button>
           <Button variant="primary" onClick={() => void exportLeft()}>
             导出所选
           </Button>
           <Button onClick={() => void download()} disabled={!bundleId}>
-            下载 ZIP
+            下载压缩包
           </Button>
         </div>
-        <h3>审批记录</h3>
+        <h3>挑选记录</h3>
         <ul>
           {approvals.map((a) => (
             <li key={a.id}>
-              {a.decision} · {a.actorRole} · {a.decidedAt}
+              {zh(DECISION_ZH, a.decision)} · {zh(ROLE_ZH, a.actorRole)} · {a.decidedAt}
               {a.reason ? ` — ${a.reason}` : ''}
             </li>
           ))}
-          {approvals.length === 0 && <li>暂无 — QA PASS 并不等于批准。</li>}
+          {approvals.length === 0 && <li>暂无 — 质检通过并不等于人工批准。</li>}
         </ul>
       </section>
     </main>

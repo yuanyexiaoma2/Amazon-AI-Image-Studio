@@ -5,8 +5,8 @@ import { SiteHeader } from '@/components/site-header';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Amazon AI Image Studio',
-  description: '亚马逊商品图生产 MVP 脚手架',
+  title: '亚马逊 AI 生图工作台',
+  description: '亚马逊商品图生产工作台',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui';
+import { zh, PROVIDER_ZH, SLOT_ZH } from '@/lib/zh-labels';
 
 type Brief = {
   id: string;
@@ -82,8 +83,8 @@ function WizardInner() {
       setProvider(json.provider);
       setMsg(
         json.autoApproved
-          ? '计划已生成并自动批准（工作区已开启自动门禁），可直接物化到画布。'
-          : '计划已生成。请检查每条简报，确认后批准。',
+          ? '计划已生成并自动批准（工作区已开启自动批准），可直接物化到画布。'
+          : '计划已生成。请检查每条分镜说明，确认后批准。',
       );
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -159,7 +160,7 @@ function WizardInner() {
       </p>
       <h1>意图向导：一句话 → 一套图的计划</h1>
       <p className="muted">
-        第 1 步填意图 → 第 2 步 AI 规划卖点与场景 → 第 3 步批准并物化到画布。前提：Truth Pack 已批准。
+        第 1 步填意图 → 第 2 步 AI 规划卖点与场景 → 第 3 步批准并物化到画布。前提：产品图资料已批准。
       </p>
 
       {isAdmin && workspace && (
@@ -170,7 +171,7 @@ function WizardInner() {
               checked={Boolean(workspace.autoApproveGates)}
               onChange={() => void toggleGates()}
             />{' '}
-            个人模式：生成后自动批准门禁（全程留审计）
+            个人模式：生成后自动批准（全程留审计记录）
           </label>
         </p>
       )}
@@ -191,7 +192,7 @@ function WizardInner() {
               checked={includePackage}
               onChange={(e) => setIncludePackage(e.target.checked)}
             />{' '}
-            包含包装图（PACKAGE 槽位）
+            包含包装图
           </label>
         </p>
         <Button
@@ -212,7 +213,7 @@ function WizardInner() {
         <section>
           <h2>
             第 3 步 · 检查计划（修订 #{plan.revision.revision}
-            {provider ? ` · ${provider}` : ''}
+            {provider ? ` · ${zh(PROVIDER_ZH, provider)}` : ''}
             {approved ? ' · 已批准' : ''}）
           </h2>
           <ol className="stack" style={{ paddingLeft: 0, gap: 'var(--space-3)' }}>
@@ -220,7 +221,7 @@ function WizardInner() {
               <li key={b.id} className="card" style={{ listStyle: 'none' }}>
                 <div>
                   <strong>
-                    #{b.orderIndex} {b.slot}
+                    #{b.orderIndex} {zh(SLOT_ZH, b.slot)}
                   </strong>{' '}
                   <code>{b.constraints.aspectRatio}</code> — {b.purpose}
                 </div>

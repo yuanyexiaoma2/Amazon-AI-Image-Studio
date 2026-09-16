@@ -77,8 +77,8 @@ export default function AdminPage() {
 
   return (
     <main className="container" style={{ maxWidth: 1100 }}>
-      <h1>管理后台 — 任务 / 积分 / 对账</h1>
-      <p className="muted">仅 OWNER/ADMIN（W7-06）。Fake 账本 — ADR-0003。</p>
+      <h1>管理后台 — 任务 / 额度 / 对账</h1>
+      <p className="muted">仅所有者和管理员可用。当前为演示账本。</p>
       <div className="row">
         <label className="row" style={{ flex: 1 }}>
           工作空间 ID{' '}
@@ -94,7 +94,7 @@ export default function AdminPage() {
       {message && <p className="banner-info">{message}</p>}
 
       <section style={{ marginTop: 'var(--space-6)' }}>
-        <h2>积分调整</h2>
+        <h2>额度调整</h2>
         <div className="row">
           <Input
             value={adjustAmount}

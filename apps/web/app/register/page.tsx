@@ -35,7 +35,7 @@ export default function RegisterPage() {
     <div className="auth-wrap">
       <div className="auth-card">
         <h1 className="auth-title">创建账号</h1>
-        <p className="auth-sub">注册 Amazon AI Image Studio，开始生成商品图</p>
+        <p className="auth-sub">注册亚马逊 AI 生图工作台，开始生成商品图</p>
         <form onSubmit={onSubmit} className="stack">
           <label className="form-field">
             姓名（可选）

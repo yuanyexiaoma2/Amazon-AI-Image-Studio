@@ -58,6 +58,7 @@ import {
 import { ChatPanel } from './ChatPanel';
 import { AssetImage } from '../asset-image';
 import { NUMERIC_CONFIG_KEYS } from './config-options';
+import { zh, RUN_STATUS_ZH } from '@/lib/zh-labels';
 
 type CanvasSnapshot = { nodes: Node[]; edges: Edge[] };
 
@@ -65,18 +66,18 @@ type CanvasSnapshot = { nodes: Node[]; edges: Edge[] };
 type RunAllOutcome = { message: string; authRequired: boolean };
 
 const NODE_LABEL_ZH: Record<string, string> = {
-  source_image: '源图（Source Image）',
-  product_truth: '产品真相（Product Truth）',
-  prompt: '提示词（Prompt）',
-  remove_background: '抠图（Remove Background）',
-  generate: '生成（Generate）',
-  replace_background: '换背景（Replace Background）',
-  inpaint: '局部重绘（Inpaint）',
-  outpaint: '外扩（Outpaint）',
-  upscale: '超分（Upscale）',
-  qa_gate: 'QA 门禁（QA Gate）',
-  approval_selector: '审批选择器（Approval）',
-  export: '导出（Export）',
+  source_image: '参考图',
+  product_truth: '产品图',
+  prompt: '提示词',
+  remove_background: '抠图',
+  generate: '生成',
+  replace_background: '换背景',
+  inpaint: '局部重绘',
+  outpaint: '扩图',
+  upscale: '高清放大',
+  qa_gate: '质检',
+  approval_selector: '人工挑选',
+  export: '导出',
 };
 
 function nodeLabelZh(type: string): string {
@@ -85,12 +86,12 @@ function nodeLabelZh(type: string): string {
 
 const PORT_LABEL_ZH: Record<string, string> = {
   image: '图片',
-  images: '图片集',
+  images: '图片',
   mask: '蒙版',
   prompt: '提示词',
-  truth: '产品真相',
+  truth: '产品图',
   references: '参考图',
-  shotBrief: '分镜简报',
+  shotBrief: '分镜说明',
 };
 
 /** Node-card affordances provided by StudioCanvasInner (upload / hints). */
@@ -187,11 +188,10 @@ function StudioNodeView(props: NodeProps) {
           type="target"
           position={Position.Left}
           style={{ top: 16 + i * 14, background: 'var(--accent-strong)', width: 8, height: 8 }}
-          title={`${p.id}: ${p.type}`}
+          title={PORT_LABEL_ZH[p.id] ?? p.id}
         />
       ))}
       <div style={{ fontWeight: 600 }}>{label}</div>
-      <div className="faint" style={{ fontSize: 10 }}>{nodeType}</div>
       {sourceVersionId ? (
         <div style={{ marginTop: 4 }}>
           <AssetImage
@@ -233,7 +233,7 @@ function StudioNodeView(props: NodeProps) {
           type="source"
           position={Position.Right}
           style={{ top: 16 + i * 14, background: 'var(--ok-soft)', width: 8, height: 8 }}
-          title={`${p.id}: ${p.type}`}
+          title={PORT_LABEL_ZH[p.id] ?? p.id}
         />
       ))}
     </div>
@@ -312,7 +312,7 @@ function StudioCanvasInner(props: {
     if (f.kind === 'conflict') {
       setConflict(
         f.message ||
-          '并发编辑冲突（409）。请重新加载以保留另一会话的更改，或放弃本地编辑。',
+          '并发编辑冲突 — 另一个窗口也改了这张画布。点「加载远端」以对方版本为准，或放弃本地修改。',
       );
       setStatus('冲突 — 未覆盖');
       return;
@@ -410,7 +410,7 @@ function StudioCanvasInner(props: {
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ name: 'Studio 工作流' }),
+          body: JSON.stringify({ name: '新建工作流' }),
         },
       );
       const created = await createRes.json().catch(() => null);
@@ -698,7 +698,7 @@ function StudioCanvasInner(props: {
     try {
       const asset = await uploadAsset(file, (m) => setUploadNotice(`${file.name} — ${m}`));
       if (asset.status === 'REJECTED') {
-        setUploadNotice(`${file.name} 未通过检查（REJECTED）— 请更换图片`);
+        setUploadNotice(`${file.name} 未通过检查 — 请更换图片`);
         return;
       }
       if (asset.versionId) updateNodeConfig(nodeId, 'assetVersionId', asset.versionId);
@@ -917,7 +917,7 @@ function StudioCanvasInner(props: {
         handleCommandResult(r);
         if (r.ok && r.batch.run) {
           setStatus(
-            `运行 ${r.batch.run.status}（${r.batch.run.id.slice(0, 8)}…）· 修订 ${r.batch.revisionNumber}`,
+            `运行${zh(RUN_STATUS_ZH, r.batch.run.status)}（${r.batch.run.id.slice(0, 8)}…）· 修订 ${r.batch.revisionNumber}`,
           );
         }
       } finally {
@@ -941,7 +941,7 @@ function StudioCanvasInner(props: {
     if (r.ok) {
       return {
         message: r.batch.run
-          ? `运行 ${r.batch.run.status}（${r.batch.run.id.slice(0, 8)}…）`
+          ? `运行${zh(RUN_STATUS_ZH, r.batch.run.status)}（${r.batch.run.id.slice(0, 8)}…）`
           : '运行已提交',
         authRequired: false,
       };
@@ -1023,7 +1023,7 @@ function StudioCanvasInner(props: {
         try {
           const asset = await uploadAsset(file, (m) => setUploadNotice(`${file.name} — ${m}`));
           if (asset.status === 'REJECTED') {
-            setUploadNotice(`${file.name} 未通过检查（REJECTED）— 请更换图片`);
+            setUploadNotice(`${file.name} 未通过检查 — 请更换图片`);
             return;
           }
           const id = `n-source_image-${Date.now()}`;
@@ -1054,7 +1054,7 @@ function StudioCanvasInner(props: {
           if (r.ok) {
             setUploadNotice(
               asset.versionId
-                ? `${file.name} 已上传并绑定到源图节点`
+                ? `${file.name} 已上传并绑定到参考图节点`
                 : `${file.name} 已上传，素材仍在处理中 — 稍后可在属性面板选择素材版本`,
             );
           }
@@ -1082,7 +1082,7 @@ function StudioCanvasInner(props: {
         : null;
     const versionId = fromSelected ?? sourceAssetVersionId;
     if (!versionId) {
-      setStatus('请先为 source_image 选择素材版本以编辑蒙版');
+      setStatus('请先在「参考图」节点选择素材版本，再编辑蒙版');
       return;
     }
     const res = await fetch(
@@ -1113,7 +1113,7 @@ function StudioCanvasInner(props: {
   return (
     <div
       role="application"
-      aria-label="Studio 工作流画布"
+      aria-label="工作流画布"
       className={belowStepper ? 'studio-grid studio-grid-below-stepper' : 'studio-grid'}
     >
       <aside aria-label="节点库" className="studio-aside studio-aside-left">
@@ -1121,7 +1121,7 @@ function StudioCanvasInner(props: {
           节点库
         </div>
         <div className="faint" style={{ fontSize: 'var(--font-size-xs)', marginBottom: 'var(--space-2)' }}>
-          11 种 MVP 节点 · 点击添加或拖到画布 · 也可直接拖入图片文件
+          11 种节点 · 点击添加或拖到画布 · 也可直接拖入图片文件
         </div>
         {palette.map((n) => (
           <button
@@ -1191,7 +1191,7 @@ function StudioCanvasInner(props: {
                 className="btn btn-primary"
                 disabled={runAllBusy || !draft}
                 onClick={() => void triggerRunAll()}
-                title="运行整张图画布（Fake · 预算 $5）"
+                title="运行整张画布（演示模式 · 预算 $5）"
               >
                 {runAllBusy ? '启动中…' : '▶ 运行整图'}
               </button>
@@ -1292,7 +1292,7 @@ function StudioCanvasInner(props: {
         )}
         {conflict && (
           <div className="banner-warn canvas-overlay" style={{ top: 48 }}>
-            <strong>409 冲突</strong> — {conflict}
+            <strong>编辑冲突</strong> — {conflict}
             <div style={{ marginTop: 'var(--space-2)' }}>
               <button type="button" className="btn" onClick={() => void reload()}>
                 加载远端
@@ -1425,10 +1425,10 @@ function TaskDrawer(props: {
       setEvents((prev) => [`${type}: ${ev.data}`.slice(0, 180), ...prev].slice(0, 8));
       void refresh();
     };
-    es.addEventListener('attempt.running', (e) => push('running', e as MessageEvent));
-    es.addEventListener('attempt.progress', (e) => push('progress', e as MessageEvent));
-    es.addEventListener('attempt.succeeded', (e) => push('ok', e as MessageEvent));
-    es.addEventListener('attempt.failed', (e) => push('fail', e as MessageEvent));
+    es.addEventListener('attempt.running', (e) => push('运行中', e as MessageEvent));
+    es.addEventListener('attempt.progress', (e) => push('进度', e as MessageEvent));
+    es.addEventListener('attempt.succeeded', (e) => push('成功', e as MessageEvent));
+    es.addEventListener('attempt.failed', (e) => push('失败', e as MessageEvent));
     es.onerror = () => {
       /* browser auto-reconnects */
     };
@@ -1470,7 +1470,7 @@ function TaskDrawer(props: {
       <div className="row">
         <strong>任务抽屉</strong>
         <button type="button" className="btn" disabled={busy || !ready} onClick={() => void runAll()}>
-          {busy ? '启动中…' : '运行整图（Fake · 预算 $5）'}
+          {busy ? '启动中…' : '运行整图（演示模式 · 预算 $5）'}
         </button>
         <button type="button" className="btn" onClick={() => void refresh()}>
           刷新
@@ -1502,8 +1502,8 @@ function TaskDrawer(props: {
           <div key={r.id} className="run-card">
             <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'space-between' }}>
               <span>
-                <code>{r.id.slice(0, 8)}</code> · <strong>{r.status}</strong> · 预估{' '}
-                {(r.estimateMicrounits / 1_000_000).toFixed(3)} USD
+                <code>{r.id.slice(0, 8)}</code> · <strong>{zh(RUN_STATUS_ZH, r.status)}</strong> · 预估{' '}
+                {(r.estimateMicrounits / 1_000_000).toFixed(3)} 美元
               </span>
               {(r.status === 'QUEUED' || r.status === 'RUNNING') && (
                 <button type="button" className="btn" onClick={() => void cancelRun(r.id)}>
@@ -1515,11 +1515,11 @@ function TaskDrawer(props: {
               const latest = it.attempts[it.attempts.length - 1];
               return (
                 <div key={it.id} style={{ fontSize: 'var(--font-size-sm)', opacity: 0.9, paddingLeft: 8 }}>
-                  节点 <code>{it.nodeId}</code> · {it.status}
+                  节点 <code>{it.nodeId}</code> · {zh(RUN_STATUS_ZH, it.status)}
                   {latest && (
                     <>
                       {' '}
-                      · 尝试 #{latest.attemptNo} {latest.status}（{latest.progress}%）
+                      · 尝试 #{latest.attemptNo} {zh(RUN_STATUS_ZH, latest.status)}（{latest.progress}%）
                       {latest.errorClass && (
                         <span style={{ color: 'var(--danger-text)' }}>
                           {' '}
@@ -1541,7 +1541,7 @@ function TaskDrawer(props: {
           </div>
           {events.length > 0 && (
             <div className="faint" style={{ fontSize: 'var(--font-size-xs)' }}>
-              SSE: {events[0]}
+              实时事件：{events[0]}
             </div>
           )}
         </>

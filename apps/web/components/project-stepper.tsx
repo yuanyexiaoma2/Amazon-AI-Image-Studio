@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * V2 PR-1 — pipeline stepper （素材 → Truth Pack → Shot Plan → 画布 → 审核导出）.
+ * V2 PR-1 — pipeline stepper （素材 → 产品图 → 分镜计划 → 画布 → 审核导出）.
  * Steps are clickable; completion comes from the pure `deriveProjectStep`.
  */
 import Link from 'next/link';
@@ -18,8 +18,8 @@ const STEP_DEFS: Array<{
   href: (projectId: string) => string;
 }> = [
   { key: 'assets', label: '素材', href: (id) => `/projects/${id}` },
-  { key: 'truth', label: 'Truth Pack', href: (id) => `/projects/${id}#truth-pack` },
-  { key: 'shotPlan', label: 'Shot Plan', href: (id) => `/projects/${id}#shot-plan` },
+  { key: 'truth', label: '产品图', href: (id) => `/projects/${id}#truth-pack` },
+  { key: 'shotPlan', label: '分镜计划', href: (id) => `/projects/${id}#shot-plan` },
   { key: 'canvas', label: '画布', href: (id) => `/projects/${id}/studio` },
   { key: 'review', label: '审核导出', href: (id) => `/projects/${id}/review` },
 ];
