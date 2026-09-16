@@ -217,3 +217,36 @@ export function getModelByKey(
 ): ModelRegistryEntry | undefined {
   return registry.find((m) => m.key === key && m.enabled);
 }
+
+/**
+ * 「智能匹配」节点模型取值：config.modelKey === 'auto' 时由运行时按输入解析——
+ * 编辑类操作或连了参考图 → 图生图/编辑偏好序；否则文生图偏好序。
+ * 偏好序体现所有者主力模型（Google Nano Banana Pro / GPT Image 2），Seedream 兜底，
+ * Fake 用于演示/测试。找不到偏好项时回退到注册表里第一个可用 GENERATE 模型。
+ */
+export const AUTO_MODEL_KEY = 'auto';
+
+const AUTO_T2I_PREFERENCE = [
+  'kie-nano-banana-pro',
+  'kie-gpt-image-2-generate',
+  'kie-seedream-5-pro-generate',
+  'primary-image-generate',
+] as const;
+
+const AUTO_EDIT_PREFERENCE = [
+  'kie-nano-banana-pro',
+  'kie-gpt-image-2-edit',
+  'kie-seedream-5-pro-edit',
+  'primary-image-edit',
+] as const;
+
+export function resolveAutoModelKey(
+  needsReferences: boolean,
+  registry: ReadonlyArray<ModelRegistryEntry> = DEFAULT_MODEL_REGISTRY,
+): string | undefined {
+  const preference = needsReferences ? AUTO_EDIT_PREFERENCE : AUTO_T2I_PREFERENCE;
+  for (const key of preference) {
+    if (getModelByKey(key, registry)) return key;
+  }
+  return listEnabledModels(registry, 'GENERATE')[0]?.key;
+}

@@ -19,3 +19,24 @@ describe('resolveModelRegistry P2-A', () => {
     expect(enabled.every((m) => m.provider === 'kie')).toBe(true);
   });
 });
+
+describe('resolveAutoModelKey（智能匹配）', () => {
+  it('kie 注册表：无参考图 → 文生图偏好（Nano Banana Pro）', async () => {
+    const { resolveAutoModelKey } = await import('../src/model-registry.js');
+    const regs = resolveModelRegistry('kie');
+    expect(resolveAutoModelKey(false, regs)).toBe('kie-nano-banana-pro');
+  });
+
+  it('kie 注册表：有参考图/编辑操作 → 编辑偏好（Nano Banana Pro）', async () => {
+    const { resolveAutoModelKey } = await import('../src/model-registry.js');
+    const regs = resolveModelRegistry('kie');
+    expect(resolveAutoModelKey(true, regs)).toBe('kie-nano-banana-pro');
+  });
+
+  it('fake 注册表回退到演示模型', async () => {
+    const { resolveAutoModelKey } = await import('../src/model-registry.js');
+    const regs = resolveModelRegistry('fake');
+    expect(resolveAutoModelKey(false, regs)).toBe('primary-image-generate');
+    expect(resolveAutoModelKey(true, regs)).toBe('primary-image-edit');
+  });
+});

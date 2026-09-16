@@ -71,7 +71,7 @@ describe('W3-05 node config schemas', () => {
     const op = defaultNodeConfig('outpaint');
     expect(op.targetRatio).toBe('1:1');
     expect(op.placement).toBe('center');
-    expect(op.modelKey).toBe('primary-image-edit');
+    expect(op.modelKey).toBe('auto');
     const up = validateNodeConfig('upscale', {
       engineKey: 'default-upscale',
       targetResolution: '2K',

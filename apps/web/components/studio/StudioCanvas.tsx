@@ -294,6 +294,10 @@ const RESOLUTION_ZH: Record<string, string> = {
 const FALLBACK_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
 const FALLBACK_RESOLUTIONS = ['1K', '2K', '4K'];
 
+/** 智能匹配时的安全档：谷歌/GPT 文生图与图生图三方交集，1K/2K 全兼容。 */
+const AUTO_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
+const AUTO_RESOLUTIONS = ['1K', '2K'];
+
 function withCurrentValue(options: string[], current: string): string[] {
   return current && !options.includes(current) ? [current, ...options] : options;
 }
@@ -306,10 +310,14 @@ function GenerateNodeControls(props: { nodeId: string; config?: Record<string, u
   const ratio = typeof cfg.ratio === 'string' && cfg.ratio ? cfg.ratio : '1:1';
   const resolution = typeof cfg.resolution === 'string' && cfg.resolution ? cfg.resolution : '2K';
   const models = (actions.models ?? []).filter((m) => m.operations.includes('GENERATE'));
-  const current = models.find((m) => m.key === modelKey);
-  const ratioOptions = withCurrentValue(current?.ratios ?? FALLBACK_RATIOS, ratio);
+  const isAuto = modelKey === 'auto' || modelKey === '';
+  const current = isAuto ? undefined : models.find((m) => m.key === modelKey);
+  const ratioOptions = withCurrentValue(
+    isAuto ? AUTO_RATIOS : (current?.ratios ?? FALLBACK_RATIOS),
+    ratio,
+  );
   const resolutionOptions = withCurrentValue(
-    current?.resolutionTiers ?? FALLBACK_RESOLUTIONS,
+    isAuto ? AUTO_RESOLUTIONS : (current?.resolutionTiers ?? FALLBACK_RESOLUTIONS),
     resolution,
   );
   return (
@@ -317,11 +325,11 @@ function GenerateNodeControls(props: { nodeId: string; config?: Record<string, u
       <label className="studio-node-field">
         <span>模型</span>
         <select
-          value={modelKey}
+          value={isAuto ? 'auto' : modelKey}
           onChange={(e) => actions.updateConfig(props.nodeId, 'modelKey', e.target.value)}
         >
-          {actions.models === null ? <option value={modelKey}>加载中…</option> : null}
-          {actions.models !== null && !current && modelKey ? (
+          <option value="auto">智能匹配（自动）</option>
+          {actions.models !== null && !isAuto && !current && modelKey ? (
             <option value={modelKey}>{modelLabelZh({ key: modelKey })}（不可用）</option>
           ) : null}
           {models.map((m) => (
@@ -357,7 +365,9 @@ function GenerateNodeControls(props: { nodeId: string; config?: Record<string, u
           ))}
         </select>
       </label>
-      {current?.pricing ? (
+      {isAuto ? (
+        <div className="studio-node-cost faint">只写提示词 → 文生图；连了参考图 → 图生图</div>
+      ) : current?.pricing ? (
         <div className="studio-node-cost faint">
           约 ${current.pricing.estimatedUnitCost}/张
         </div>
@@ -626,19 +636,19 @@ function StudioCanvasInner(props: {
     activeNodeId: selectedInfo?.id ?? null,
   });
 
-  // 模型注册表加载后，把生成节点上已不可用的模型（例如切换到 kie 后被禁用的
-  // 演示模型）自动改成第一个可用模型，保证「运行整图」开箱即用。
+  // 模型注册表加载后，把节点上已不可用的模型（例如切换到 kie 后被禁用的
+  // 演示模型）自动改成「智能匹配」，运行时按输入解析，保证「运行整图」开箱即用。
   const modelsForFix = configOptions.models;
   useEffect(() => {
     if (!modelsForFix || modelsForFix.length === 0) return;
-    const genModels = modelsForFix.filter((m) => m.operations.includes('GENERATE'));
-    if (genModels.length === 0) return;
     for (const n of nodesRef.current) {
-      if (String((n.data as { nodeType?: string }).nodeType ?? '') !== 'generate') continue;
+      const nt = String((n.data as { nodeType?: string }).nodeType ?? '');
+      if (nt !== 'generate' && nt !== 'inpaint' && nt !== 'outpaint') continue;
       const cfg = (n.data as { config?: Record<string, unknown> }).config ?? {};
       const mk = typeof cfg.modelKey === 'string' ? cfg.modelKey : '';
-      if (!genModels.some((m) => m.key === mk)) {
-        updateNodeConfig(n.id, 'modelKey', genModels[0].key);
+      if (mk === 'auto') continue; // 智能匹配：运行时按输入解析
+      if (!modelsForFix.some((m) => m.key === mk)) {
+        updateNodeConfig(n.id, 'modelKey', 'auto');
       }
     }
   }, [modelsForFix]);

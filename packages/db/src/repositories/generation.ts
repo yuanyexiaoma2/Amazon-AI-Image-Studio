@@ -7,6 +7,7 @@ import type {
   PrismaClient,
 } from '@prisma/client';
 import {
+  AUTO_MODEL_KEY,
   FAKE_PRIMARY_MODEL,
   amountToMicrounits,
   budgetExceeded,
@@ -24,6 +25,7 @@ import {
   extractTruthRevisionId,
   extractUpscaleParams,
   getModelByKey,
+  resolveAutoModelKey,
   resolveModelRegistry,
   isDeterministicNodeType,
   operationForNodeType,
@@ -276,14 +278,6 @@ export class GenerationRepository {
                 config: node.config,
               })
             : null;
-        const nodeModel =
-          getModelByKey(
-            (typeof node.config?.modelKey === 'string' ? node.config.modelKey : undefined) ??
-              upscaleParamsEarly?.engineKey ??
-              input.modelKey ??
-              defaultKey,
-            registry,
-          ) ?? model;
         const op = operationForNodeType(node.type) ?? 'GENERATE';
         const inputs = resolvePortInputs(fullGraph, node.id);
         const { prompt, negativePrompt, shotBriefId } = extractPromptFromInputs(
@@ -296,6 +290,19 @@ export class GenerationRepository {
         );
         const refIds = [...extractReferenceAssetVersionIds(inputs)];
         const imageVersionId = extractImageAssetVersionId(inputs);
+        // 智能匹配：modelKey='auto' 时按输入选择——编辑类操作或连了参考图 → 图生图/编辑模型；
+        // 否则文生图模型（resolveAutoModelKey 的偏好顺序见 domain model-registry）。
+        const needsReferences = op !== 'GENERATE' || refIds.length > 0 || !!imageVersionId;
+        let configModelKey =
+          typeof node.config?.modelKey === 'string' ? node.config.modelKey : undefined;
+        if (configModelKey === AUTO_MODEL_KEY) {
+          configModelKey = resolveAutoModelKey(needsReferences, registry);
+        }
+        const nodeModel =
+          getModelByKey(
+            configModelKey ?? upscaleParamsEarly?.engineKey ?? input.modelKey ?? defaultKey,
+            registry,
+          ) ?? model;
         // Prefer source image WxH for edit/inpaint/cutout; fall back to resolution tier.
         let dims = resolutionToPixels(
           typeof node.config?.resolution === 'string' ? node.config.resolution : '2K',

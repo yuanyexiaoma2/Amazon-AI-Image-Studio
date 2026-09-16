@@ -100,6 +100,7 @@ export const PROVIDER_ZH: Record<string, string> = {
 
 /** 生图模型 key → 中文显示名（模型品牌名保留原文）。 */
 export const MODEL_KEY_ZH: Record<string, string> = {
+  auto: '智能匹配（自动）',
   'primary-image-generate': '演示模型（文生图）',
   'primary-image-edit': '演示模型（图片编辑）',
   'default-upscale': '演示引擎（高清放大）',

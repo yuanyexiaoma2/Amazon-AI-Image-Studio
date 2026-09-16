@@ -33,7 +33,7 @@ export const RemoveBackgroundConfigSchema = NodeConfigBaseSchema.extend({
 });
 
 export const GenerateConfigSchema = NodeConfigBaseSchema.extend({
-  modelKey: z.string().min(1).max(128).optional().default('primary-image-edit'),
+  modelKey: z.string().min(1).max(128).optional().default('auto'),
   ratio: z.string().max(16).optional().default('1:1'),
   resolution: z.enum(['1K', '2K', '4K']).optional().default('2K'),
   count: z.number().int().min(1).max(8).optional().default(2),
@@ -51,7 +51,7 @@ export const ReplaceBackgroundConfigSchema = NodeConfigBaseSchema.extend({
 
 export const InpaintConfigSchema = NodeConfigBaseSchema.extend({
   strength: z.number().min(0).max(1).optional().default(0.6),
-  modelKey: z.string().min(1).max(128).optional().default('primary-image-edit'),
+  modelKey: z.string().min(1).max(128).optional().default('auto'),
   /** Optional direct bind to Mask row (W5-B editor); MASK port also accepted. */
   maskId: z.string().uuid().optional().nullable(),
 });
@@ -59,7 +59,7 @@ export const InpaintConfigSchema = NodeConfigBaseSchema.extend({
 export const OutpaintConfigSchema = NodeConfigBaseSchema.extend({
   targetRatio: z.string().max(16).optional().default('1:1'),
   placement: z.enum(['center', 'top', 'bottom', 'left', 'right']).optional().default('center'),
-  modelKey: z.string().min(1).max(128).optional().default('primary-image-edit'),
+  modelKey: z.string().min(1).max(128).optional().default('auto'),
 });
 
 export const UpscaleConfigSchema = NodeConfigBaseSchema.extend({
