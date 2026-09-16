@@ -7,12 +7,14 @@
  */
 import { useEffect, useState } from 'react';
 
-export type MeWorkspace = { id: string; name: string; role: string };
+export type MeWorkspace = { id: string; name: string; role: string; autoApproveGates?: boolean };
 
 export type Me = {
   id: string;
   email: string;
   sessionVersion: number;
+  localMode?: boolean;
+  authenticated?: boolean;
   workspaces: MeWorkspace[];
 };
 

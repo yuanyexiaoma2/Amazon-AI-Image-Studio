@@ -12,7 +12,7 @@ import {
   ShotPlanNotFoundError,
 } from '@studio/db';
 import { getOrCreateRequestId } from '@/lib/request-id';
-import { requireWorkspaceRoles } from '@/lib/workspace-access';
+import { paidGateResponse, requireWorkspaceRoles } from '@/lib/workspace-access';
 import { serializeShotPlan } from '@/lib/shot-plan-serialize';
 
 type Ctx = { params: Promise<{ workspaceId: string; projectId: string }> };
@@ -29,6 +29,9 @@ export async function POST(request: Request, context: Ctx) {
   const { workspaceId, projectId } = await context.params;
   const access = await requireWorkspaceRoles(workspaceId, requestId, SHOT_PLAN_WRITE_ROLES);
   if (!access.ok) return access.response;
+  // PR-6: planner generation calls the LLM provider — paid action in local mode.
+  const paidGate = await paidGateResponse(requestId);
+  if (paidGate) return paidGate;
 
   const projects = new ProjectRepository(prisma);
   const project = await projects.findById(workspaceId, projectId);

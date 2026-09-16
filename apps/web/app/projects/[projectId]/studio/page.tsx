@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { StudioCanvas } from '@/components/studio/StudioCanvas';
 import { ProjectStepper } from '@/components/project-stepper';
+import { ProjectSwitcher } from '@/components/project-switcher';
 import { Spinner } from '@/components/ui';
 import { useWorkspace } from '@/lib/use-workspace';
 
@@ -32,7 +33,8 @@ function StudioInner() {
 
   return (
     <div>
-      <div className="stepper-bar">
+      <div className="stepper-bar studio-topbar">
+        <ProjectSwitcher workspaceId={workspaceId} projectId={projectId} />
         <ProjectStepper projectId={projectId} input={{ hasWorkflow: true }} />
       </div>
       <StudioCanvas

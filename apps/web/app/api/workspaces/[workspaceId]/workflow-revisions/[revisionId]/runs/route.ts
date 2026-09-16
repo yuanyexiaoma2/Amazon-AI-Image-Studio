@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { CreateRunRequestSchema, makeApiError } from '@studio/contracts';
 import { RUN_WRITE_ROLES } from '@studio/domain';
 import { getOrCreateRequestId } from '@/lib/request-id';
-import { requireWorkspaceRoles } from '@/lib/workspace-access';
+import { paidGateResponse, requireWorkspaceRoles } from '@/lib/workspace-access';
 import { createRunForRevision } from '@/lib/create-run';
 
 type Ctx = { params: Promise<{ workspaceId: string; revisionId: string }> };
@@ -12,6 +12,10 @@ export async function POST(request: Request, context: Ctx) {
   const { workspaceId, revisionId } = await context.params;
   const access = await requireWorkspaceRoles(workspaceId, requestId, [...RUN_WRITE_ROLES]);
   if (!access.ok) return access.response;
+  // PR-6: creating a run spends credits and calls the image provider — paid
+  // action in local mode.
+  const paidGate = await paidGateResponse(requestId);
+  if (paidGate) return paidGate;
 
   let body: unknown;
   try {

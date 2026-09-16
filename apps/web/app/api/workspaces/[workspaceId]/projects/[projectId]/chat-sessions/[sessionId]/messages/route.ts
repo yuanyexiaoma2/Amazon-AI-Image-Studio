@@ -27,7 +27,7 @@ import {
   type ChatAgentTurnOutput,
 } from '@studio/providers';
 import { getOrCreateRequestId } from '@/lib/request-id';
-import { requireWorkspaceRoles } from '@/lib/workspace-access';
+import { paidGateResponse, requireWorkspaceRoles } from '@/lib/workspace-access';
 import { applyCommandsToWorkflow } from '@/lib/apply-commands';
 import { serializeChatMessage } from '@/lib/chat-serialize';
 
@@ -81,6 +81,9 @@ export async function POST(request: Request, context: Ctx) {
   const { workspaceId, projectId, sessionId } = await context.params;
   const access = await requireWorkspaceRoles(workspaceId, requestId, [...WORKFLOW_WRITE_ROLES]);
   if (!access.ok) return access.response;
+  // PR-6: every agent turn calls the chat LLM provider — paid action in local mode.
+  const paidGate = await paidGateResponse(requestId);
+  if (paidGate) return paidGate;
 
   let body: unknown;
   try {

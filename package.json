@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @studio/web dev",
+    "dev:local": "node scripts/dev-local.mjs",
     "worker": "pnpm --filter @studio/worker start",
     "build": "pnpm -r --filter=./packages/* build && pnpm --filter @studio/web build && pnpm --filter @studio/worker build",
     "lint": "pnpm -r lint",

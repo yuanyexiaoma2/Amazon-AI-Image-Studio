@@ -9,7 +9,7 @@ import {
   CreditInsufficientError,
 } from '@studio/db';
 import { getOrCreateRequestId } from '@/lib/request-id';
-import { requireWorkspaceRoles } from '@/lib/workspace-access';
+import { paidGateResponse, requireWorkspaceRoles } from '@/lib/workspace-access';
 import { enqueueGenerationFromOutbox } from '@/lib/queues';
 
 type Ctx = { params: Promise<{ workspaceId: string; attemptId: string }> };
@@ -19,6 +19,9 @@ export async function POST(request: Request, context: Ctx) {
   const { workspaceId, attemptId } = await context.params;
   const access = await requireWorkspaceRoles(workspaceId, requestId, [...RUN_WRITE_ROLES]);
   if (!access.ok) return access.response;
+  // PR-6: retrying an attempt re-calls the image provider — paid action in local mode.
+  const paidGate = await paidGateResponse(requestId);
+  if (paidGate) return paidGate;
 
   const repo = new GenerationRepository(prisma);
   try {

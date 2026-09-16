@@ -25,7 +25,21 @@ export function SiteHeader() {
         Amazon AI Image Studio
       </Link>
       <nav className="site-nav">
-        {loading ? null : me ? (
+        {loading ? null : me?.localMode ? (
+          <>
+            <Link href="/projects">项目</Link>
+            <Link href="/admin">Admin</Link>
+            {workspace ? <Badge tone="accent">{workspace.name}</Badge> : null}
+            <Badge>本地工作台</Badge>
+            {me.authenticated ? (
+              <span className="muted" style={{ fontSize: 'var(--font-size-sm)' }}>
+                已登录，可生图
+              </span>
+            ) : (
+              <Link href="/login">登录（生图需要）</Link>
+            )}
+          </>
+        ) : me ? (
           <>
             <Link href="/projects">项目</Link>
             {isAdmin ? <Link href="/admin">Admin</Link> : null}

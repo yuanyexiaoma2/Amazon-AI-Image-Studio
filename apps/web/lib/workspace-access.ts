@@ -4,10 +4,12 @@ import { prisma, UserRepository } from '@studio/db';
 import type { WorkspaceRoleName } from '@studio/domain';
 import {
   requireActiveSession,
+  requirePaidSession,
   SessionGuardError,
   sessionGuardStatus,
   type ActiveSession,
 } from './session-guard';
+import { isLocalMode } from './local-mode';
 
 export async function requireWorkspaceMember(
   workspaceId: string,
@@ -64,4 +66,26 @@ export async function requireWorkspaceRoles(
     };
   }
   return access;
+}
+
+/**
+ * PR-6 paid gate: in LOCAL_MODE, browsing/editing runs as the local principal
+ * but actions that spend credits or call paid providers still require a real
+ * signed-in account. Returns a 401 response when login is required, else null.
+ * No-op outside LOCAL_MODE (those routes already required auth above).
+ */
+export async function paidGateResponse(requestId: string): Promise<NextResponse | null> {
+  if (!isLocalMode()) return null;
+  try {
+    await requirePaidSession();
+    return null;
+  } catch (err) {
+    if (err instanceof SessionGuardError) {
+      return NextResponse.json(
+        makeApiError(err.code, '生图需要登录账号', requestId),
+        { status: sessionGuardStatus(err), headers: { 'x-request-id': requestId } },
+      );
+    }
+    throw err;
+  }
 }

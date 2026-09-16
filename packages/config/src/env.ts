@@ -40,6 +40,13 @@ const envSchema = z.object({
   KIE_LLM_MODEL: z.string().optional(),
   // V2 chat agent (PR-4) — canvas-operator LLM via the same kie chat endpoint.
   CHAT_PROVIDER: z.enum(['fake', 'kie']).default('fake'),
+  // PR-6 local workbench — single-user mode: bypass the login wall with a
+  // provisioned local principal. Default off; enable via `pnpm dev:local`.
+  LOCAL_MODE: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true' || v === '1')
+    .default('false'),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

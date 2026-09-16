@@ -18,6 +18,8 @@ import {
 } from '@studio/db';
 import { createRunForRevision } from '@/lib/create-run';
 import type { serializeRun } from '@/lib/generation-serialize';
+import { isLocalMode } from '@/lib/local-mode';
+import { requirePaidSession, SessionGuardError } from '@/lib/session-guard';
 
 export type ApplyCommandsOutcome =
   | {
@@ -167,6 +169,26 @@ export async function applyCommandsToWorkflow(args: {
 
     let run: ReturnType<typeof serializeRun> | undefined;
     if (runCommand) {
+      // PR-6: browsing/editing is free in local mode, but a run spends credits
+      // and calls the provider — require a real signed-in account.
+      if (isLocalMode()) {
+        try {
+          await requirePaidSession();
+        } catch (err) {
+          if (err instanceof SessionGuardError) {
+            return {
+              ok: false,
+              status: 401,
+              body: makeApiError('UNAUTHENTICATED', '生图需要登录账号', requestId, {
+                batchId: batch.batchId,
+                revisionNumber: draft.draft.revisionNumber,
+                commandsApplied: true,
+              }),
+            };
+          }
+          throw err;
+        }
+      }
       const { revision } = await workflows.snapshot({
         workspaceId,
         workflowId,

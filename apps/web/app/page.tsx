@@ -1,6 +1,17 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { isLocalMode } from '@/lib/local-mode';
+import { ensureLocalPrincipal } from '@/lib/local-principal';
 
-export default function HomePage() {
+export const dynamic = 'force-dynamic';
+
+export default async function HomePage() {
+  // PR-6: local workbench — the canvas is the home screen, no login wall.
+  if (isLocalMode()) {
+    const { project } = await ensureLocalPrincipal();
+    redirect(`/projects/${project.id}/studio`);
+  }
+
   return (
     <div className="container">
       <h1>Amazon AI Image Studio</h1>
