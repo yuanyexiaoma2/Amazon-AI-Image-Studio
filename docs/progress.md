@@ -694,3 +694,35 @@ One branch / one PR / one review each; merge unlocks the next segment.
 **范围纪律（规则 13）发现但未修：** MaskEditor 蒙版画布 overlay 用 canvas 硬编码 rgba 色（遮罩染色，深浅主题均可用，未 token 化）；登录/注册页的 1Password 类扩展会干扰程序化 fill（非应用问题）。
 
 **Status:** **DONE**（不标 VERIFIED — 待 V2 rule 12b 全新上下文复审 + 所有者合并）。
+
+---
+
+## PR-6 — 本地工作台 (DONE)
+
+**Branch:** `feat/local-workbench`（stacked on `feat/v2-visual-redesign` / PR-5 未合并）
+**Owner ruling（2026-09-15，会话口述）：** 不要登录墙 —— 参考 jiaotu.ai / Eximia 的"全 UI 免登录可探索"模式：**浏览/上传/搭建/编辑画布零登录；生图等烧钱动作仍需登录账号**。忽略旧流程规则做体验重构；引擎（命令层/节点/kie 接入/聊天 Agent/撤销）全部保留。实现期不碰真实 KIE_API_KEY，真实试用归所有者。
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| PR-6-01 | LOCAL_MODE 两层访问 | DONE | `LOCAL_MODE=1` → `requireActiveSession` 短路到幂等供给的本地主体（`local@studio.local` + 工作区 OWNER + autoApproveGates + 大额 credit GRANT + 默认项目）；付费边界用 `requirePaidSession()`（无视 LOCAL_MODE）：commands 尾部 run、workflow-revisions runs、shot-plans/generate、chat messages、attempts retry → 无真实会话 401「生图需要登录账号」。auth 代码零删除，关 LOCAL_MODE 即回账号模式（commit `a5f4f27`） |
+| PR-6-02 | 画布即首页 + 项目切换器 | DONE | `/` server component 在 LOCAL_MODE 下 307 → `/projects/{默认项目}/studio`；site-header 本地徽标 + 「登录（生图需要）」；`/api/me` 增 `localMode`/`authenticated`；Studio 顶栏 ProjectSwitcher（切换 + 内联新建项目）（commit `a5f4f27`） |
+| PR-6-03 | Studio 易用性 | DONE | 空画布 4 起步模板（主图直出/抠图换背景/三类图套装/空白，单个可撤销命令批次，端口按 NODE_REGISTRY 校验）；图片拖入画布上传成源图节点（`use-asset-upload.ts` 抽取共用）；节点库拖拽落点；「▶ 运行整图」入顶栏 + TaskDrawer 默认折叠自动展开；prompt 四段式 placeholder；选中节点不再顶掉助手 tab；<1280px 硬阻断→可关横幅；401 → 登录引导链接（commit `14f90d3`） |
+| PR-6-04 | 一键启动 | DONE | `pnpm dev:local`（`scripts/dev-local.mjs`：加载根 .env 不回显、注入 LOCAL_MODE+INLINE 缺省值不覆盖已有；Windows spawn EINVAL 修复 commit `bcd6116`）；README/.env.example 文档 |
+| PR-6-05 | 撤销后模板卡回归 | DONE | 撤销模板批次回到空画布时重新提供起步模板（commit `2bfb0f4`） |
+
+### PR-6 commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm lint` / `typecheck` / `test` / `build` | Exit 0 全绿，2026-09-15 Asia/Shanghai（web 42 passed/16 skipped；domain 151；providers 71；contracts 24） |
+| `RUN_INTEGRATION=1 pnpm --filter @studio/db test` | 40/40 |
+| `IMAGE_PROVIDER=fake CHAT_PROVIDER=fake PLANNER_PROVIDER=fake RUN_INTEGRATION=1 pnpm --filter @studio/web test` | **58/58**（含新 local-mode.integration 3/3；三 provider 必须同时覆盖——`.env` 带 kie，缺 PLANNER 覆盖会让 shot-plan-roles 超时，预存注意事项） |
+| `pnpm test:e2e`（web :3100，`LOCAL_MODE=0` + 三 provider=fake + INLINE，`APP_URL=http://127.0.0.1:3100`） | **PASS** exit 0，LOCAL_MODE 关闭时行为零回归 |
+| LOCAL_MODE curl 冒烟（:3200，无 cookie） | `GET /` → 307 → studio；`/api/me` 200（localMode/authenticated:false/OWNER）；建 workflow 201；addNode 200；尾部 run 命令 → **401 UNAUTHENTICATED + commandsApplied:true** |
+| tabbit 视觉自验（`dev:local` :3000，1440×900，fake provider） | 5 张截图 `docs/screenshots/pr-6/`：`/` 直进画布无登录墙、模板应用、助手 tab 不被顶、401 登录引导 |
+| Provider | 全程 **Fake**；未读未用真实 KIE_API_KEY |
+| 进程清理 | 验证后 web/dev 全杀，:3000/:3100/:3200 无监听 |
+
+**不修仅记录：** tabbit 浏览器此前在本地 dev app 有旧 Auth.js 会话，验证未登录路径时已将其登出（用户浏览器侧状态变化）；验证数据残留 dev DB（PR6 smoke workflow、默认项目画布 revision 8）；模板应用非乐观更新（等服务端往返后落图，保证画布以服务端为准）。
+
+**Status:** **DONE**（不标 VERIFIED — 待 V2 rule 12b 全新上下文复审 + 所有者合并）。
