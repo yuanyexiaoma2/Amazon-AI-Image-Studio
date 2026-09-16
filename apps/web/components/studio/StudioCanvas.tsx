@@ -78,6 +78,10 @@ const PORT_LABEL_ZH: Record<string, string> = {
   truth: '产品图',
   references: '参考图',
   shotBrief: '分镜说明',
+  report: '质检报告',
+  candidates: '候选图',
+  approvedAssets: '已选定图',
+  assets: '已选定图',
 };
 
 /** Node-card affordances provided by StudioCanvasInner (upload / hints). */
@@ -160,6 +164,10 @@ function StudioNodeView(props: NodeProps) {
     nodeType === 'source_image' && typeof data.config?.assetVersionId === 'string'
       ? (data.config.assetVersionId as string)
       : null;
+  const truthRevisionId =
+    nodeType === 'product_truth' && typeof data.config?.truthRevisionId === 'string'
+      ? (data.config.truthRevisionId as string)
+      : null;
   const promptText =
     nodeType === 'prompt' && typeof data.config?.text === 'string'
       ? data.config.text.trim()
@@ -167,16 +175,6 @@ function StudioNodeView(props: NodeProps) {
   const missing = actions.missingPorts(props.id);
   return (
     <div className={props.selected ? 'studio-node studio-node-selected' : 'studio-node'}>
-      {def?.inputPorts.map((p, i) => (
-        <Handle
-          key={`in-${p.id}`}
-          id={p.id}
-          type="target"
-          position={Position.Left}
-          style={{ top: 16 + i * 14, background: 'var(--accent-strong)', width: 8, height: 8 }}
-          title={PORT_LABEL_ZH[p.id] ?? p.id}
-        />
-      ))}
       <div style={{ fontWeight: 600 }}>{label}</div>
       {sourceVersionId ? (
         <div style={{ marginTop: 4 }}>
@@ -200,6 +198,34 @@ function StudioNodeView(props: NodeProps) {
           上传图片
         </button>
       ) : null}
+      {nodeType === 'product_truth' ? (
+        truthRevisionId ? (
+          <div className="studio-node-preview">
+            已绑定产品图资料 ✓{' '}
+            <button
+              type="button"
+              className="studio-node-relink nodrag"
+              onClick={(e) => {
+                e.stopPropagation();
+                actions.uploadIntoNode(props.id);
+              }}
+            >
+              换一张
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="btn studio-node-upload nodrag"
+            onClick={(e) => {
+              e.stopPropagation();
+              actions.uploadIntoNode(props.id);
+            }}
+          >
+            上传产品图
+          </button>
+        )
+      ) : null}
       {nodeType === 'prompt' ? (
         <div className={promptText ? 'studio-node-preview' : 'studio-node-preview faint'}>
           {promptText
@@ -209,19 +235,45 @@ function StudioNodeView(props: NodeProps) {
             : '点选我，在右侧写提示词'}
         </div>
       ) : null}
+      {def && def.inputPorts.length > 0 ? (
+        <div className="studio-node-ports">
+          {def.inputPorts.map((p) => (
+            <div
+              key={`in-${p.id}`}
+              className={p.required ? 'studio-node-port' : 'studio-node-port faint'}
+            >
+              <Handle
+                id={p.id}
+                type="target"
+                position={Position.Left}
+                className="studio-handle studio-handle-in"
+                title={`输入 · ${PORT_LABEL_ZH[p.id] ?? p.id}`}
+              />
+              {PORT_LABEL_ZH[p.id] ?? p.id}
+              {p.required ? '' : '（可选）'}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {def && def.outputPorts.length > 0 ? (
+        <div className="studio-node-ports">
+          {def.outputPorts.map((p) => (
+            <div key={`out-${p.id}`} className="studio-node-port studio-node-port-out">
+              <Handle
+                id={p.id}
+                type="source"
+                position={Position.Right}
+                className="studio-handle studio-handle-out"
+                title={`输出 · ${PORT_LABEL_ZH[p.id] ?? p.id}`}
+              />
+              {PORT_LABEL_ZH[p.id] ?? p.id}
+            </div>
+          ))}
+        </div>
+      ) : null}
       {missing.length > 0 ? (
         <div className="studio-node-missing">缺连线：{missing.join(' / ')}</div>
       ) : null}
-      {def?.outputPorts.map((p, i) => (
-        <Handle
-          key={`out-${p.id}`}
-          id={p.id}
-          type="source"
-          position={Position.Right}
-          style={{ top: 16 + i * 14, background: 'var(--ok-soft)', width: 8, height: 8 }}
-          title={PORT_LABEL_ZH[p.id] ?? p.id}
-        />
-      ))}
     </div>
   );
 }
@@ -768,6 +820,8 @@ function StudioCanvasInner(props: {
     const nodeId = pendingUploadNodeRef.current;
     pendingUploadNodeRef.current = null;
     if (!file || !nodeId) return;
+    const node = nodesRef.current.find((n) => n.id === nodeId);
+    const nodeType = String((node?.data as { nodeType?: string } | undefined)?.nodeType ?? '');
     setUploadNotice(`正在上传 ${file.name}…`);
     try {
       const asset = await uploadAsset(file, (m) => setUploadNotice(`${file.name} — ${m}`));
@@ -775,13 +829,59 @@ function StudioCanvasInner(props: {
         setUploadNotice(`${file.name} 未通过检查 — 请更换图片`);
         return;
       }
-      if (asset.versionId) updateNodeConfig(nodeId, 'assetVersionId', asset.versionId);
+      if (!asset.versionId) {
+        setUploadNotice(`已上传 ${file.name}，还在处理中 — 请稍后重新点上传按钮绑定`);
+        return;
+      }
+      if (nodeType === 'product_truth') {
+        await bindTruthFromUpload(nodeId, asset.versionId, file.name);
+        return;
+      }
+      updateNodeConfig(nodeId, 'assetVersionId', asset.versionId);
       setUploadNotice(
         asset.status === 'READY' ? `已上传 ${file.name}` : `已上传 ${file.name}，处理中…`,
       );
     } catch {
       setUploadNotice(`上传失败：${file.name}`);
     }
+  }
+
+  // 产品图节点一键绑定：上传 → 自动识别产品信息（演示识别）→ 确认 → 批准 → 绑定到节点。
+  async function bindTruthFromUpload(nodeId: string, versionId: string, fileName: string) {
+    const base = `/api/workspaces/${workspaceId}/projects/${projectId}/truth-pack`;
+    const headers = { 'content-type': 'application/json' };
+    setUploadNotice(`${fileName} 已上传，正在识别产品信息…`);
+    const extract = await fetch(`${base}/extract`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ assetVersionIds: [versionId] }),
+    });
+    const eJson = await extract.json().catch(() => null);
+    if (!extract.ok) throw new Error(eJson?.error?.message ?? '识别失败');
+    const revision = eJson?.pack?.revision as
+      | { id?: string; facts?: Array<{ id: string; status: string }> }
+      | undefined;
+    if (!revision?.id) throw new Error('识别失败');
+    const updates = (revision.facts ?? [])
+      .filter((f) => f.status === 'EXTRACTED')
+      .map((f) => ({ factId: f.id, status: 'CONFIRMED' as const }));
+    if (updates.length > 0) {
+      const confirm = await fetch(`${base}/confirm`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ updates }),
+      });
+      if (!confirm.ok) throw new Error('确认产品信息失败');
+    }
+    const approve = await fetch(`${base}/approve`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ revisionId: revision.id }),
+    });
+    const aJson = await approve.json().catch(() => null);
+    if (!approve.ok) throw new Error(aJson?.error?.message ?? '生成产品图资料失败');
+    updateNodeConfig(nodeId, 'truthRevisionId', revision.id);
+    setUploadNotice('产品图资料已生成并绑定 ✓（可在项目页查看和修改内容）');
   }
 
   // Required-but-unconnected input ports per node (drives 缺连线 hints).

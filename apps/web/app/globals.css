@@ -519,6 +519,58 @@ code {
   color: var(--warn-strong);
 }
 
+/* PR-6 port rows: each port gets a labeled row; the handle dot anchors to
+   its own row instead of a hardcoded top offset, so dots never drift when
+   node content height changes. */
+.studio-node-ports {
+  margin-top: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.studio-node-port {
+  position: relative;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-muted);
+}
+
+.studio-node-port-out {
+  text-align: right;
+}
+
+.studio-node .react-flow__handle.studio-handle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 9px;
+  height: 9px;
+  min-width: 0;
+  min-height: 0;
+  border: none;
+}
+
+.studio-node .react-flow__handle.studio-handle-in {
+  left: -17px;
+  background: var(--accent-strong);
+}
+
+.studio-node .react-flow__handle.studio-handle-out {
+  right: -17px;
+  background: var(--ok-soft);
+}
+
+.studio-node-relink {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: var(--accent-strong);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .stepper {
   display: flex;
   gap: var(--space-2);
