@@ -20,7 +20,7 @@ function baseConfig(fetchImpl: typeof fetch): KieAdapterConfig {
     baseUrl: 'https://api.kie.ai',
     apiKey: 'test-key',
     generateModelId: KIE_DOCUMENTED_GENERATE_MODEL,
-    editModelId: 'seedream/5-pro-image-to-image',
+    editModelId: 'nano-banana-2',
     estimatedCreditsPerImage: 7,
     usdPerCredit: 0.005,
     webhookHmacKey: 'whsec-test',
@@ -230,7 +230,7 @@ describe('KieImageProviderAdapter (mocked HTTP)', () => {
       a.submit({
         operation: 'EDIT',
         prompt: 'change background',
-        modelId: 'seedream/5-pro-image-to-image',
+        modelId: 'gpt-image-2-5-flare-image-to-image',
         idempotencyKey: 'edit-no-ref',
       }),
     ).rejects.toBeInstanceOf(ProviderAdapterError);
@@ -383,5 +383,128 @@ describe('kie model families — nano-banana-pro / gpt-image-2 (docs.kie.ai Open
     const gpt2 = await a.getCapabilities('gpt-image-2-text-to-image');
     expect(gpt2.operations).toEqual(['GENERATE']);
     expect(gpt2.maxReferenceImages).toBe(0);
+  });
+});
+
+describe('kie model families — nano-banana-2 / 2-lite / gpt-image-2.5', () => {
+  let calls: Array<{ url: string; method: string; body?: unknown }>;
+
+  beforeEach(() => {
+    calls = [];
+  });
+
+  function okFetch() {
+    return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      let body: unknown;
+      if (init?.body) {
+        try {
+          body = JSON.parse(String(init.body));
+        } catch {
+          body = init.body;
+        }
+      }
+      calls.push({ url, method: init?.method ?? 'GET', body });
+      if (url.includes(KIE_CREDITS_PATH)) {
+        return Response.json({ code: 200, msg: 'success', data: 100000 });
+      }
+      if (url.includes('/jobs/createTask')) {
+        return Response.json({ code: 200, msg: 'success', data: { taskId: 'task_nb2' } });
+      }
+      return Response.json({ code: 404, msg: 'nope' }, { status: 404 });
+    }) as unknown as typeof fetch;
+  }
+
+  function createCallBody() {
+    return calls.find((c) => c.url.includes('createTask'))?.body as {
+      model: string;
+      input: Record<string, unknown>;
+    };
+  }
+
+  function lastCreateCallBody() {
+    const list = calls.filter((c) => c.url.includes('createTask'));
+    return list[list.length - 1]?.body as {
+      model: string;
+      input: Record<string, unknown>;
+    };
+  }
+
+  it('nano-banana-2: image_input + resolution + aspect_ratio（文档无组合限制）', async () => {
+    const a = new KieImageProviderAdapter(baseConfig(okFetch()));
+    await a.submit({
+      operation: 'GENERATE',
+      prompt: 'white bg',
+      modelId: 'nano-banana-2',
+      aspectRatio: '1:4',
+      resolutionTier: '4K',
+      idempotencyKey: 'nb2-t2i',
+    });
+    const body = createCallBody();
+    expect(body.model).toBe('nano-banana-2');
+    expect(body.input).toMatchObject({
+      image_input: [],
+      aspect_ratio: '1:4',
+      resolution: '4K',
+      output_format: 'png',
+    });
+  });
+
+  it('nano-banana-2-lite: 用 image_urls，无 resolution/output_format 参数', async () => {
+    const a = new KieImageProviderAdapter(baseConfig(okFetch()));
+    await a.submit({
+      operation: 'EDIT',
+      prompt: 'swap bg',
+      modelId: 'nano-banana-2-lite',
+      aspectRatio: '4:1',
+      referenceAssets: [{ url: 'https://static.aiquickdraw.com/x.png' }],
+      idempotencyKey: 'nb2l-edit',
+    });
+    const body = createCallBody();
+    expect(body.model).toBe('nano-banana-2-lite');
+    expect(body.input.image_urls).toEqual(['https://static.aiquickdraw.com/x.png']);
+    expect(body.input.aspect_ratio).toBe('4:1');
+    expect(body.input.resolution).toBeUndefined();
+    expect(body.input.output_format).toBeUndefined();
+    expect(body.input.image_input).toBeUndefined();
+  });
+
+  it('gpt-image-2.5 flare t2i + sunburst i2i body shapes', async () => {
+    const a = new KieImageProviderAdapter(baseConfig(okFetch()));
+    await a.submit({
+      operation: 'GENERATE',
+      prompt: 'hero shot',
+      modelId: 'gpt-image-2-5-flare-text-to-image',
+      aspectRatio: '21:9',
+      resolutionTier: '4K',
+      idempotencyKey: 'g25-t2i',
+    });
+    let body = createCallBody();
+    expect(body.model).toBe('gpt-image-2-5-flare-text-to-image');
+    expect(body.input).toMatchObject({ aspect_ratio: '21:9', resolution: '4K' });
+    expect(body.input.input_urls).toBeUndefined();
+
+    await a.submit({
+      operation: 'EDIT',
+      prompt: 'new bg',
+      modelId: 'gpt-image-2-5-sunburst-image-to-image',
+      referenceAssets: [{ url: 'https://static.aiquickdraw.com/y.png' }],
+      idempotencyKey: 'g25-i2i',
+    });
+    body = lastCreateCallBody();
+    expect(body.model).toBe('gpt-image-2-5-sunburst-image-to-image');
+    expect(body.input.input_urls).toEqual(['https://static.aiquickdraw.com/y.png']);
+  });
+
+  it('estimateCost: nano-banana-2 分档（1K=8 / 2K=12 / 4K=18 credits）', async () => {
+    const a = new KieImageProviderAdapter(baseConfig(okFetch()));
+    const t1 = await a.estimateCost({
+      operation: 'GENERATE', prompt: 'x', modelId: 'nano-banana-2', resolutionTier: '1K', count: 1, idempotencyKey: 'c1',
+    });
+    const t4 = await a.estimateCost({
+      operation: 'GENERATE', prompt: 'x', modelId: 'nano-banana-2', resolutionTier: '4K', count: 1, idempotencyKey: 'c2',
+    });
+    expect(t1.estimatedMicrounits).toBe(Math.round(8 * 0.005 * 1_000_000));
+    expect(t4.estimatedMicrounits).toBe(Math.round(18 * 0.005 * 1_000_000));
   });
 });

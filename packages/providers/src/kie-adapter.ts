@@ -27,8 +27,8 @@ import {
 } from './create-rate-limiter.js';
 
 /** Documented Market model IDs (https://docs.kie.ai/market/...). */
-export const KIE_DOCUMENTED_GENERATE_MODEL = 'seedream/5-pro-text-to-image';
-export const KIE_DOCUMENTED_EDIT_MODEL = 'seedream/5-pro-image-to-image';
+export const KIE_DOCUMENTED_GENERATE_MODEL = 'nano-banana-2';
+export const KIE_DOCUMENTED_EDIT_MODEL = 'nano-banana-2';
 
 /**
  * Documented credit economics (kie.ai billing UI / pricing notes):
@@ -201,6 +201,60 @@ function resolutionFromTier(tier?: string): '1K' | '2K' | '4K' {
  * (docs.kie.ai OpenAPI 确认，见 domain model-registry.ts 对应条目注释）。
  */
 const KIE_FAMILY_CAPABILITIES: Record<string, Omit<ModelCapabilities, 'modelId'>> = {
+  'nano-banana-2': {
+    operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+    ratios: ['1:1', '2:3', '3:2', '1:4', '4:1', '3:4', '4:3', '4:5', '5:4', '1:8', '8:1', '9:16', '16:9', '21:9'],
+    resolutionTiers: ['1K', '2K', '4K'],
+    maxReferenceImages: 14,
+    maxOutputs: 4,
+    supportsSeed: false,
+    supportsWebhook: true,
+  },
+  'nano-banana-2-lite': {
+    operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+    ratios: ['1:1', '2:3', '3:2', '1:4', '4:1', '3:4', '4:3', '4:5', '5:4', '1:8', '8:1', '9:16', '16:9', '21:9'],
+    resolutionTiers: ['1K'],
+    maxReferenceImages: 10,
+    maxOutputs: 4,
+    supportsSeed: false,
+    supportsWebhook: true,
+  },
+  'gpt-image-2-5-flare-text-to-image': {
+    operations: ['GENERATE'],
+    ratios: ['1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16', '21:9'],
+    resolutionTiers: ['1K', '2K', '4K'],
+    maxReferenceImages: 0,
+    maxOutputs: 4,
+    supportsSeed: false,
+    supportsWebhook: true,
+  },
+  'gpt-image-2-5-flare-image-to-image': {
+    operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+    ratios: ['1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16', '21:9'],
+    resolutionTiers: ['1K', '2K', '4K'],
+    maxReferenceImages: 16,
+    maxOutputs: 4,
+    supportsSeed: false,
+    supportsWebhook: true,
+  },
+  'gpt-image-2-5-sunburst-text-to-image': {
+    operations: ['GENERATE'],
+    ratios: ['1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16', '21:9'],
+    resolutionTiers: ['1K', '2K', '4K'],
+    maxReferenceImages: 0,
+    maxOutputs: 4,
+    supportsSeed: false,
+    supportsWebhook: true,
+  },
+  'gpt-image-2-5-sunburst-image-to-image': {
+    operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+    ratios: ['1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16', '21:9'],
+    resolutionTiers: ['1K', '2K', '4K'],
+    maxReferenceImages: 16,
+    maxOutputs: 4,
+    supportsSeed: false,
+    supportsWebhook: true,
+  },
   'nano-banana-pro': {
     operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
     ratios: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
@@ -235,6 +289,15 @@ const KIE_FAMILY_CAPABILITIES: Record<string, Omit<ModelCapabilities, 'modelId'>
  * gpt-image-2 官方未公布，保守占位 10。未收录的模型回退到 env 配置默认值。
  */
 const KIE_MODEL_CREDIT_ESTIMATES: Record<string, (tier?: string) => number> = {
+  'nano-banana-2': (tier) => {
+    const t = resolutionFromTier(tier);
+    return t === '4K' ? 18 : t === '2K' ? 12 : 8;
+  },
+  'nano-banana-2-lite': () => 8, // 官方未公布，占位
+  'gpt-image-2-5-flare-text-to-image': () => 10, // 官方未公布，占位
+  'gpt-image-2-5-flare-image-to-image': () => 10,
+  'gpt-image-2-5-sunburst-text-to-image': () => 10,
+  'gpt-image-2-5-sunburst-image-to-image': () => 10,
   'nano-banana-pro': (tier) => (resolutionFromTier(tier) === '4K' ? 24 : 18),
   'gpt-image-2-text-to-image': () => 10,
   'gpt-image-2-image-to-image': () => 10,
@@ -654,8 +717,9 @@ export class KieImageProviderAdapter implements ImageProviderAdapter {
 
   /**
    * Per-model-family `input` shapes (docs.kie.ai OpenAPI):
-   * - nano-banana-pro: prompt + image_input[] + aspect_ratio + resolution + output_format
-   * - gpt-image-2-*:   prompt + aspect_ratio + resolution（i2i 用 input_urls[]）
+   * - nano-banana-pro / nano-banana-2: prompt + image_input[] + aspect_ratio + resolution + output_format
+   * - nano-banana-2-lite: prompt + aspect_ratio + image_urls[]（无 resolution/output_format）
+   * - gpt-image-2-5-* / gpt-image-2-*: prompt + aspect_ratio + resolution（i2i 用 input_urls[]）
    * - seedream/*:      prompt + aspect_ratio + quality（i2i 用 image_urls[]）
    * - flux-2/*:        同 seedream，但 resolution 替代 quality
    */
@@ -666,24 +730,34 @@ export class KieImageProviderAdapter implements ImageProviderAdapter {
     const aspect = aspectFromRequest(request);
     const isEditOp = request.operation !== 'GENERATE';
 
-    if (modelId === 'nano-banana-pro') {
+    if (modelId === 'nano-banana-pro' || modelId === 'nano-banana-2') {
       return {
-        prompt: request.prompt.slice(0, 10000),
+        prompt: request.prompt.slice(0, modelId === 'nano-banana-2' ? 20000 : 10000),
         image_input: isEditOp
-          ? this.requireReferenceUrls(request, 'nano-banana-pro').slice(0, 8)
-          : this.referenceUrls(request).slice(0, 8),
+          ? this.requireReferenceUrls(request, modelId).slice(0, modelId === 'nano-banana-2' ? 14 : 8)
+          : this.referenceUrls(request).slice(0, modelId === 'nano-banana-2' ? 14 : 8),
         aspect_ratio: aspect,
         resolution: resolutionFromTier(request.resolutionTier),
         output_format: 'png',
       };
     }
 
-    if (modelId.startsWith('gpt-image-2')) {
+    if (modelId === 'nano-banana-2-lite') {
+      return {
+        prompt: request.prompt.slice(0, 20000),
+        aspect_ratio: aspect,
+        image_urls: isEditOp
+          ? this.requireReferenceUrls(request, modelId).slice(0, 10)
+          : this.referenceUrls(request).slice(0, 10),
+      };
+    }
+
+    if (modelId.startsWith('gpt-image-2-5') || modelId.startsWith('gpt-image-2')) {
       const isI2I = modelId.includes('image-to-image');
       if (isEditOp && !isI2I) {
         throw new ProviderAdapterError(
           'VALIDATION',
-          '该模型只支持文生图 — 编辑类操作请改用 gpt-image-2-image-to-image',
+          '该模型只支持文生图 — 编辑类操作请改用对应的 image-to-image 模型',
           400,
         );
       }
@@ -693,7 +767,7 @@ export class KieImageProviderAdapter implements ImageProviderAdapter {
         resolution: resolutionFromTier(request.resolutionTier),
       };
       if (isI2I) {
-        input.input_urls = this.requireReferenceUrls(request, 'gpt-image-2 图片编辑').slice(0, 16);
+        input.input_urls = this.requireReferenceUrls(request, modelId).slice(0, 16);
       }
       return input;
     }

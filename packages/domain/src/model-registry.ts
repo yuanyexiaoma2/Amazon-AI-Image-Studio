@@ -72,43 +72,118 @@ export const DEFAULT_MODEL_REGISTRY: ModelRegistryEntry[] = [
 ];
 
 
-/** Documented kie.ai Market model IDs — pricing from docs examples × $0.005/credit. */
-export const KIE_GENERATE_MODEL: ModelRegistryEntry = {
-  key: 'kie-seedream-5-pro-generate',
+/**
+ * Google Nano Banana 2（docs.kie.ai/market/google/nanobanana2，OpenAPI 确认）。
+ * 单一 modelId 文生图/图生图合一（image_input ≤14 张，30MB/张；传空即纯文生图）。
+ * 比例比 Pro 多 1:4/4:1/1:8/8:1 极端档；文档无比例×分辨率组合限制。
+ * 价格（第三方双源）：1K≈$0.04、2K≈$0.06、4K≈$0.09；estimatedUnitCost 取 2K 档。
+ */
+export const KIE_NANO_BANANA_2_MODEL: ModelRegistryEntry = {
+  key: 'kie-nano-banana-2',
   provider: 'kie',
-  modelId: 'seedream/5-pro-text-to-image',
-  displayName: 'Kie Seedream 5 Pro (text-to-image)',
+  modelId: 'nano-banana-2',
+  displayName: 'Google Nano Banana 2',
   enabled: true,
-  operations: ['GENERATE'],
-  ratios: ['1:1', '4:3', '3:4', '16:9', '9:16', '2:3', '3:2', '21:9'],
-  resolutionTiers: ['1K', '2K'],
-  maxReferenceImages: 0,
+  operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+  // 文档另支持 'auto'（模型自选比例），UI 只给显式比例。
+  ratios: ['1:1', '2:3', '3:2', '1:4', '4:1', '3:4', '4:3', '4:5', '5:4', '1:8', '8:1', '9:16', '16:9', '21:9'],
+  resolutionTiers: ['1K', '2K', '4K'],
+  maxReferenceImages: 14,
   maxOutputs: 4,
   supportsSeed: false,
   supportsWebhook: true,
-  // 7 credits (docs callback example) × $0.005/credit (kie billing UI) = $0.035
-  pricing: { currency: 'USD', unit: 'image', estimatedUnitCost: 0.035 },
+  pricing: { currency: 'USD', unit: 'image', estimatedUnitCost: 0.06 },
   configVersion: 1,
 };
 
-export const KIE_EDIT_MODEL: ModelRegistryEntry = {
-  key: 'kie-seedream-5-pro-edit',
+/**
+ * Google Nano Banana 2 Lite（docs.kie.ai/market/google/nano-banana-2-lite，OpenAPI 确认）。
+ * 注意：参考图参数是 image_urls（≤10 张），与 nb-pro/nb2 的 image_input 不同；
+ * 无 resolution / output_format 参数（只出 1K）；aspect_ratio 在 schema 里 required，调用时显式传。
+ * 价格 kie 官方未确认（上游 Google 官价 ≈$0.034/张）；estimatedUnitCost 为占位 $0.04。
+ */
+export const KIE_NANO_BANANA_2_LITE_MODEL: ModelRegistryEntry = {
+  key: 'kie-nano-banana-2-lite',
   provider: 'kie',
-  modelId: 'seedream/5-pro-image-to-image',
-  displayName: 'Kie Seedream 5 Pro (image-to-image)',
+  modelId: 'nano-banana-2-lite',
+  displayName: 'Google Nano Banana 2 Lite',
   enabled: true,
-  operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'UPSCALE', 'REMOVE_BACKGROUND'],
-  ratios: ['1:1', '4:3', '3:4', '16:9', '9:16', '2:3', '3:2', '21:9'],
-  resolutionTiers: ['1K', '2K'],
+  operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+  ratios: ['1:1', '2:3', '3:2', '1:4', '4:1', '3:4', '4:3', '4:5', '5:4', '1:8', '8:1', '9:16', '16:9', '21:9'],
+  resolutionTiers: ['1K'],
   maxReferenceImages: 10,
   maxOutputs: 4,
   supportsSeed: false,
   supportsWebhook: true,
-  pricing: { currency: 'USD', unit: 'image', estimatedUnitCost: 0.035 },
+  pricing: { currency: 'USD', unit: 'image', estimatedUnitCost: 0.04 },
   configVersion: 1,
 };
 
-export const KIE_MODEL_REGISTRY: ModelRegistryEntry[] = [KIE_GENERATE_MODEL, KIE_EDIT_MODEL];
+/**
+ * GPT Image 2.5（docs.kie.ai/market/gpt/ 下四个端点，OpenAPI 确认）。
+ * Flare=速度档 / Sunburst=精度档，各分 t2i/i2i；i2i 用 input_urls ≤16 张。
+ * 组合限制仅「27:16、16:27、9:8、8:9 只支持 1K」——登记时直接剔除这四个和 auto，
+ * 其余 8 档比例 1K/2K/4K 全兼容（比 gpt-image-2 宽松：1:1 可 4K、auto 可 4K）。
+ * 价格：kie 官方未确认；第三方实测 1K≈$0.03；estimatedUnitCost 保守占位 $0.05。
+ */
+const GPT_IMAGE_2_5_BASE: Pick<
+  ModelRegistryEntry,
+  | 'provider'
+  | 'enabled'
+  | 'ratios'
+  | 'resolutionTiers'
+  | 'maxOutputs'
+  | 'supportsSeed'
+  | 'supportsWebhook'
+  | 'pricing'
+  | 'configVersion'
+> = {
+  provider: 'kie',
+  enabled: true,
+  ratios: ['1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16', '21:9'],
+  resolutionTiers: ['1K', '2K', '4K'],
+  maxOutputs: 4,
+  supportsSeed: false,
+  supportsWebhook: true,
+  pricing: { currency: 'USD', unit: 'image', estimatedUnitCost: 0.05 },
+  configVersion: 1,
+};
+
+export const KIE_GPT_IMAGE_2_5_FLARE_GENERATE: ModelRegistryEntry = {
+  ...GPT_IMAGE_2_5_BASE,
+  key: 'kie-gpt-image-2-5-flare-generate',
+  modelId: 'gpt-image-2-5-flare-text-to-image',
+  displayName: 'GPT Image 2.5 Flare (text-to-image)',
+  operations: ['GENERATE'],
+  maxReferenceImages: 0,
+};
+
+export const KIE_GPT_IMAGE_2_5_FLARE_EDIT: ModelRegistryEntry = {
+  ...GPT_IMAGE_2_5_BASE,
+  key: 'kie-gpt-image-2-5-flare-edit',
+  modelId: 'gpt-image-2-5-flare-image-to-image',
+  displayName: 'GPT Image 2.5 Flare (image-to-image)',
+  operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+  maxReferenceImages: 16,
+};
+
+export const KIE_GPT_IMAGE_2_5_SUNBURST_GENERATE: ModelRegistryEntry = {
+  ...GPT_IMAGE_2_5_BASE,
+  key: 'kie-gpt-image-2-5-sunburst-generate',
+  modelId: 'gpt-image-2-5-sunburst-text-to-image',
+  displayName: 'GPT Image 2.5 Sunburst (text-to-image)',
+  operations: ['GENERATE'],
+  maxReferenceImages: 0,
+};
+
+export const KIE_GPT_IMAGE_2_5_SUNBURST_EDIT: ModelRegistryEntry = {
+  ...GPT_IMAGE_2_5_BASE,
+  key: 'kie-gpt-image-2-5-sunburst-edit',
+  modelId: 'gpt-image-2-5-sunburst-image-to-image',
+  displayName: 'GPT Image 2.5 Sunburst (image-to-image)',
+  operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+  maxReferenceImages: 16,
+};
 
 /**
  * Google Nano Banana Pro（docs.kie.ai/market/google/pro-image-to-image，OpenAPI 确认）。
@@ -178,7 +253,13 @@ export const KIE_GPT_IMAGE_2_EDIT_MODEL: ModelRegistryEntry = {
   configVersion: 1,
 };
 
-export const KIE_EXTENDED_MODEL_REGISTRY: ModelRegistryEntry[] = [
+export const KIE_MODEL_REGISTRY: ModelRegistryEntry[] = [
+  KIE_NANO_BANANA_2_MODEL,
+  KIE_NANO_BANANA_2_LITE_MODEL,
+  KIE_GPT_IMAGE_2_5_FLARE_GENERATE,
+  KIE_GPT_IMAGE_2_5_FLARE_EDIT,
+  KIE_GPT_IMAGE_2_5_SUNBURST_GENERATE,
+  KIE_GPT_IMAGE_2_5_SUNBURST_EDIT,
   KIE_NANO_BANANA_PRO_MODEL,
   KIE_GPT_IMAGE_2_GENERATE_MODEL,
   KIE_GPT_IMAGE_2_EDIT_MODEL,
@@ -195,7 +276,6 @@ export function resolveModelRegistry(
   if (p === 'kie' || p === 'kie.ai' || p === 'kieai') {
     return [
       ...KIE_MODEL_REGISTRY,
-      ...KIE_EXTENDED_MODEL_REGISTRY,
       ...DEFAULT_MODEL_REGISTRY.map((m) => ({ ...m, enabled: false })),
     ];
   }
@@ -221,22 +301,25 @@ export function getModelByKey(
 /**
  * 「智能匹配」节点模型取值：config.modelKey === 'auto' 时由运行时按输入解析——
  * 编辑类操作或连了参考图 → 图生图/编辑偏好序；否则文生图偏好序。
- * 偏好序体现所有者主力模型（Google Nano Banana Pro / GPT Image 2），Seedream 兜底，
- * Fake 用于演示/测试。找不到偏好项时回退到注册表里第一个可用 GENERATE 模型。
+ * 偏好序体现所有者主力模型（Google Nano Banana 2 / GPT Image 2.5 优先，
+ * Nano Banana Pro / GPT Image 2 备选），Fake 用于演示/测试。
+ * 找不到偏好项时回退到注册表里第一个可用 GENERATE 模型。
  */
 export const AUTO_MODEL_KEY = 'auto';
 
 const AUTO_T2I_PREFERENCE = [
+  'kie-nano-banana-2',
+  'kie-gpt-image-2-5-flare-generate',
   'kie-nano-banana-pro',
   'kie-gpt-image-2-generate',
-  'kie-seedream-5-pro-generate',
   'primary-image-generate',
 ] as const;
 
 const AUTO_EDIT_PREFERENCE = [
+  'kie-nano-banana-2',
+  'kie-gpt-image-2-5-flare-edit',
   'kie-nano-banana-pro',
   'kie-gpt-image-2-edit',
-  'kie-seedream-5-pro-edit',
   'primary-image-edit',
 ] as const;
 

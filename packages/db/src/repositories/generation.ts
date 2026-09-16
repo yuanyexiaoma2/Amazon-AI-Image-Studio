@@ -196,7 +196,7 @@ export class GenerationRepository {
     const provider = (process.env.IMAGE_PROVIDER ?? 'fake').trim().toLowerCase();
     const defaultKey =
       provider === 'kie' || provider === 'kie.ai' || provider === 'kieai'
-        ? 'kie-seedream-5-pro-generate'
+        ? 'kie-nano-banana-2'
         : FAKE_PRIMARY_MODEL.key;
     const model = getModelByKey(input.modelKey ?? defaultKey, registry) ?? getModelByKey(defaultKey, registry) ?? FAKE_PRIMARY_MODEL;
     const unitMicro = amountToMicrounits(model.pricing.estimatedUnitCost);
