@@ -1655,17 +1655,12 @@ function StudioCanvasInner(props: {
     })();
   }
 
-  // 创意参谋「用作提示词」：写入当前选中的生图卡
+  // 创意参谋「用作提示词」：直接填入底部提示词条并聚焦，回车即生成
+  const [promptInject, setPromptInject] = useState<{ text: string; nonce: number } | null>(null);
   function handleUsePrompt(text: string) {
-    const target = nodesRef.current.find(
-      (n) => n.selected && String((n.data as { nodeType?: string }).nodeType ?? '') === 'generate',
-    );
-    if (!target) {
-      setStatus('先在画布上选中一张生图卡，再点「用作提示词」');
-      return;
-    }
-    updateNodeConfig(target.id, 'prompt', text);
-    setStatus('已写入提示词到选中的生图卡');
+    if (!text.trim()) return;
+    setPromptInject({ text, nonce: Date.now() });
+    setStatus('已填入下方提示词条 — 回车即可生成');
   }
 
   return (
@@ -1827,6 +1822,7 @@ function StudioCanvasInner(props: {
               models={configOptions.models}
               busy={runBusy || runAllBusy}
               onSubmit={promptBarSubmit}
+              inject={promptInject}
             />
           </Panel>
         </ReactFlow>

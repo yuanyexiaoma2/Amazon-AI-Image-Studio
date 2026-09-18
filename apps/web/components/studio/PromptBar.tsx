@@ -27,8 +27,10 @@ export function PromptBar(props: {
   models: ModelOptionItem[] | null;
   busy: boolean;
   onSubmit: (values: PromptBarValues, boundId: string | null) => void;
+  /** 外部注入提示词（如参谋面板「用作提示词」）；nonce 变化时覆盖输入框并聚焦。 */
+  inject: { text: string; nonce: number } | null;
 }) {
-  const { bound, boundHasReferences, models, busy, onSubmit } = props;
+  const { bound, boundHasReferences, models, busy, onSubmit, inject } = props;
   const [prompt, setPrompt] = useState('');
   const [modelKey, setModelKey] = useState('auto');
   const [ratio, setRatio] = useState('1:1');
@@ -36,6 +38,7 @@ export function PromptBar(props: {
   const [count, setCount] = useState('2');
   const [note, setNote] = useState<string | null>(null);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const flash = (msg: string) => {
     setNote(msg);
     if (noteTimer.current) clearTimeout(noteTimer.current);
@@ -44,6 +47,14 @@ export function PromptBar(props: {
   useEffect(() => () => {
     if (noteTimer.current) clearTimeout(noteTimer.current);
   }, []);
+
+  // 外部注入（nonce 唯一，同一条文本重复注入也生效）
+  useEffect(() => {
+    if (!inject) return;
+    setPrompt(inject.text);
+    inputRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inject?.nonce]);
 
   const boundId = bound?.id ?? null;
   useEffect(() => {
@@ -83,6 +94,7 @@ export function PromptBar(props: {
           ✦
         </span>
         <input
+          ref={inputRef}
           className="prompt-bar-input"
           value={prompt}
           placeholder="描述任何你想要生成的内容"
