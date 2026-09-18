@@ -45,7 +45,7 @@ export const GenerateConfigSchema = NodeConfigBaseSchema.extend({
   seed: z.number().int().optional().nullable(),
   briefSlot: z.string().max(32).optional().nullable(),
   briefOrderIndex: z.number().int().optional().nullable(),
-  /** 内联提示词（内容卡片范式）：无 prompt 文本卡连线时的兜底；连线优先。 */
+  /** 内联提示词：无 prompt 连线时单独生效；有连线时作为后缀拼在连线文本之后。 */
   prompt: z.string().max(8000).optional().default(''),
   /** 卡片标题（@卡片名 定位用），空串 = 未命名。 */
   title: z.string().max(64).optional().default(''),

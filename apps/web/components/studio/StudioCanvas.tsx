@@ -46,6 +46,7 @@ import {
   buildStarterTemplateCommands,
   type StarterTemplateId,
 } from './starter-templates';
+import { buildSuiteCommands } from './suite-template';
 import { IMAGE_FILE_RE, useAssetUpload } from '@/lib/use-asset-upload';
 import { ChatPanel } from './ChatPanel';
 import { applyConfigEdit } from './config-options';
@@ -1454,6 +1455,41 @@ function StudioCanvasInner(props: {
     [commands, handleCommandResult, makeRollback, applyLocalSnapshot, workspaceId, fitView],
   );
 
+  // 左栏「套装」：一句话 → 1 文本卡 + 3 生图卡（白底/场景/细节），一个批次，采纳权威图。
+  const addSuite = useCallback(
+    (description: string) => {
+      const desc = description.trim();
+      if (!desc) return;
+      const rect = wrapRef.current?.getBoundingClientRect();
+      const center = rect
+        ? screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+        : { x: 400, y: 300 };
+      const { commands: cmds, selectId } = buildSuiteCommands(desc, {
+        x: center.x - 290,
+        y: center.y - 190,
+      });
+      const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+      setStatus('正在生成套装…');
+      setRailPanel(null);
+      void commands
+        .applyNow(cmds, makeRollback(snapshot))
+        .then((r) => {
+          handleCommandResult(r);
+          if (r.ok) {
+            const flowNodes = toFlowNodes(r.batch.graph, workspaceId).map((n) => ({
+              ...n,
+              selected: n.id === selectId,
+            }));
+            applyLocalSnapshot({ nodes: flowNodes, edges: toFlowEdges(r.batch.graph) });
+            setSelectedIds([selectId]);
+            setStatus(`已生成套装（1 文本 + 3 生图）· 修订 ${r.batch.revisionNumber}`);
+            setTimeout(() => void fitView({ padding: 0.2, duration: 200 }), 50);
+          }
+        });
+    },
+    [commands, handleCommandResult, makeRollback, applyLocalSnapshot, screenToFlowPosition, workspaceId, fitView],
+  );
+
   const onCanvasDragOver = useCallback((ev: ReactDragEvent<HTMLDivElement>) => {
     const types = ev.dataTransfer.types;
     if (
@@ -1613,6 +1649,7 @@ function StudioCanvasInner(props: {
         panel={railPanel}
         onToggle={(kind) => setRailPanel((prev) => (prev === kind ? null : kind))}
         onAddNode={addNodeAtCenter}
+        onAddSuite={addSuite}
         workspaceId={workspaceId}
         assets={configOptions.assets}
         uploading={railUploading}

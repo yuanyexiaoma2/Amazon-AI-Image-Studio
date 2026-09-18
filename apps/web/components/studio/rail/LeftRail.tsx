@@ -4,7 +4,7 @@
  * 左侧窄竖排图标栏（Phase 3 chrome）：＋添加 / 🖼 素材库 / 🕘 生成历史 / ❓帮助。
  * 点击图标展开/收起对应的飞出面板；添加与素材均支持拖入画布。
  */
-import { useRef, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { IMAGE_FILE_RE } from '@/lib/use-asset-upload';
 import type { AssetOptionItem } from '../config-options';
 import { AssetImage } from '../../asset-image';
@@ -101,14 +101,16 @@ export function LeftRail(props: {
   panel: RailPanelKind | null;
   onToggle: (kind: RailPanelKind) => void;
   onAddNode: (type: string) => void;
+  onAddSuite: (description: string) => void;
   workspaceId: string;
   assets: AssetOptionItem[] | null;
   uploading: boolean;
   onUploadFile: (file: File) => void;
   historyPanel: ReactNode;
 }) {
-  const { panel, onToggle, onAddNode, workspaceId, assets, uploading, onUploadFile, historyPanel } =
+  const { panel, onToggle, onAddNode, onAddSuite, workspaceId, assets, uploading, onUploadFile, historyPanel } =
     props;
+  const [suiteText, setSuiteText] = useState('');
   const btn = (kind: RailPanelKind, icon: string, label: string) => (
     <button
       key={kind}
@@ -152,6 +154,37 @@ export function LeftRail(props: {
                   <span className="studio-flyout-item-desc faint">{item.desc}</span>
                 </button>
               ))}
+              <div className="studio-suite">
+                <span className="studio-flyout-item-title">套装</span>
+                <span className="studio-flyout-item-desc faint">
+                  一句话描述 → 文本卡 + 白底/场景/细节三张生图卡
+                </span>
+                <input
+                  className="studio-suite-input"
+                  value={suiteText}
+                  placeholder="例：便携不锈钢保温杯 500ml"
+                  maxLength={200}
+                  onChange={(e) => setSuiteText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.nativeEvent.isComposing && suiteText.trim()) {
+                      e.preventDefault();
+                      onAddSuite(suiteText.trim());
+                      setSuiteText('');
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={!suiteText.trim()}
+                  onClick={() => {
+                    onAddSuite(suiteText.trim());
+                    setSuiteText('');
+                  }}
+                >
+                  生成套装
+                </button>
+              </div>
               <div className="faint" style={{ fontSize: 'var(--font-size-xs)' }}>
                 也可以双击画布空白处直接创建。
               </div>

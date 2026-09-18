@@ -44,13 +44,22 @@ export function GenerateCardNode(props: NodeProps) {
         </button>
       </div>
       {connectedPrompt !== null ? (
-        <div
-          className="studio-card-prompt nodrag"
-          title="提示词来自连线的文本卡；断开连线后可在卡片上直接编辑"
-        >
-          {connectedPrompt.length > 120 ? `${connectedPrompt.slice(0, 120)}…` : connectedPrompt}
-          <span className="studio-card-prompt-src faint">来自文本卡</span>
-        </div>
+        <>
+          <div
+            className="studio-card-prompt nodrag"
+            title="提示词来自连线的文本卡；下方可为本卡追加后缀"
+          >
+            {connectedPrompt.length > 120 ? `${connectedPrompt.slice(0, 120)}…` : connectedPrompt}
+            <span className="studio-card-prompt-src faint">来自文本卡</span>
+          </div>
+          <input
+            className="studio-card-suffix nodrag"
+            value={configPrompt}
+            placeholder="追加后缀（可选，如：白底主图）"
+            title="生成时拼在连线文本之后：「连线文本，后缀」"
+            onChange={(e) => actions.updateConfig(props.id, 'prompt', e.target.value)}
+          />
+        </>
       ) : (
         <textarea
           className="studio-card-textarea nodrag nowheel"
