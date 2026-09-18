@@ -146,6 +146,7 @@ function StudioCanvasInner(props: {
   const [runAllMsg, setRunAllMsg] = useState<RunAllOutcome | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [nodeResults, setNodeResults] = useState<Record<string, string[]>>({});
+  const [nodeStale, setNodeStale] = useState<Record<string, boolean>>({});
   const [runsActive, setRunsActive] = useState(false);
   const revisionRef = useRef(0);
   const nodesRef = useRef(nodes);
@@ -202,8 +203,10 @@ function StudioCanvasInner(props: {
         results?: Record<string, string[]>;
         stale?: Record<string, boolean>;
       } | null;
-      // stale 徽标 UI 下一批接入，本批只消费 results。
-      if (json && typeof json === 'object' && json.results) setNodeResults(json.results);
+      if (json && typeof json === 'object' && json.results) {
+        setNodeResults(json.results);
+        setNodeStale(json.stale ?? {});
+      }
     } catch {
       /* 轮询失败保持旧数据 */
     }
@@ -357,6 +360,7 @@ function StudioCanvasInner(props: {
 
   useEffect(() => {
     setNodeResults({});
+    setNodeStale({});
     void refreshNodeResults();
   }, [resultsWorkflowId, refreshNodeResults]);
 
@@ -996,6 +1000,7 @@ function StudioCanvasInner(props: {
       updateConfig: (nodeId, key, raw) => updateNodeConfig(nodeId, key, raw),
       models: configOptions.models,
       resultImages: (nodeId) => nodeResults[nodeId] ?? [],
+      isStale: (nodeId) => nodeStale[nodeId] === true,
       runNode: (nodeId) => void runNode(nodeId),
       runBusy,
       connectedPromptText: (nodeId) => connectedPromptByNode.get(nodeId) ?? null,
@@ -1006,6 +1011,7 @@ function StudioCanvasInner(props: {
       missingPortsByNode,
       configOptions.models,
       nodeResults,
+      nodeStale,
       runNode,
       runBusy,
       connectedPromptByNode,

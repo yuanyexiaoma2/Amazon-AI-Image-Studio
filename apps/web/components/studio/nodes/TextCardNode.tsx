@@ -3,16 +3,18 @@
 import { useContext } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { NodeActionContext } from './context';
+import { CardTitle } from './CardTitle';
 
 /** 文本卡：可直接编辑的多行提示词，右侧「+」为提示词输出端口。 */
 export function TextCardNode(props: NodeProps) {
   const actions = useContext(NodeActionContext);
   const data = props.data as { config?: Record<string, unknown> };
   const text = typeof data.config?.text === 'string' ? data.config.text : '';
+  const title = typeof data.config?.title === 'string' ? data.config.title : '';
   return (
     <div className={props.selected ? 'studio-card studio-card-selected' : 'studio-card'}>
       <div className="studio-card-head">
-        <span className="studio-card-title">文本</span>
+        <CardTitle nodeId={props.id} title={title} fallback="文本" />
       </div>
       <textarea
         className="studio-card-textarea nodrag nowheel"

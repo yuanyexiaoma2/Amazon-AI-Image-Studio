@@ -4,6 +4,7 @@ import { useContext } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { AssetImage } from '../../asset-image';
 import { NodeActionContext } from './context';
+import { CardTitle } from './CardTitle';
 
 /** 图片卡：大图预览；未绑定素材时显示上传入口；底部小字显示文件名。 */
 export function ImageCardNode(props: NodeProps) {
@@ -11,13 +12,14 @@ export function ImageCardNode(props: NodeProps) {
   const data = props.data as { workspaceId?: string; config?: Record<string, unknown> };
   const versionId =
     typeof data.config?.assetVersionId === 'string' ? data.config.assetVersionId : null;
+  const title = typeof data.config?.title === 'string' ? data.config.title : '';
   const meta = versionId
     ? (actions.assetLabel(versionId) ?? `版本 ${versionId.slice(0, 8)}…`)
     : null;
   return (
     <div className={props.selected ? 'studio-card studio-card-selected' : 'studio-card'}>
       <div className="studio-card-head">
-        <span className="studio-card-title">图片</span>
+        <CardTitle nodeId={props.id} title={title} fallback="图片" />
       </div>
       {versionId ? (
         <div className="studio-card-preview nodrag">

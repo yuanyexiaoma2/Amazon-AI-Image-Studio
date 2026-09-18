@@ -3,6 +3,7 @@
 import { useContext } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { NodeActionContext, PORT_LABEL_ZH } from './context';
+import { CardTitle } from './CardTitle';
 import { GenerateNodeControls } from './GenerateNodeControls';
 import { GenerateNodeResults } from './GenerateNodeResults';
 
@@ -12,8 +13,10 @@ export function GenerateCardNode(props: NodeProps) {
   const data = props.data as { workspaceId?: string; config?: Record<string, unknown> };
   const config = data.config ?? { schemaVersion: 1 };
   const configPrompt = typeof config.prompt === 'string' ? config.prompt : '';
+  const title = typeof config.title === 'string' ? config.title : '';
   const connectedPrompt = actions.connectedPromptText(props.id);
   const results = actions.resultImages(props.id);
+  const stale = actions.isStale(props.id);
   return (
     <div
       className={
@@ -21,7 +24,12 @@ export function GenerateCardNode(props: NodeProps) {
       }
     >
       <div className="studio-card-head">
-        <span className="studio-card-title">生图</span>
+        <CardTitle nodeId={props.id} title={title} fallback="生图" />
+        {stale ? (
+          <span className="studio-card-stale" title="上游内容已变更，建议重新生成">
+            需重跑
+          </span>
+        ) : null}
         <button
           type="button"
           className="btn btn-primary studio-card-run nodrag"

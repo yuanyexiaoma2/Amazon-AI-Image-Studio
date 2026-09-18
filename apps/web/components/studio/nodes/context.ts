@@ -25,6 +25,8 @@ export type NodeActionContextValue = {
   models: ModelOptionItem[] | null;
   /** nodeId → 已生成图片的 assetVersionIds（当前快照修订的 SUCCEEDED 结果）。 */
   resultImages: (nodeId: string) => string[];
+  /** nodeId → 最近成功结果是否已过期（上游内容变更，建议重跑）。 */
+  isStale: (nodeId: string) => boolean;
   /** 单节点运行（scope: NODES）。 */
   runNode: (nodeId: string) => void;
   runBusy: boolean;
@@ -40,6 +42,7 @@ export const NodeActionContext = createContext<NodeActionContextValue>({
   updateConfig: () => {},
   models: null,
   resultImages: () => [],
+  isStale: () => false,
   runNode: () => {},
   runBusy: false,
   connectedPromptText: () => null,

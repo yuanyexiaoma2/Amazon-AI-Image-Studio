@@ -1204,6 +1204,47 @@ code {
 .studio-card-title {
   font-weight: 600;
   font-size: var(--font-size-sm);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.studio-card-title-input {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  padding: 1px 4px;
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  outline: none;
+}
+
+/* 「需重跑」徽标：上游内容变更后标在生图卡标题栏右侧 */
+.studio-card-stale {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--warn-text);
+}
+
+.studio-card-stale::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+.studio-card-stale + .studio-card-run {
+  margin-left: 0;
 }
 
 .studio-card-run {
