@@ -764,6 +764,8 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 | PR-7-16 | 参谋面板新建/历史对话 + kie slug 修正 + 移除模板引导层 | DONE | 排查发现 kie 裸 slug `gemini-3-8-flash` 是 Gemini 原生端点（422），OpenAI 兼容 slug 为 `gemini-3-8-flash-openai`；Claude 无 OpenAI 兼容端点，kie-chat 新增 `apiStyle:'anthropic'` 走 `/claude/v1/messages`（system 提顶层、max_tokens 必填）。ChatPanel 头部加「新建对话/历史对话」图标按钮 + 历史下拉（`PATCH chat-sessions/[id]` 自动以首条消息为标题，`ChatRepository.renameSession` + contracts `PatchChatSessionRequestSchema`）。StudioCanvas 删除空画布模板引导弹层。单测 providers 84 全绿（新增 anthropic 请求体/错误信封 2 例）、web 71 全绿。浏览器实测（dev:local + 真实 kie）：gemini-3-8-flash-openai 回合成功且署名正确、新建对话 ✓、自动标题 ✓、历史列表/切换 ✓。Claude 端点 kie 侧持续 429「Internal error」，代码路径就绪但未能真实验证 |
 
+| PR-7-17 | 「用作提示词」一键填入提示词条 | DONE | owner ruling 2026-09-19：参谋优化后的提示词一点击就进文本框。PromptBar 新增 `inject{text,nonce}` prop（nonce 变化即覆盖输入框并聚焦）；`handleUsePrompt` 从「写入选中生图卡（未选中报错）」改为直接填入底部提示词条。web typecheck+71 测试全绿；浏览器实测点击后填入+聚焦 ✓（commit `12972a4`） |
+
 ### PR-7 commands / evidence (implementer)
 
 | Command | Result |
