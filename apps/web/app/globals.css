@@ -606,6 +606,15 @@ code {
   font-size: 10px;
 }
 
+.studio-node-note {
+  color: var(--warn-text);
+}
+
+.prompt-bar-note {
+  font-size: 11px;
+  color: var(--warn-text);
+}
+
 .stepper {
   display: flex;
   gap: var(--space-2);

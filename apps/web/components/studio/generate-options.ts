@@ -17,6 +17,18 @@ export const FALLBACK_RESOLUTIONS = ['1K', '2K', '4K'];
 export const AUTO_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
 export const AUTO_RESOLUTIONS = ['1K', '2K'];
 
+/**
+ * 模型 × 参考图连线兼容性：返回禁用原因（null = 可用）。
+ * t2i-only 模型在已连参考图时禁用；i2i-only 模型在无参考图时禁用。
+ */
+export function modelDisabledReason(m: ModelOptionItem, hasReferences: boolean): string | null {
+  const caps = m.capabilities;
+  if (!caps) return null;
+  if (hasReferences && !caps.i2i) return '该模型不支持参考图';
+  if (!hasReferences && !caps.t2i) return '该模型必须连接参考图';
+  return null;
+}
+
 export function withCurrentValue(options: string[], current: string): string[] {
   return current && !options.includes(current) ? [current, ...options] : options;
 }

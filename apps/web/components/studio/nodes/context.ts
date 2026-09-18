@@ -62,6 +62,8 @@ export type NodeActionContextValue = {
   isStale: (nodeId: string) => boolean;
   /** 图片卡快捷操作：在右侧派生一张连好参考图的生图卡并选中。 */
   spawnGenerateFrom: (sourceNodeId: string, preset: ImageQuickAction) => void;
+  /** nodeId → 该节点 references 端口是否已连参考图。 */
+  hasReferences: (nodeId: string) => boolean;
   /** 单节点运行（scope: NODES）。 */
   runNode: (nodeId: string) => void;
   runBusy: boolean;
@@ -79,6 +81,7 @@ export const NodeActionContext = createContext<NodeActionContextValue>({
   resultImages: () => [],
   isStale: () => false,
   spawnGenerateFrom: () => {},
+  hasReferences: () => false,
   runNode: () => {},
   runBusy: false,
   connectedPromptText: () => null,

@@ -4,10 +4,10 @@
  * 底部浮动提示词条：选中唯一生图卡时绑定它；否则提交时先在视图中心建一张生图卡。
  * 提交 = configure + 单节点 run（由 StudioCanvas 命令层完成）。
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { modelLabelZh } from '@/lib/zh-labels';
 import type { ModelOptionItem } from './config-options';
-import { RESOLUTION_ZH, generateOptionSets } from './generate-options';
+import { RESOLUTION_ZH, generateOptionSets, modelDisabledReason } from './generate-options';
 
 export type PromptBarValues = {
   prompt: string;
@@ -22,16 +22,28 @@ const COUNT_OPTIONS = ['1', '2', '3', '4'];
 export function PromptBar(props: {
   /** 当前绑定的生图卡（选中且唯一）；null = 提交时新建。 */
   bound: { id: string; config: Record<string, unknown> } | null;
+  /** 绑定的生图卡是否已连参考图（驱动模型 t2i/i2i 置灰）。 */
+  boundHasReferences: boolean;
   models: ModelOptionItem[] | null;
   busy: boolean;
   onSubmit: (values: PromptBarValues, boundId: string | null) => void;
 }) {
-  const { bound, models, busy, onSubmit } = props;
+  const { bound, boundHasReferences, models, busy, onSubmit } = props;
   const [prompt, setPrompt] = useState('');
   const [modelKey, setModelKey] = useState('auto');
   const [ratio, setRatio] = useState('1:1');
   const [resolution, setResolution] = useState('2K');
   const [count, setCount] = useState('2');
+  const [note, setNote] = useState<string | null>(null);
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flash = (msg: string) => {
+    setNote(msg);
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = setTimeout(() => setNote(null), 4000);
+  };
+  useEffect(() => () => {
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+  }, []);
 
   const boundId = bound?.id ?? null;
   useEffect(() => {
@@ -96,18 +108,45 @@ export function PromptBar(props: {
         <select
           className="prompt-bar-select"
           value={isAuto ? 'auto' : modelKey}
-          onChange={(e) => setModelKey(e.target.value)}
+          onChange={(e) => {
+            const key = e.target.value;
+            setModelKey(key);
+            // 换模型时把不支持的比例/清晰度切到第一可用档
+            const m = modelOptions.find((x) => x.key === key);
+            if (m?.ratios && m.ratios.length > 0 && !m.ratios.includes(ratio)) {
+              setRatio(m.ratios[0] as string);
+              flash(`该模型不支持 ${ratio}，已切换到 ${m.ratios[0]}`);
+            }
+            if (
+              m?.resolutionTiers &&
+              m.resolutionTiers.length > 0 &&
+              !m.resolutionTiers.includes(resolution)
+            ) {
+              setResolution(m.resolutionTiers[0] as string);
+              flash(
+                `该模型不支持 ${RESOLUTION_ZH[resolution] ?? resolution}，已切换到 ${m.resolutionTiers[0]}`,
+              );
+            }
+          }}
           title="模型"
         >
           <option value="auto">智能匹配（自动）</option>
           {models !== null && !isAuto && !current && modelKey ? (
             <option value={modelKey}>{modelLabelZh({ key: modelKey })}（不可用）</option>
           ) : null}
-          {modelOptions.map((m) => (
-            <option key={m.key} value={m.key}>
-              {modelLabelZh(m)}
-            </option>
-          ))}
+          {modelOptions.map((m) => {
+            const reason = modelDisabledReason(m, boundHasReferences);
+            return (
+              <option
+                key={m.key}
+                value={m.key}
+                disabled={reason !== null}
+                title={reason ?? m.rules?.join('；') ?? undefined}
+              >
+                {modelLabelZh(m)}
+              </option>
+            );
+          })}
         </select>
         <select
           className="prompt-bar-select"
@@ -147,6 +186,7 @@ export function PromptBar(props: {
         </select>
         {boundId ? <span className="prompt-bar-bound faint">已绑定选中的生图卡</span> : null}
       </div>
+      {note ? <div className="prompt-bar-note">{note}</div> : null}
     </div>
   );
 }

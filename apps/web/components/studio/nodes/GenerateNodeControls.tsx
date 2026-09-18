@@ -1,11 +1,11 @@
 'use client';
 
-import { useContext } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { modelLabelZh } from '@/lib/zh-labels';
 import { NodeActionContext } from './context';
-import { RESOLUTION_ZH, generateOptionSets } from '../generate-options';
+import { RESOLUTION_ZH, generateOptionSets, modelDisabledReason } from '../generate-options';
 
-/** 生成节点卡片内联控件：模型 / 比例 / 清晰度（比例与清晰度跟随所选模型的能力）。 */
+/** 生成节点卡片内联控件：模型 / 比例 / 清晰度（选项跟随所选模型能力，参考图状态置灰不兼容模型）。 */
 export function GenerateNodeControls(props: { nodeId: string; config?: Record<string, unknown> }) {
   const actions = useContext(NodeActionContext);
   const cfg = props.config ?? {};
@@ -18,6 +18,39 @@ export function GenerateNodeControls(props: { nodeId: string; config?: Record<st
     ratio,
     resolution,
   );
+  const hasRefs = actions.hasReferences(props.nodeId);
+  const [note, setNote] = useState<string | null>(null);
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flash = (msg: string) => {
+    setNote(msg);
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = setTimeout(() => setNote(null), 4000);
+  };
+  useEffect(() => () => {
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+  }, []);
+
+  // 选中模型不支持当前比例/清晰度时自动切到第一可用档并提示。
+  useEffect(() => {
+    if (isAuto || !current) return;
+    if (current.ratios && current.ratios.length > 0 && !current.ratios.includes(ratio)) {
+      actions.updateConfig(props.nodeId, 'ratio', current.ratios[0] as string);
+      flash(`该模型不支持 ${ratio}，已切换到 ${current.ratios[0]}`);
+      return;
+    }
+    if (
+      current.resolutionTiers &&
+      current.resolutionTiers.length > 0 &&
+      !current.resolutionTiers.includes(resolution)
+    ) {
+      actions.updateConfig(props.nodeId, 'resolution', current.resolutionTiers[0] as string);
+      flash(`该模型不支持 ${RESOLUTION_ZH[resolution] ?? resolution}，已切换到 ${current.resolutionTiers[0]}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuto, current?.key, ratio, resolution]);
+
+  const currentReason = current ? modelDisabledReason(current, hasRefs) : null;
+
   return (
     <div className="studio-node-controls nodrag" onClick={(e) => e.stopPropagation()}>
       <label className="studio-node-field">
@@ -30,11 +63,19 @@ export function GenerateNodeControls(props: { nodeId: string; config?: Record<st
           {actions.models !== null && !isAuto && !current && modelKey ? (
             <option value={modelKey}>{modelLabelZh({ key: modelKey })}（不可用）</option>
           ) : null}
-          {models.map((m) => (
-            <option key={m.key} value={m.key}>
-              {modelLabelZh(m)}
-            </option>
-          ))}
+          {models.map((m) => {
+            const reason = modelDisabledReason(m, hasRefs);
+            return (
+              <option
+                key={m.key}
+                value={m.key}
+                disabled={reason !== null}
+                title={reason ?? m.rules?.join('；') ?? undefined}
+              >
+                {modelLabelZh(m)}
+              </option>
+            );
+          })}
         </select>
       </label>
       <label className="studio-node-field">
@@ -63,6 +104,10 @@ export function GenerateNodeControls(props: { nodeId: string; config?: Record<st
           ))}
         </select>
       </label>
+      {note ? <div className="studio-node-cost studio-node-note">{note}</div> : null}
+      {currentReason ? (
+        <div className="studio-node-cost studio-node-note">{currentReason}，请更换模型</div>
+      ) : null}
       {isAuto ? (
         <div className="studio-node-cost faint">只写提示词 → 文生图；连了参考图 → 图生图</div>
       ) : current?.pricing ? (

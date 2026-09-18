@@ -958,6 +958,15 @@ function StudioCanvasInner(props: {
     return map;
   }, [nodes, edges]);
 
+  // references 端口已连参考图的节点集合（驱动模型 t2i/i2i 置灰）
+  const nodesWithReferences = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of edges) {
+      if (e.targetHandle === 'references' || e.targetHandle === 'image') set.add(e.target);
+    }
+    return set;
+  }, [edges]);
+
   // 图片卡底部小字：assetVersionId → 素材文件名
   const assetNameByVersion = useMemo(() => {
     const map = new Map<string, string>();
@@ -1073,6 +1082,7 @@ function StudioCanvasInner(props: {
       resultImages: (nodeId) => nodeResults[nodeId] ?? [],
       isStale: (nodeId) => nodeStale[nodeId] === true,
       spawnGenerateFrom,
+      hasReferences: (nodeId) => nodesWithReferences.has(nodeId),
       runNode: (nodeId) => void runNode(nodeId),
       runBusy,
       connectedPromptText: (nodeId) => connectedPromptByNode.get(nodeId) ?? null,
@@ -1085,6 +1095,7 @@ function StudioCanvasInner(props: {
       nodeResults,
       nodeStale,
       spawnGenerateFrom,
+      nodesWithReferences,
       runNode,
       runBusy,
       connectedPromptByNode,
@@ -1786,6 +1797,7 @@ function StudioCanvasInner(props: {
           <Panel position="bottom-center">
             <PromptBar
               bound={boundGenerate}
+              boundHasReferences={boundGenerate ? nodesWithReferences.has(boundGenerate.id) : false}
               models={configOptions.models}
               busy={runBusy || runAllBusy}
               onSubmit={promptBarSubmit}
