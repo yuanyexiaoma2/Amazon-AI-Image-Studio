@@ -1649,6 +1649,23 @@ function StudioCanvasInner(props: {
     })();
   }
 
+  // 素材库面板「删除」：软删除（ARCHIVED）后刷新列表；画布上已引用它的卡片不受影响
+  function onRailDeleteAsset(assetId: string, name: string) {
+    void (async () => {
+      try {
+        const res = await fetch(`/api/workspaces/${workspaceId}/assets/${assetId}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        configOptions.reload();
+        setUploadNotice(`已删除素材 ${name}`);
+      } catch {
+        setUploadNotice(`删除失败：${name}`);
+      }
+    })();
+  }
+
   return (
     <div
       role="application"
@@ -1668,6 +1685,7 @@ function StudioCanvasInner(props: {
         assets={configOptions.assets}
         uploading={railUploading}
         onUploadFile={onRailUploadFile}
+        onDeleteAsset={onRailDeleteAsset}
         historyPanel={
           <HistoryPanel
             workspaceId={workspaceId}

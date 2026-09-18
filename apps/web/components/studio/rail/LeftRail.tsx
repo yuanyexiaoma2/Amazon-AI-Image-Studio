@@ -66,9 +66,18 @@ function AssetsFlyout(props: {
   assets: AssetOptionItem[] | null;
   uploading: boolean;
   onUploadFile: (file: File) => void;
+  onDeleteAsset: (assetId: string, name: string) => void;
 }) {
-  const { workspaceId, assets, uploading, onUploadFile } = props;
+  const { workspaceId, assets, uploading, onUploadFile, onDeleteAsset } = props;
   const fileRef = useRef<HTMLInputElement | null>(null);
+  // 两段式删除：第一次点进入确认态（红色 ✕→「删？」），3 秒内再点才真删
+  const [armingId, setArmingId] = useState<string | null>(null);
+  const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const arm = (id: string) => {
+    if (armTimer.current) clearTimeout(armTimer.current);
+    setArmingId(id);
+    armTimer.current = setTimeout(() => setArmingId(null), 3000);
+  };
   const ready = (assets ?? []).filter((a) => a.currentVersionId && a.status !== 'ARCHIVED');
   return (
     <div className="stack">
@@ -100,27 +109,49 @@ function AssetsFlyout(props: {
         <div className="faint">还没有素材 — 点「上传」或直接把图片文件拖进画布。</div>
       ) : (
         <div className="studio-asset-grid">
-          {ready.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              className="studio-asset-item"
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData('application/studio-asset', a.currentVersionId as string);
-                e.dataTransfer.effectAllowed = 'copy';
-              }}
-              title={`${a.originalFilename ?? a.id} — 拖到画布建成图片卡`}
-            >
-              <AssetImage
-                workspaceId={workspaceId}
-                versionId={a.currentVersionId}
-                size={72}
-                alt={a.originalFilename ?? '素材'}
-              />
-              <span className="studio-asset-name faint">{a.originalFilename ?? a.id.slice(0, 8)}</span>
-            </button>
-          ))}
+          {ready.map((a) => {
+            const name = a.originalFilename ?? a.id.slice(0, 8);
+            const armed = armingId === a.id;
+            return (
+              <span key={a.id} className="studio-asset-cell">
+                <button
+                  type="button"
+                  className="studio-asset-item"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('application/studio-asset', a.currentVersionId as string);
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  title={`${a.originalFilename ?? a.id} — 拖到画布建成图片卡`}
+                >
+                  <AssetImage
+                    workspaceId={workspaceId}
+                    versionId={a.currentVersionId}
+                    size={72}
+                    alt={a.originalFilename ?? '素材'}
+                  />
+                  <span className="studio-asset-name faint">{name}</span>
+                </button>
+                <button
+                  type="button"
+                  className={armed ? 'studio-asset-del studio-asset-del-armed' : 'studio-asset-del'}
+                  title={armed ? '再点一次确认删除' : '删除素材'}
+                  aria-label={armed ? '确认删除' : `删除素材 ${name}`}
+                  onClick={() => {
+                    if (armed) {
+                      if (armTimer.current) clearTimeout(armTimer.current);
+                      setArmingId(null);
+                      onDeleteAsset(a.id, name);
+                    } else {
+                      arm(a.id);
+                    }
+                  }}
+                >
+                  {armed ? '删？' : '✕'}
+                </button>
+              </span>
+            );
+          })}
         </div>
       )}
     </div>
@@ -150,9 +181,10 @@ export function LeftRail(props: {
   assets: AssetOptionItem[] | null;
   uploading: boolean;
   onUploadFile: (file: File) => void;
+  onDeleteAsset: (assetId: string, name: string) => void;
   historyPanel: ReactNode;
 }) {
-  const { panel, onToggle, onAddNode, onAddSuite, workspaceId, assets, uploading, onUploadFile, historyPanel } =
+  const { panel, onToggle, onAddNode, onAddSuite, workspaceId, assets, uploading, onUploadFile, onDeleteAsset, historyPanel } =
     props;
   const [suiteText, setSuiteText] = useState('');
   const btn = (kind: RailPanelKind, label: string) => (
@@ -240,6 +272,7 @@ export function LeftRail(props: {
               assets={assets}
               uploading={uploading}
               onUploadFile={onUploadFile}
+              onDeleteAsset={onDeleteAsset}
             />
           ) : null}
           {panel === 'history' ? historyPanel : null}
