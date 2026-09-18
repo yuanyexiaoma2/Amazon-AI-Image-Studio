@@ -1,0 +1,10 @@
+API Request Error: {
+  code: 10000,
+  data: null,
+  msg: '未知错误',
+  extra_msg: 'commerceclient PowerFreezeV2: code=2000001100, msg=本月积分使用已达上限，请联系团长调整积分使用上限',
+  trace_id: '0b6d8b3b-3fd7-4e78-9c1f-cec86e30a5dc',
+  time: '170ms',
+  traceId: undefined
+}
+创建生成任务失败 [10000]: 未知错误

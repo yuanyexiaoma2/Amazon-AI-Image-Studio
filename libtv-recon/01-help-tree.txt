@@ -1,0 +1,847 @@
+# 采集时间: 2026-09-18 12:02:25
+/c/Users/Administrator/.libtv/libtv
+1.0.2
+
+================================================================================
+$ libtv --help
+--------------------------------------------------------------------------------
+用法： libtv [options] [command]
+
+画布命令：登录、登出（logout）、账户（account）、项目、脚本（script）、节点、分组、上传、下载（download）、image（含
+`image shortcut` Slash）、模型。当前项目默认读取当前目录 `.libtv/project.json`（`libtv project
+use`）；默认分组见 `libtv group use`。
+
+选项：
+  -V, --version            显示版本号。
+  -h, --help               显示本命令说明。
+
+命令：
+  login                    登录：浏览器（web）或手机验证码。
+  logout                   退出登录：删除凭据文件、清除 LIBTV_TOKEN 与内存中的 token/webid 快照。
+  account                  多账户：查看当前账户信息、列出可切换账户、切换生效账户（个人 / 团队）。
+  project                  画布项目：新建、列表、更新、本地绑定(use/unuse)、画布摘要（含团队空间）。
+  upload [options] <node>  媒体上传：上传文件并建资源节点。
+  download [options]       下载节点资源到本地：`-n` 为节点 id
+                           或显示名。图片/视频/音频单节点直存文件；普通分组与多文件场景输出 ZIP（对齐画布「批量下载」命名）。
+  image                    图片类画布节点：Slash 快捷等子命令。
+  script                   脚本节点相关命令（分镜图组等）。
+  node [options] [node]    画布节点：`list` 列出（可选按分组）；`create` 仅新建（必填 -t）；`delete`
+                           删除。以下为「已有节点」默认用法（须传节点名；不传名仅 `node` 时打印本帮助）。新建请用 `node
+                           create`；默认子命令不接受 `-t`。
+  group                    普通分组：`list` 列出画布上所有普通 group；`create <group>`
+                           仅新建；`group [group]` 仅操作已有组（查询/绑定/`--node-rm`
+                           解绑/`--run`；已 `group use` 时可省略
+                           `<group>`）。`use`/`unuse` 维护 `.libtv/project.json`
+                           默认分组。
+  model [name...]          模型：`search` 在 supportModels 中检索（可选
+                           `-t/--type`）；`libtv model <name...>` 对
+                           modelKey/modelName 完全匹配后拉取完整 tool_spec schema。
+  help [command]           显示子命令说明。
+
+================================================================================
+$ libtv login --help
+--------------------------------------------------------------------------------
+用法： libtv login [options] [command]
+
+登录：浏览器（web）或手机验证码。
+
+选项：
+  -h, --help       显示本命令说明。
+
+命令：
+  web [options]    浏览器登录：启动本机回调服务，打印带 callback_url 的 LibTV 首页链接；登录成功后把 token 写入
+                   ~/.libtv/credentials.json（与旧版 token 凭据格式一致）。
+  phone [options]  手机登录：发短信、验证码两步。
+                   先 -p 发短信，再加 -c 完成登录。
+  help [command]   显示子命令说明。
+
+================================================================================
+$ libtv login web --help
+--------------------------------------------------------------------------------
+用法： libtv login web [options]
+
+浏览器登录：启动本机回调服务，打印带 callback_url 的 LibTV 首页链接；登录成功后把 token 写入
+~/.libtv/credentials.json（与旧版 token 凭据格式一致）。
+
+选项：
+  --open      尝试用系统默认浏览器打开登录链接
+  -h, --help  显示本命令说明。
+
+================================================================================
+$ libtv login phone --help
+--------------------------------------------------------------------------------
+用法： libtv login phone [options]
+
+手机登录：发短信、验证码两步。
+先 -p 发短信，再加 -c 完成登录。
+
+选项：
+  -p, --phone <phone>          11 位中国大陆手机号。
+  -c, --code <code>            短信中 6 位数字验证码。
+  --captcha <captcha-payload>  人机验证返回串。接口要求时在网页完成验证；将网页返回的验证参数字符串填于此。
+  -h, --help                   显示本命令说明。
+
+================================================================================
+$ libtv logout --help
+--------------------------------------------------------------------------------
+用法： libtv logout [options]
+
+退出登录：删除凭据文件、清除 LIBTV_TOKEN 与内存中的 token/webid 快照。
+
+选项：
+  -h, --help  显示本命令说明。
+
+================================================================================
+$ libtv account --help
+--------------------------------------------------------------------------------
+用法： libtv account [options] [command]
+
+多账户：查看当前账户信息、列出可切换账户、切换生效账户（个人 / 团队）。
+
+选项：
+  -h, --help      显示本命令说明。
+
+命令：
+  info            当前账号信息：登录用户 + 当前生效账户（个人/团队）的基本信息；顺便校准本机活跃账户作用域。
+  list|ls         账户列表：当前用户可切换到的全部账户（个人 + 团队），含 isActive 标识。
+  use <account>   切换当前生效账户：传 accountId（数字）或 accountName（精确名称）。
+  help [command]  显示子命令说明。
+
+================================================================================
+$ libtv account info --help
+--------------------------------------------------------------------------------
+用法： libtv account info [options]
+
+当前账号信息：登录用户 + 当前生效账户（个人/团队）的基本信息；顺便校准本机活跃账户作用域。
+
+选项：
+  -h, --help  显示本命令说明。
+
+================================================================================
+$ libtv account list --help
+--------------------------------------------------------------------------------
+用法： libtv account list|ls [options]
+
+账户列表：当前用户可切换到的全部账户（个人 + 团队），含 isActive 标识。
+
+选项：
+  -h, --help  显示本命令说明。
+
+================================================================================
+$ libtv account use --help
+--------------------------------------------------------------------------------
+用法： libtv account use [options] <account>
+
+切换当前生效账户：传 accountId（数字）或 accountName（精确名称）。
+
+参数：
+  account     目标账户：accountId（数字）或 accountName（精确字符串，重名时请改用 accountId）。
+
+选项：
+  -h, --help  显示本命令说明。
+
+================================================================================
+$ libtv workspace --help
+--------------------------------------------------------------------------------
+用法： libtv [options] [command]
+
+画布命令：登录、登出（logout）、账户（account）、项目、脚本（script）、节点、分组、上传、下载（download）、image（含
+`image shortcut` Slash）、模型。当前项目默认读取当前目录 `.libtv/project.json`（`libtv project
+use`）；默认分组见 `libtv group use`。
+
+选项：
+  -V, --version            显示版本号。
+  -h, --help               显示本命令说明。
+
+命令：
+  login                    登录：浏览器（web）或手机验证码。
+  logout                   退出登录：删除凭据文件、清除 LIBTV_TOKEN 与内存中的 token/webid 快照。
+  account                  多账户：查看当前账户信息、列出可切换账户、切换生效账户（个人 / 团队）。
+  project                  画布项目：新建、列表、更新、本地绑定(use/unuse)、画布摘要（含团队空间）。
+  upload [options] <node>  媒体上传：上传文件并建资源节点。
+  download [options]       下载节点资源到本地：`-n` 为节点 id
+                           或显示名。图片/视频/音频单节点直存文件；普通分组与多文件场景输出 ZIP（对齐画布「批量下载」命名）。
+  image                    图片类画布节点：Slash 快捷等子命令。
+  script                   脚本节点相关命令（分镜图组等）。
+  node [options] [node]    画布节点：`list` 列出（可选按分组）；`create` 仅新建（必填 -t）；`delete`
+                           删除。以下为「已有节点」默认用法（须传节点名；不传名仅 `node` 时打印本帮助）。新建请用 `node
+                           create`；默认子命令不接受 `-t`。
+  group                    普通分组：`list` 列出画布上所有普通 group；`create <group>`
+                           仅新建；`group [group]` 仅操作已有组（查询/绑定/`--node-rm`
+                           解绑/`--run`；已 `group use` 时可省略
+                           `<group>`）。`use`/`unuse` 维护 `.libtv/project.json`
+                           默认分组。
+  model [name...]          模型：`search` 在 supportModels 中检索（可选
+                           `-t/--type`）；`libtv model <name...>` 对
+                           modelKey/modelName 完全匹配后拉取完整 tool_spec schema。
+  help [command]           显示子命令说明。
+
+================================================================================
+$ libtv workspace create --help
+--------------------------------------------------------------------------------
+用法： libtv [options] [command]
+
+画布命令：登录、登出（logout）、账户（account）、项目、脚本（script）、节点、分组、上传、下载（download）、image（含
+`image shortcut` Slash）、模型。当前项目默认读取当前目录 `.libtv/project.json`（`libtv project
+use`）；默认分组见 `libtv group use`。
+
+选项：
+  -V, --version            显示版本号。
+  -h, --help               显示本命令说明。
+
+命令：
+  login                    登录：浏览器（web）或手机验证码。
+  logout                   退出登录：删除凭据文件、清除 LIBTV_TOKEN 与内存中的 token/webid 快照。
+  account                  多账户：查看当前账户信息、列出可切换账户、切换生效账户（个人 / 团队）。
+  project                  画布项目：新建、列表、更新、本地绑定(use/unuse)、画布摘要（含团队空间）。
+  upload [options] <node>  媒体上传：上传文件并建资源节点。
+  download [options]       下载节点资源到本地：`-n` 为节点 id
+                           或显示名。图片/视频/音频单节点直存文件；普通分组与多文件场景输出 ZIP（对齐画布「批量下载」命名）。
+  image                    图片类画布节点：Slash 快捷等子命令。
+  script                   脚本节点相关命令（分镜图组等）。
+  node [options] [node]    画布节点：`list` 列出（可选按分组）；`create` 仅新建（必填 -t）；`delete`
+                           删除。以下为「已有节点」默认用法（须传节点名；不传名仅 `node` 时打印本帮助）。新建请用 `node
+                           create`；默认子命令不接受 `-t`。
+  group                    普通分组：`list` 列出画布上所有普通 group；`create <group>`
+                           仅新建；`group [group]` 仅操作已有组（查询/绑定/`--node-rm`
+                           解绑/`--run`；已 `group use` 时可省略
+                           `<group>`）。`use`/`unuse` 维护 `.libtv/project.json`
+                           默认分组。
+  model [name...]          模型：`search` 在 supportModels 中检索（可选
+                           `-t/--type`）；`libtv model <name...>` 对
+                           modelKey/modelName 完全匹配后拉取完整 tool_spec schema。
+  help [command]           显示子命令说明。
+
+================================================================================
+$ libtv workspace list --help
+--------------------------------------------------------------------------------
+用法： libtv [options] [command]
+
+画布命令：登录、登出（logout）、账户（account）、项目、脚本（script）、节点、分组、上传、下载（download）、image（含
+`image shortcut` Slash）、模型。当前项目默认读取当前目录 `.libtv/project.json`（`libtv project
+use`）；默认分组见 `libtv group use`。
+
+选项：
+  -V, --version            显示版本号。
+  -h, --help               显示本命令说明。
+
+命令：
+  login                    登录：浏览器（web）或手机验证码。
+  logout                   退出登录：删除凭据文件、清除 LIBTV_TOKEN 与内存中的 token/webid 快照。
+  account                  多账户：查看当前账户信息、列出可切换账户、切换生效账户（个人 / 团队）。
+  project                  画布项目：新建、列表、更新、本地绑定(use/unuse)、画布摘要（含团队空间）。
+  upload [options] <node>  媒体上传：上传文件并建资源节点。
+  download [options]       下载节点资源到本地：`-n` 为节点 id
+                           或显示名。图片/视频/音频单节点直存文件；普通分组与多文件场景输出 ZIP（对齐画布「批量下载」命名）。
+  image                    图片类画布节点：Slash 快捷等子命令。
+  script                   脚本节点相关命令（分镜图组等）。
+  node [options] [node]    画布节点：`list` 列出（可选按分组）；`create` 仅新建（必填 -t）；`delete`
+                           删除。以下为「已有节点」默认用法（须传节点名；不传名仅 `node` 时打印本帮助）。新建请用 `node
+                           create`；默认子命令不接受 `-t`。
+  group                    普通分组：`list` 列出画布上所有普通 group；`create <group>`
+                           仅新建；`group [group]` 仅操作已有组（查询/绑定/`--node-rm`
+                           解绑/`--run`；已 `group use` 时可省略
+                           `<group>`）。`use`/`unuse` 维护 `.libtv/project.json`
+                           默认分组。
+  model [name...]          模型：`search` 在 supportModels 中检索（可选
+                           `-t/--type`）；`libtv model <name...>` 对
+                           modelKey/modelName 完全匹配后拉取完整 tool_spec schema。
+  help [command]           显示子命令说明。
+
+================================================================================
+$ libtv workspace update --help
+--------------------------------------------------------------------------------
+用法： libtv [options] [command]
+
+画布命令：登录、登出（logout）、账户（account）、项目、脚本（script）、节点、分组、上传、下载（download）、image（含
+`image shortcut` Slash）、模型。当前项目默认读取当前目录 `.libtv/project.json`（`libtv project
+use`）；默认分组见 `libtv group use`。
+
+选项：
+  -V, --version            显示版本号。
+  -h, --help               显示本命令说明。
+
+命令：
+  login                    登录：浏览器（web）或手机验证码。
+  logout                   退出登录：删除凭据文件、清除 LIBTV_TOKEN 与内存中的 token/webid 快照。
+  account                  多账户：查看当前账户信息、列出可切换账户、切换生效账户（个人 / 团队）。
+  project                  画布项目：新建、列表、更新、本地绑定(use/unuse)、画布摘要（含团队空间）。
+  upload [options] <node>  媒体上传：上传文件并建资源节点。
+  download [options]       下载节点资源到本地：`-n` 为节点 id
+                           或显示名。图片/视频/音频单节点直存文件；普通分组与多文件场景输出 ZIP（对齐画布「批量下载」命名）。
+  image                    图片类画布节点：Slash 快捷等子命令。
+  script                   脚本节点相关命令（分镜图组等）。
+  node [options] [node]    画布节点：`list` 列出（可选按分组）；`create` 仅新建（必填 -t）；`delete`
+                           删除。以下为「已有节点」默认用法（须传节点名；不传名仅 `node` 时打印本帮助）。新建请用 `node
+                           create`；默认子命令不接受 `-t`。
+  group                    普通分组：`list` 列出画布上所有普通 group；`create <group>`
+                           仅新建；`group [group]` 仅操作已有组（查询/绑定/`--node-rm`
+                           解绑/`--run`；已 `group use` 时可省略
+                           `<group>`）。`use`/`unuse` 维护 `.libtv/project.json`
+                           默认分组。
+  model [name...]          模型：`search` 在 supportModels 中检索（可选
+                           `-t/--type`）；`libtv model <name...>` 对
+                           modelKey/modelName 完全匹配后拉取完整 tool_spec schema。
+  help [command]           显示子命令说明。
+
+================================================================================
+$ libtv workspace use --help
+--------------------------------------------------------------------------------
+用法： libtv [options] [command]
+
+画布命令：登录、登出（logout）、账户（account）、项目、脚本（script）、节点、分组、上传、下载（download）、image（含
+`image shortcut` Slash）、模型。当前项目默认读取当前目录 `.libtv/project.json`（`libtv project
+use`）；默认分组见 `libtv group use`。
+
+选项：
+  -V, --version            显示版本号。
+  -h, --help               显示本命令说明。
+
+命令：
+  login                    登录：浏览器（web）或手机验证码。
+  logout                   退出登录：删除凭据文件、清除 LIBTV_TOKEN 与内存中的 token/webid 快照。
+  account                  多账户：查看当前账户信息、列出可切换账户、切换生效账户（个人 / 团队）。
+  project                  画布项目：新建、列表、更新、本地绑定(use/unuse)、画布摘要（含团队空间）。
+  upload [options] <node>  媒体上传：上传文件并建资源节点。
+  download [options]       下载节点资源到本地：`-n` 为节点 id
+                           或显示名。图片/视频/音频单节点直存文件；普通分组与多文件场景输出 ZIP（对齐画布「批量下载」命名）。
+  image                    图片类画布节点：Slash 快捷等子命令。
+  script                   脚本节点相关命令（分镜图组等）。
+  node [options] [node]    画布节点：`list` 列出（可选按分组）；`create` 仅新建（必填 -t）；`delete`
+                           删除。以下为「已有节点」默认用法（须传节点名；不传名仅 `node` 时打印本帮助）。新建请用 `node
+                           create`；默认子命令不接受 `-t`。
+  group                    普通分组：`list` 列出画布上所有普通 group；`create <group>`
+                           仅新建；`group [group]` 仅操作已有组（查询/绑定/`--node-rm`
+                           解绑/`--run`；已 `group use` 时可省略
+                           `<group>`）。`use`/`unuse` 维护 `.libtv/project.json`
+                           默认分组。
+  model [name...]          模型：`search` 在 supportModels 中检索（可选
+                           `-t/--type`）；`libtv model <name...>` 对
+                           modelKey/modelName 完全匹配后拉取完整 tool_spec schema。
+  help [command]           显示子命令说明。
+
+================================================================================
+$ libtv workspace unuse --help
+--------------------------------------------------------------------------------
+用法： libtv [options] [command]
+
+画布命令：登录、登出（logout）、账户（account）、项目、脚本（script）、节点、分组、上传、下载（download）、image（含
+`image shortcut` Slash）、模型。当前项目默认读取当前目录 `.libtv/project.json`（`libtv project
+use`）；默认分组见 `libtv group use`。
+
+选项：
+  -V, --version            显示版本号。
+  -h, --help               显示本命令说明。
+
+命令：
+  login                    登录：浏览器（web）或手机验证码。
+  logout                   退出登录：删除凭据文件、清除 LIBTV_TOKEN 与内存中的 token/webid 快照。
+  account                  多账户：查看当前账户信息、列出可切换账户、切换生效账户（个人 / 团队）。
+  project                  画布项目：新建、列表、更新、本地绑定(use/unuse)、画布摘要（含团队空间）。
+  upload [options] <node>  媒体上传：上传文件并建资源节点。
+  download [options]       下载节点资源到本地：`-n` 为节点 id
+                           或显示名。图片/视频/音频单节点直存文件；普通分组与多文件场景输出 ZIP（对齐画布「批量下载」命名）。
+  image                    图片类画布节点：Slash 快捷等子命令。
+  script                   脚本节点相关命令（分镜图组等）。
+  node [options] [node]    画布节点：`list` 列出（可选按分组）；`create` 仅新建（必填 -t）；`delete`
+                           删除。以下为「已有节点」默认用法（须传节点名；不传名仅 `node` 时打印本帮助）。新建请用 `node
+                           create`；默认子命令不接受 `-t`。
+  group                    普通分组：`list` 列出画布上所有普通 group；`create <group>`
+                           仅新建；`group [group]` 仅操作已有组（查询/绑定/`--node-rm`
+                           解绑/`--run`；已 `group use` 时可省略
+                           `<group>`）。`use`/`unuse` 维护 `.libtv/project.json`
+                           默认分组。
+  model [name...]          模型：`search` 在 supportModels 中检索（可选
+                           `-t/--type`）；`libtv model <name...>` 对
+                           modelKey/modelName 完全匹配后拉取完整 tool_spec schema。
+  help [command]           显示子命令说明。
+
+================================================================================
+$ libtv project --help
+--------------------------------------------------------------------------------
+用法： libtv project [options] [command]
+
+画布项目：新建、列表、更新、本地绑定(use/unuse)、画布摘要（含团队空间）。
+
+选项：
+  -h, --help                      显示本命令说明。
+
+命令：
+  create [options] <project>      项目新建：创建空白画布项目。
+                                  默认按「当前活跃账户作用域」(`libtv account use` 写入)决定落地空间，与
+                                  lib `createNewProject(scope='auto')` 一致；显式
+                                  `--team-id <n>` 覆盖，`--team-id 0` 强制建到个人。
+  list|ls [options]               项目列表：分页、筛选、排序。
+                                  默认走「当前活跃账户作用域」的 teamId（由 `libtv account use`
+                                  写入），与 lib 端 `vipInfoStore.vipInfo.teamId`
+                                  自动注入语义一致；显式传 `--team-id <n>` 覆盖，`--team-id 0`
+                                  强制查个人项目。
+  update [options] <projectUuid>  项目更新：修改画布项目名称 / 简介 / 封面 / 所在文件夹（团队项目同样适用）。
+  use <project>                   将当前目录绑定到画布项目：创建
+                                  .libtv/project.json（会清除原默认分组绑定）。
+  unuse                           解除当前目录与项目的绑定（删除 .libtv/project.json，同时解除默认分组）。
+  help [command]                  显示子命令说明。
+
+================================================================================
+$ libtv project create --help
+--------------------------------------------------------------------------------
+用法： libtv project create [options] <project>
+
+项目新建：创建空白画布项目。
+默认按「当前活跃账户作用域」(`libtv account use` 写入)决定落地空间，与 lib
+`createNewProject(scope='auto')` 一致；显式 `--team-id <n>` 覆盖，`--team-id 0` 强制建到个人。
+
+参数：
+  project                   项目名称（展示用）。
+
+选项：
+  -d, --description <text>  项目简介（可选）。
+  --cover-url <url>         封面图链接（可选）。
+  -t, --team-id <n>         所属团队 ID（可选；与 lib `CreateProjectReq.teamId` 一致）。
+                            缺省 = 跟随当前活跃账户的 scope；传 0 = 强制个人空间。
+  --folder-id <n>           父文件夹 id（可选；0/不传 = 根目录，与 lib
+                            `CreateProjectReq.folderId` 一致）。
+  -h, --help                显示本命令说明。
+
+================================================================================
+$ libtv project list --help
+--------------------------------------------------------------------------------
+用法： libtv project list|ls [options]
+
+项目列表：分页、筛选、排序。
+默认走「当前活跃账户作用域」的 teamId（由 `libtv account use` 写入），与 lib 端
+`vipInfoStore.vipInfo.teamId` 自动注入语义一致；显式传 `--team-id <n>` 覆盖，`--team-id 0`
+强制查个人项目。
+
+选项：
+  -p, --page <n>          页码，从 1 起。 (默认： 1)
+  -s, --page-size <n>     每页条数。 (默认： 20)
+  -o, --order-by <field>  排序方式（须传接口约定ID）：最近更新；按编辑时间由新到旧；按编辑时间由旧到新。 (默认：
+                          "updated_at_desc")
+  --name <text>           名称含该关键字则保留；子串匹配。
+  -t, --team-id <n>       团队空间过滤：>0 时仅返回该团队下的项目（与 lib `ListProjectsReq.teamId`
+                          一致）。
+                          缺省 = 跟随 `libtv account use` 写入的 scope；传 0 = 强制个人项目。
+  -h, --help              显示本命令说明。
+
+================================================================================
+$ libtv project update --help
+--------------------------------------------------------------------------------
+用法： libtv project update [options] <projectUuid>
+
+项目更新：修改画布项目名称 / 简介 / 封面 / 所在文件夹（团队项目同样适用）。
+
+参数：
+  projectUuid               画布项目 UUID。
+
+选项：
+  -n, --name <text>         新项目名称。
+  -d, --description <text>  新项目简介。
+  --cover-url <url>         新封面图链接（传空字符串可清空）。
+  --folder-id <n>           父文件夹 id（0 = 根目录；可用于「移动至文件夹」）。
+  -h, --help                显示本命令说明。
+
+================================================================================
+$ libtv project use --help
+--------------------------------------------------------------------------------
+用法： libtv project use [options] <project>
+
+将当前目录绑定到画布项目：创建 .libtv/project.json（会清除原默认分组绑定）。
+
+参数：
+  project     画布项目：仅支持 UUID，不支持按名称匹配。
+
+选项：
+  -h, --help  显示本命令说明。
+
+================================================================================
+$ libtv project unuse --help
+--------------------------------------------------------------------------------
+用法： libtv project unuse [options]
+
+解除当前目录与项目的绑定（删除 .libtv/project.json，同时解除默认分组）。
+
+选项：
+  -h, --help  显示本命令说明。
+
+================================================================================
+$ libtv node --help
+--------------------------------------------------------------------------------
+用法： libtv node [options] [command] [node]
+
+画布节点：`list` 列出（可选按分组）；`create` 仅新建（必填 -t）；`delete` 删除。以下为「已有节点」默认用法（须传节点名；不传名仅
+`node` 时打印本帮助）。新建请用 `node create`；默认子命令不接受 `-t`。
+
+参数：
+  node                     默认用法：目标节点 ID 或展示名；精确匹配，ID 优先。
+                           无写参且未接管道仅列出匹配项。
+                           无写参且标准输入为逐行 JSON 则补入边，缺边则创建。
+
+选项：
+  -p, --project <project>  目标项目 UUID（可选）。缺省见根命令 --help。
+  -g, --group <group>      可选。父级普通分组：解析与改边仅限该组 childNodeIds。未传时若当前目录已 `libtv
+                           group use` 绑定默认分组，则自动套用同一限定。
+  --prompt <text>          写入节点参数中的提示词。与 --set 同用时后写覆盖同名键。
+  --name <text>            将节点展示名更新为指定文本。
+  -s, --set <pair>         改「生成器参数」（写
+                           `data.params`）——影响模型这次怎么生成。键=值，可重复；仅拆分首个等号，值支持
+                           true/false/数字/JSON。
+                           可选字段见 `libtv model <model>`，常见如 model / ratio / count
+                           / settings.*。
+                           model 只接受模型名字（modelName），如 `-s model=可灵O1`（用 `libtv
+                           model search` 查看可用名字）。
+                           例：-s model=可灵O1  -s ratio=16:9  -s count=2 (默认： [])
+  -u, --update <pair>      改「节点自身属性」（写 `data` 顶层，不含
+                           `params`）——节点本体承载的内容，不影响模型参数。键=值，可重复；语法同 `--set`。
+                           典型字段：文本的 `content`、脚本/分镜的 `rows` 等。
+                           例：-u content='["Hello"]'  -u contentWidth=720
+                           注意：展示名用 `--name`；`params` 用 `--set`/`--prompt`；`type`
+                           不可改。 (默认： [])
+  --left <node>            入边（确保）：上游节点ID或名称。ID优先；无则建边，有则不变。
+                           注意：不可与 --left-add、--left-rm 同用。 (默认： [])
+  --left-add <node>        入边（追加）：上游节点ID或名称。ID优先；可重复。 (默认： [])
+  --left-rm <node>         入边（移除）：上游节点ID或名称。ID优先；可重复。 (默认： [])
+  --right <node>           出边（确保）：下游节点ID或名称。ID优先；无则建边，有则不变。
+                           注意：不可与 --right-add、--right-rm 同用。 (默认： [])
+  --right-add <node>       出边（追加）：下游节点ID或名称。ID优先；可重复。 (默认： [])
+  --right-rm <node>        出边（移除）：下游节点ID或名称。ID优先；可重复。 (默认： [])
+  --x <n>                  与 `node create` 联用：画布 X（像素）（由父级 `node` 解析，勿在 create
+                           上重复声明）。 (默认： "0")
+  --y <n>                  与 `node create` 联用：画布 Y（像素）（由父级 `node` 解析，勿在 create
+                           上重复声明）。 (默认： "0")
+  -r, --run                主流程成功后触发生成一次。管道为逐行 JSON 时可串联下游画布节点命令。
+  -h, --help               显示本命令说明。
+
+命令：
+  list [options]           列出画布节点。
+  create [options] <node>  新建画布节点（-t 必填）；支持 --left/--right 与
+                           --left-add/--left-rm 等；--group
+                           限定在父分组的子节点内解析并将新节点挂入该组。画布坐标请用父级「libtv node」的
+                           --x/--y（勿与 create 重复声明，否则坐标会落为 0）。
+  delete [options] <node>  删除指定节点及其全部连线。
+
+================================================================================
+$ libtv node create --help
+--------------------------------------------------------------------------------
+用法： libtv node create [options] <node>
+
+新建画布节点（-t 必填）；支持 --left/--right 与 --left-add/--left-rm 等；--group
+限定在父分组的子节点内解析并将新节点挂入该组。画布坐标请用父级「libtv node」的 --x/--y（勿与 create 重复声明，否则坐标会落为 0）。
+
+参数：
+  node                     新节点展示名（画布上需唯一）。
+
+选项：
+  -p, --project <project>  目标项目 UUID（可选）。缺省见根命令 --help。
+  -g, --group <group>      可选。父级普通分组：新建挂到该组；解析边端点名/id 仅限该组 childNodeIds。未传时若已
+                           `group use` 则默认该绑定分组。
+  -t, --type <type>        节点类型（text、image、video、audio、group、script、video-clip）；新建必填。
+  --prompt <text>          写入节点参数中的提示词。与 --set 同用时后写覆盖同名键。
+  -s, --set <pair>         写入节点参数：键=值，可重复。仅拆分首个等号；值可为结构化文本。
+                           例：-s 比例=16:9。模型：-s model=<模型名字>
+                           （model 只接受模型名字 modelName，如 `-s model=可灵O1`；用 `libtv
+                           model search` 查看可用名字，传 modelKey 会报错提示）。 (默认： [])
+  -u, --update <pair>      改「节点自身属性」（写 `data` 顶层，不含
+                           `params`）——节点本体承载的内容，不影响模型参数。键=值，可重复；语法同 `--set`。
+                           典型字段：文本的 `content`、脚本/分镜的 `rows` 等。
+                           例：-u content='["Hello"]'  -u contentWidth=720
+                           注意：展示名由位置参数 `<node>` 承载；`params` 用
+                           `--set`/`--prompt`；`type` 不可改。 (默认： [])
+  --left <node>            入边（确保）：上游节点ID或名称。ID优先；无则建边，有则不变。
+                           注意：不可与 --left-add、--left-rm 同用。 (默认： [])
+  --left-add <node>        入边（追加）：上游节点ID或名称。ID优先；可重复。 (默认： [])
+  --left-rm <node>         入边（移除）：上游节点ID或名称。ID优先；可重复。 (默认： [])
+  --right <node>           出边（确保）：下游节点ID或名称。ID优先；无则建边，有则不变。
+                           注意：不可与 --right-add、--right-rm 同用。 (默认： [])
+  --right-add <node>       出边（追加）：下游节点ID或名称。ID优先；可重复。 (默认： [])
+  --right-rm <node>        出边（移除）：下游节点ID或名称。ID优先；可重复。 (默认： [])
+  -r, --run                主流程成功后触发生成一次。管道为逐行 JSON 时可串联下游画布节点命令。
+  -h, --help               显示本命令说明。
+
+================================================================================
+$ libtv node list --help
+--------------------------------------------------------------------------------
+用法： libtv node list [options]
+
+列出画布节点。
+
+选项：
+  -p, --project <project>  目标项目 UUID（可选）。缺省见根命令 --help。
+  -g, --group <group>      可选。普通分组节点 ID 或展示名；仅列出该组 childNodeIds 中的节点。不传时若已
+                           `group use` 则默认该绑定分组；否则列出全部节点。
+  -h, --help               显示本命令说明。
+
+================================================================================
+$ libtv node delete --help
+--------------------------------------------------------------------------------
+用法： libtv node delete [options] <node>
+
+删除指定节点及其全部连线。
+
+参数：
+  node                     要删除的节点：节点 ID 或展示名。精确匹配；ID 优先。
+
+选项：
+  -p, --project <project>  目标项目 UUID（可选）。缺省见根命令 --help。
+  -g, --group <group>      可选。父级普通分组：仅允许删除该组 childNodeIds 内的节点。未传时若已 `group use`
+                           则默认该绑定分组。
+  -h, --help               显示本命令说明。
+
+================================================================================
+$ libtv group --help
+--------------------------------------------------------------------------------
+用法： libtv group [options] [command]
+
+普通分组：`list` 列出画布上所有普通 group；`create <group>` 仅新建；`group [group]`
+仅操作已有组（查询/绑定/`--node-rm` 解绑/`--run`；已 `group use` 时可省略 `<group>`）。`use`/`unuse`
+维护 `.libtv/project.json` 默认分组。
+
+选项：
+  -h, --help                显示本命令说明。
+
+命令：
+  use [options] <group>     将当前工作目录绑定到指定普通分组（写入 .libtv/project.json 的
+                            groupNodeKey）；未传 libtv node 的 -g/--group
+                            时，列表/解析/新建挂组/更新等限定在该分组子节点内。
+  unuse                     解除当前目录与默认分组的绑定（保留 project.json 中的项目）。
+  list [options]            列出画布普通分组；传 --group 时仅列出该父分组 childNodeIds 内的子分组节点。
+  create [options] <group>  新建普通分组：可建空组，或创建并绑定子节点（--node / 管道）。已有同名或同 id
+                            分组时失败；查询或向已有组绑定请用 libtv group <group>。
+  help [command]            显示子命令说明。
+
+================================================================================
+$ libtv group list --help
+--------------------------------------------------------------------------------
+用法： libtv group list [options]
+
+列出画布普通分组；传 --group 时仅列出该父分组 childNodeIds 内的子分组节点。
+
+选项：
+  -p, --project <project>  目标项目 UUID（可选）。缺省见根命令 --help。
+  -g, --group <group>      可选。父级普通分组：仅列出其 childNodeIds 中、且为普通 group 的节点。
+  -h, --help               显示本命令说明。
+
+================================================================================
+$ libtv group create --help
+--------------------------------------------------------------------------------
+用法： libtv group create [options] <group>
+
+新建普通分组：可建空组，或创建并绑定子节点（--node / 管道）。已有同名或同 id 分组时失败；查询或向已有组绑定请用 libtv group
+<group>。
+
+参数：
+  group                    新分组展示名（新建；与画布节点 id 冲突时需换名）。
+
+选项：
+  -p, --project <project>  目标项目 UUID（可选）。缺省见根命令 --help。
+  -g, --group <group>      可选。父级普通分组：新建分组（空组或
+                           create_bind）挂到该组下；解析「新分组名」冲突时也在该组子节点范围内比对。
+  --node <node>            待绑定子节点：ID或名称。ID优先；可重复。
+                           与标准输入逐行 JSON 合并。 (默认： [])
+  -r, --run                主流程成功后整组生成一次。管道场景输出为逐行 JSON。
+  -h, --help               显示本命令说明。
+
+================================================================================
+$ libtv group use --help
+--------------------------------------------------------------------------------
+用法： libtv group use [options] <group>
+
+将当前工作目录绑定到指定普通分组（写入 .libtv/project.json 的 groupNodeKey）；未传 libtv node 的
+-g/--group 时，列表/解析/新建挂组/更新等限定在该分组子节点内。
+
+参数：
+  group                    分组节点 ID 或展示名（规则与 libtv group <group> 一致）。
+
+选项：
+  -p, --project <project>  目标项目 UUID（可选）。缺省为当前目录 .libtv/project.json。
+  -g, --group <group>      可选。父级普通分组：仅在它的 childNodeIds 内解析 `<group>` 对应的分组节点。
+  -h, --help               显示本命令说明。
+
+================================================================================
+$ libtv group unuse --help
+--------------------------------------------------------------------------------
+用法： libtv group unuse [options]
+
+解除当前目录与默认分组的绑定（保留 project.json 中的项目）。
+
+选项：
+  -h, --help  显示本命令说明。
+
+================================================================================
+$ libtv upload --help
+--------------------------------------------------------------------------------
+用法： libtv upload [options] <node>
+
+媒体上传：上传文件并建资源节点。
+
+参数：
+  node                     新资源节点显示名称。写入节点名称字段。
+
+选项：
+  -p, --project <project>  目标项目 UUID（可选）。缺省见根命令 --help。
+  -g, --group <group>      可选。父级普通分组：新资源节点挂入该组（与 node --group 一致）。未传时若当前目录已
+                           `libtv group use` 绑定默认分组，则自动挂入该组。
+  --resource <path>        本地媒体文件路径。与 -f/--file 二选一，必填其一。
+  -f, --file <path>        同 --resource。
+  -t, --type <kind>        媒体种类：图片、视频或音频。省略时按扩展名推断。
+  --x <n>                  节点画布 X（像素）。 (默认： "0")
+  --y <n>                  节点画布 Y（像素）。 (默认： "0")
+  -h, --help               显示本命令说明。
+
+================================================================================
+$ libtv download --help
+--------------------------------------------------------------------------------
+用法： libtv download [options]
+
+下载节点资源到本地：`-n` 为节点 id 或显示名。图片/视频/音频单节点直存文件；普通分组与多文件场景输出 ZIP（对齐画布「批量下载」命名）。
+
+选项：
+  -n, --node <node>       目标节点 id 或显示名（与 `libtv node` 一致，支持 `group use` 下的子节点范围）
+  -p, --project <uuid>    项目 UUID（默认同其它命令：当前目录 `.libtv/project.json`）
+  -g, --group <node>      限定在普通分组子节点范围内解析 `-n`；批量下载该组时 `-n` 传分组节点 id
+  -o, --out <dir>         输出目录，默认当前工作目录 (默认： "C:\\Users\\Administrator")
+  --without-ai-watermark  偏好不添加 AI 水印（与画布「去水印」一致；会员且账号有效时图片/视频可走原链）
+  --vip                   声明当前账号为会员（等价 LIBTV_DOWNLOAD_IS_VIP=1；影响社区水印策略）
+  -h, --help              显示本命令说明。
+
+================================================================================
+$ libtv image --help
+--------------------------------------------------------------------------------
+用法： libtv image [options] [command]
+
+图片类画布节点：Slash 快捷等子命令。
+
+选项：
+  -h, --help                          显示本命令说明。
+
+命令：
+  shortcut [options] [cmdOrShortcut]  图片节点 Slash 快捷指令（与画布图片生成器输入 `/`
+                                      及图片工具栏九宫格一致）。 子模式：`list` 列出可 Slash 项；或
+                                      `<scene|label> -n <node>` 在源图节点上执行。
+  help [command]                      显示子命令说明。
+
+================================================================================
+$ libtv image shortcut --help
+--------------------------------------------------------------------------------
+用法： libtv image shortcut [options] [cmdOrShortcut]
+
+图片节点 Slash 快捷指令（与画布图片生成器输入 `/` 及图片工具栏九宫格一致）。 子模式：`list` 列出可 Slash 项；或
+`<scene|label> -n <node>` 在源图节点上执行。
+
+参数：
+  cmdOrShortcut            ① 列表子命令 `list`：列出 image 的 Slash 项。 ② 执行：传 scene 或
+                           label，并须带 `-n/--node` 指定源 `image` 节点（需有参考图）。
+
+选项：
+  -p, --project <project>  目标项目 UUID（可选）。缺省见根命令 --help。
+  -n, --node <node>        执行模式必填：源图片节点 id 或展示名（须为 `image` 节点，且具备参考图：入边或本节点
+                           http(s) 图）。
+  -g, --group <group>      可选。父级普通分组：解析 `-n` 仅限该组子节点。未传时若已 `libtv group use`
+                           则自动套用绑定分组。
+  --x <n>                  新建生成节点时的画布 X（像素）；默认取源节点绝对位置 + 偏移。
+  --y <n>                  新建生成节点时的画布 Y（像素）；默认与源节点对齐。
+  -h, --help               显示本命令说明。
+
+================================================================================
+$ libtv image shortcut list --help
+--------------------------------------------------------------------------------
+用法： libtv image shortcut [options] [cmdOrShortcut]
+
+图片节点 Slash 快捷指令（与画布图片生成器输入 `/` 及图片工具栏九宫格一致）。 子模式：`list` 列出可 Slash 项；或
+`<scene|label> -n <node>` 在源图节点上执行。
+
+参数：
+  cmdOrShortcut            ① 列表子命令 `list`：列出 image 的 Slash 项。 ② 执行：传 scene 或
+                           label，并须带 `-n/--node` 指定源 `image` 节点（需有参考图）。
+
+选项：
+  -p, --project <project>  目标项目 UUID（可选）。缺省见根命令 --help。
+  -n, --node <node>        执行模式必填：源图片节点 id 或展示名（须为 `image` 节点，且具备参考图：入边或本节点
+                           http(s) 图）。
+  -g, --group <group>      可选。父级普通分组：解析 `-n` 仅限该组子节点。未传时若已 `libtv group use`
+                           则自动套用绑定分组。
+  --x <n>                  新建生成节点时的画布 X（像素）；默认取源节点绝对位置 + 偏移。
+  --y <n>                  新建生成节点时的画布 Y（像素）；默认与源节点对齐。
+  -h, --help               显示本命令说明。
+
+================================================================================
+$ libtv script --help
+--------------------------------------------------------------------------------
+用法： libtv script [options] [command]
+
+脚本节点相关命令（分镜图组等）。
+
+选项：
+  -h, --help                   显示本命令说明。
+
+命令：
+  storyboard [options] <node>  从脚本节点在右侧创建分镜图组（与画布「生成分镜」一致）：校验目标为脚本节点；需有分镜行；分镜图模型与参数来自节点已保存的
+                               imageGenConfig，可用 --set 覆盖（对齐网页弹层里模型与设置）；未配置
+                               model 时按 supportModels.scriptImage
+                               默认首项；创建成功后默认按顺序对各分镜图片节点执行与 `libtv node --run`
+                               同源的生成与轮询；成功输出分镜组 group 节点详情 JSON。
+  help [command]               显示子命令说明。
+
+================================================================================
+$ libtv script storyboard --help
+--------------------------------------------------------------------------------
+用法： libtv script storyboard [options] <node>
+
+从脚本节点在右侧创建分镜图组（与画布「生成分镜」一致）：校验目标为脚本节点；需有分镜行；分镜图模型与参数来自节点已保存的 imageGenConfig，可用
+--set 覆盖（对齐网页弹层里模型与设置）；未配置 model 时按 supportModels.scriptImage
+默认首项；创建成功后默认按顺序对各分镜图片节点执行与 `libtv node --run` 同源的生成与轮询；成功输出分镜组 group 节点详情 JSON。
+
+参数：
+  node                     脚本节点 id 或展示名（id 优先）。
+
+选项：
+  -p, --project <project>  目标项目 UUID（可选）。缺省见根命令 --help。
+  -g, --group <group>      可选。父级普通分组：节点解析仅限该组 childNodeIds；未传时若当前目录已 `libtv
+                           group use` 则自动套用。
+  -s, --set <pair>         覆盖本次分镜图的脚本 imageGenConfig（模型与生成参数，规则同 `libtv node
+                           create --set`）。model 只接受模型名字（modelName，如 -s
+                           model=即梦4.0；用 `libtv model search --type image`
+                           查看）。例：-s model=即梦4.0 -s aspectRatio=16:9 -s
+                           settings={"ratio":"16:9"}；settings 与节点已有值浅合并。 (默认：
+                           [])
+  -h, --help               显示本命令说明。
+
+================================================================================
+$ libtv model --help
+--------------------------------------------------------------------------------
+用法： libtv model [options] [command] [name...]
+
+模型：`search` 在 supportModels 中检索（可选 `-t/--type`）；`libtv model <name...>` 对
+modelKey/modelName 完全匹配后拉取完整 tool_spec schema。
+
+参数：
+  name                        模型 ID（modelKey）或展示名（modelName）：与 supportModels 中
+                              trim 后**全等**；若无唯一命中则再按 modelKey / toolKey /
+                              tool_spec metadata.modelName 全等与
+                              `getModelSchemaByModelName` 一致解析。输出完整 schema JSON。
+
+选项：
+  -h, --help                  显示本命令说明。
+
+命令：
+  search [options] [name...]  按关键词搜索模型：可选 `-t/--type` 限定画布节点类型；`name`
+                              在过滤结果内检索（modelKey trim 后全字匹配优先，否则 modelName
+                              模糊、不区分大小写）。不传 `name` 时仅按 type 列出该类型全部模型。
+
+================================================================================
+$ libtv model search --help
+--------------------------------------------------------------------------------
+用法： libtv model search [options] [name...]
+
+按关键词搜索模型：可选 `-t/--type` 限定画布节点类型；`name` 在过滤结果内检索（modelKey trim 后全字匹配优先，否则
+modelName 模糊、不区分大小写）。不传 `name` 时仅按 type 列出该类型全部模型。
+
+参数：
+  name                    搜索词；多词以空格拼接。与 `--type` 同用可缩小范围；仅 `--type`
+                          时可省略本参数以列出该类型全部。
+
+选项：
+  -t, --type <node-type>  节点类型：text、image、video、audio、script、storyboard（与画布节点
+                          type 一致）。
+  -h, --help              显示本命令说明。
+
