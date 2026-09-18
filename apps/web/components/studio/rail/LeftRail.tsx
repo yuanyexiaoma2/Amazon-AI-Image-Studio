@@ -1,8 +1,9 @@
 'use client';
 
 /**
- * 左侧窄竖排图标栏（Phase 3 chrome）：＋添加 / 🖼 素材库 / 🕘 生成历史 / ❓帮助。
+ * 左侧窄竖排图标栏（Phase 3 chrome）：添加 / 素材库 / 生成历史 / 帮助。
  * 点击图标展开/收起对应的飞出面板；添加与素材均支持拖入画布。
+ * 图标为内联 SVG（stroke=currentColor，随主题与激活态变色）。
  */
 import { useRef, useState, type ReactNode } from 'react';
 import { IMAGE_FILE_RE } from '@/lib/use-asset-upload';
@@ -10,6 +11,49 @@ import type { AssetOptionItem } from '../config-options';
 import { AssetImage } from '../../asset-image';
 
 export type RailPanelKind = 'add' | 'assets' | 'history' | 'help';
+
+function svg(path: ReactNode) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {path}
+    </svg>
+  );
+}
+
+const RAIL_ICONS: Record<RailPanelKind, ReactNode> = {
+  add: svg(<path d="M12 5v14M5 12h14" />),
+  assets: svg(
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      <circle cx="9" cy="10" r="1.6" />
+      <path d="M4.5 17.5 10 12l3.5 3.5L17 12l3.5 3.5" />
+    </>,
+  ),
+  history: svg(
+    <>
+      <path d="M4.5 12a7.5 7.5 0 1 1 2.2 5.3" />
+      <path d="M4.5 17.5v-3.6h3.6" />
+      <path d="M12 8v4.2l3 1.8" />
+    </>,
+  ),
+  help: svg(
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M9.6 9.4a2.5 2.5 0 1 1 3.5 2.3c-.8.35-1.1.85-1.1 1.7" />
+      <circle cx="12" cy="16.8" r="0.4" fill="currentColor" stroke="none" />
+    </>,
+  ),
+};
 
 const ADD_ITEMS: Array<{ type: string; label: string; desc: string }> = [
   { type: 'prompt', label: '文本', desc: '提示词卡片，可直接编辑' },
@@ -111,7 +155,7 @@ export function LeftRail(props: {
   const { panel, onToggle, onAddNode, onAddSuite, workspaceId, assets, uploading, onUploadFile, historyPanel } =
     props;
   const [suiteText, setSuiteText] = useState('');
-  const btn = (kind: RailPanelKind, icon: string, label: string) => (
+  const btn = (kind: RailPanelKind, label: string) => (
     <button
       key={kind}
       type="button"
@@ -121,16 +165,16 @@ export function LeftRail(props: {
       aria-label={label}
       aria-pressed={panel === kind}
     >
-      <span aria-hidden>{icon}</span>
+      {RAIL_ICONS[kind]}
     </button>
   );
   return (
     <>
       <nav className="studio-rail" aria-label="画布工具栏">
-        {btn('add', '＋', '添加卡片')}
-        {btn('assets', '🖼', '素材库')}
-        {btn('history', '🕘', '生成历史')}
-        {btn('help', '❓', '帮助')}
+        {btn('add', '添加卡片')}
+        {btn('assets', '素材库')}
+        {btn('history', '生成历史')}
+        {btn('help', '帮助')}
       </nav>
       {panel ? (
         <div className="studio-flyout" role="dialog" aria-label="左栏面板">
