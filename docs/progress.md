@@ -762,6 +762,8 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | PR-7-14 | 创意参谋改造（助手只当参谋 + 可切换 LLM） | DONE | owner ruling 2026-09-19：助手不再执行画布命令，只做提示词优化/创意参谋。messages route 重写为纯对话回合（系统提示词=亚马逊产品图参谋，中文交流+英文提示词代码块；画布概况作上下文）；contracts `PostChatMessageRequestSchema` 加可选 `model`；`lib/chat-models.ts` 白名单（Gemini 3 Flash 默认 / 3.1 Pro / Claude Sonnet 4.6 / GPT-5.2，`CHAT_MODELS` env 可覆盖）。ChatPanel：头部模型下拉（localStorage 记忆）、建议卡改参谋向（优化提示词/卖点→画面 填入输入框、场景灵感直发）、助手消息带「用作提示词」（提取代码块写入选中生图卡）+ 模型署名。真实 kie 验证：Gemini 3 Flash 回复质量达标（中文建议+英文提示词代码块），「用作提示词」277 字符写入生图卡 ✓ |
 | PR-7-15 | 界面打磨（owner 走查反馈） | DONE | 项目切换器去掉 SKU 只留项目名；左栏 emoji 换 18px SVG 图标；`site-header-dark` 并入深色变量作用域修复白胶囊徽章；素材库缩略图两段式删除（hover ✕ → 3 秒内再点「删？」，走软删除 API）；生图卡折叠态（未选中只显示标题栏+结果大图/占位图井，点击选中展开参数） |
 
+| PR-7-16 | 参谋面板新建/历史对话 + kie slug 修正 + 移除模板引导层 | DONE | 排查发现 kie 裸 slug `gemini-3-8-flash` 是 Gemini 原生端点（422），OpenAI 兼容 slug 为 `gemini-3-8-flash-openai`；Claude 无 OpenAI 兼容端点，kie-chat 新增 `apiStyle:'anthropic'` 走 `/claude/v1/messages`（system 提顶层、max_tokens 必填）。ChatPanel 头部加「新建对话/历史对话」图标按钮 + 历史下拉（`PATCH chat-sessions/[id]` 自动以首条消息为标题，`ChatRepository.renameSession` + contracts `PatchChatSessionRequestSchema`）。StudioCanvas 删除空画布模板引导弹层。单测 providers 84 全绿（新增 anthropic 请求体/错误信封 2 例）、web 71 全绿。浏览器实测（dev:local + 真实 kie）：gemini-3-8-flash-openai 回合成功且署名正确、新建对话 ✓、自动标题 ✓、历史列表/切换 ✓。Claude 端点 kie 侧持续 429「Internal error」，代码路径就绪但未能真实验证 |
+
 ### PR-7 commands / evidence (implementer)
 
 | Command | Result |
