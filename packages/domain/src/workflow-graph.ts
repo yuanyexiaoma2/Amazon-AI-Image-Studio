@@ -39,6 +39,8 @@ export type PortDefinition = {
   required?: boolean;
 };
 
+export type NodeCardKind = 'text' | 'image' | 'generate';
+
 export type NodeTypeDefinition = {
   type: WorkflowNodeType;
   version: number;
@@ -46,6 +48,12 @@ export type NodeTypeDefinition = {
   layer: PipelineLayer;
   /** When false, node is system-only (not shown in palette for manual create). */
   palette: boolean;
+  /**
+   * Content-card rendering kind for the canvas UI (V2 内容卡片重构).
+   * Only set for the three card types (prompt/source_image/generate);
+   * legacy operator types render with the compact legacy view.
+   */
+  cardKind?: NodeCardKind;
   inputPorts: PortDefinition[];
   outputPorts: PortDefinition[];
 };
@@ -110,6 +118,7 @@ export const NODE_REGISTRY: ReadonlyArray<NodeTypeDefinition> = [
     label: 'Source Image',
     layer: 0,
     palette: true,
+    cardKind: 'image',
     inputPorts: [],
     outputPorts: [{ id: 'image', type: 'IMAGE' }],
   },
@@ -118,7 +127,7 @@ export const NODE_REGISTRY: ReadonlyArray<NodeTypeDefinition> = [
     version: 1,
     label: 'Product Truth',
     layer: 0,
-    palette: true,
+    palette: false,
     inputPorts: [],
     outputPorts: [{ id: 'truth', type: 'PRODUCT_TRUTH' }],
   },
@@ -128,6 +137,7 @@ export const NODE_REGISTRY: ReadonlyArray<NodeTypeDefinition> = [
     label: 'Prompt',
     layer: 0,
     palette: true,
+    cardKind: 'text',
     inputPorts: [{ id: 'shotBrief', type: 'SHOT_BRIEF', maxIncoming: 1, required: false }],
     outputPorts: [{ id: 'prompt', type: 'PROMPT' }],
   },
@@ -136,7 +146,7 @@ export const NODE_REGISTRY: ReadonlyArray<NodeTypeDefinition> = [
     version: 1,
     label: 'Remove Background',
     layer: 1,
-    palette: true,
+    palette: false,
     inputPorts: [{ id: 'image', type: 'IMAGE', maxIncoming: 1, required: true }],
     outputPorts: [
       { id: 'image', type: 'IMAGE' },
@@ -149,10 +159,12 @@ export const NODE_REGISTRY: ReadonlyArray<NodeTypeDefinition> = [
     label: 'Generate',
     layer: 1,
     palette: true,
+    cardKind: 'generate',
+    // 个人工作台（内容卡片范式）：prompt 可落到节点 config.prompt，truth 可选（无 Truth Pack）。
     inputPorts: [
       { id: 'references', type: 'IMAGE_LIST', maxIncoming: 8, required: false },
-      { id: 'prompt', type: 'PROMPT', maxIncoming: 1, required: true },
-      { id: 'truth', type: 'PRODUCT_TRUTH', maxIncoming: 1, required: true },
+      { id: 'prompt', type: 'PROMPT', maxIncoming: 1, required: false },
+      { id: 'truth', type: 'PRODUCT_TRUTH', maxIncoming: 1, required: false },
     ],
     outputPorts: [{ id: 'images', type: 'IMAGE_LIST' }],
   },
@@ -161,7 +173,7 @@ export const NODE_REGISTRY: ReadonlyArray<NodeTypeDefinition> = [
     version: 1,
     label: 'Replace Background',
     layer: 1,
-    palette: true,
+    palette: false,
     inputPorts: [
       { id: 'image', type: 'IMAGE', maxIncoming: 1, required: true },
       { id: 'mask', type: 'MASK', maxIncoming: 1, required: true },
@@ -175,7 +187,7 @@ export const NODE_REGISTRY: ReadonlyArray<NodeTypeDefinition> = [
     version: 1,
     label: 'Inpaint',
     layer: 1,
-    palette: true,
+    palette: false,
     inputPorts: [
       { id: 'image', type: 'IMAGE', maxIncoming: 1, required: true },
       { id: 'mask', type: 'MASK', maxIncoming: 1, required: true },
@@ -189,7 +201,7 @@ export const NODE_REGISTRY: ReadonlyArray<NodeTypeDefinition> = [
     version: 1,
     label: 'Outpaint',
     layer: 1,
-    palette: true,
+    palette: false,
     inputPorts: [
       { id: 'image', type: 'IMAGE', maxIncoming: 1, required: true },
       { id: 'prompt', type: 'PROMPT', maxIncoming: 1, required: false },
@@ -201,7 +213,7 @@ export const NODE_REGISTRY: ReadonlyArray<NodeTypeDefinition> = [
     version: 1,
     label: 'Upscale',
     layer: 1,
-    palette: true,
+    palette: false,
     inputPorts: [{ id: 'image', type: 'IMAGE', maxIncoming: 1, required: true }],
     outputPorts: [{ id: 'image', type: 'IMAGE' }],
   },
@@ -210,7 +222,7 @@ export const NODE_REGISTRY: ReadonlyArray<NodeTypeDefinition> = [
     version: 1,
     label: 'QA Gate',
     layer: 2,
-    palette: true,
+    palette: false,
     inputPorts: [
       { id: 'images', type: 'IMAGE_LIST', maxIncoming: 8, required: true },
       { id: 'truth', type: 'PRODUCT_TRUTH', maxIncoming: 1, required: true },
@@ -235,7 +247,7 @@ export const NODE_REGISTRY: ReadonlyArray<NodeTypeDefinition> = [
     version: 1,
     label: 'Export',
     layer: 4,
-    palette: true,
+    palette: false,
     inputPorts: [{ id: 'assets', type: 'APPROVED_ASSET_LIST', maxIncoming: 1, required: true }],
     outputPorts: [],
   },

@@ -31,6 +31,7 @@ import {
   operationForNodeType,
   resolutionToPixels,
   resolvePortInputs,
+  validateModelRunInput,
   reserveIdempotencyKey,
   refundIdempotencyKey,
   settleIdempotencyKey,
@@ -364,6 +365,28 @@ export class GenerationRepository {
             targetResolution: upscaleParams.targetResolution,
           });
           dims = { width: target.width, height: target.height };
+        }
+
+        // 提交前校验：模型 t2i/i2i 分面 + 比例/清晰度档位（UI/Agent 之外的最后一道拦截）。
+        // ratio/resolution 只对有此概念的节点传值，避免无关节点误伤。
+        const modelInputErrors = validateModelRunInput(nodeModel, {
+          hasReferences: refIds.length > 0,
+          ratio:
+            outpaintParams?.targetRatio ??
+            (node.type === 'generate' && typeof node.config?.ratio === 'string'
+              ? node.config.ratio
+              : undefined),
+          resolution:
+            upscaleParams?.targetResolution ??
+            (node.type === 'generate' && typeof node.config?.resolution === 'string'
+              ? node.config.resolution
+              : undefined),
+        });
+        if (modelInputErrors.length > 0) {
+          throw new GenerationValidationError(`节点 ${node.id}：${modelInputErrors.join('；')}`, {
+            nodeId: node.id,
+            modelKey: nodeModel.key,
+          });
         }
 
         const count =

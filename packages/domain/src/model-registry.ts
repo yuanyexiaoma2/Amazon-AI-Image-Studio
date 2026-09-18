@@ -11,6 +11,13 @@ export type ImageOperation =
   | 'REMOVE_BACKGROUND'
   | 'VISION_ANALYZE';
 
+export type ModelCapabilities = {
+  /** 文生图：无参考图也能出图。 */
+  t2i: boolean;
+  /** 图生图：可接收参考图。 */
+  i2i: boolean;
+};
+
 export type ModelRegistryEntry = {
   key: string;
   provider: string;
@@ -18,6 +25,10 @@ export type ModelRegistryEntry = {
   displayName: string;
   enabled: boolean;
   operations: ImageOperation[];
+  /** 文生图/图生图分面（kie 的 *-text-to-image 条目 t2i-only，*-image-to-image 条目 i2i-only）。 */
+  capabilities: ModelCapabilities;
+  /** 人类可读的中文使用约束说明，供 UI 展示。 */
+  rules?: string[];
   ratios: string[];
   resolutionTiers: string[];
   maxReferenceImages: number;
@@ -40,6 +51,7 @@ export const FAKE_PRIMARY_MODEL: ModelRegistryEntry = {
   displayName: 'Fake Primary Product Image',
   enabled: true,
   operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'UPSCALE', 'REMOVE_BACKGROUND'],
+  capabilities: { t2i: true, i2i: true },
   ratios: ['1:1', '4:5', '3:4', '16:9'],
   resolutionTiers: ['1K', '2K', '4K'],
   maxReferenceImages: 8,
@@ -63,6 +75,7 @@ export const FAKE_UPSCALE_MODEL: ModelRegistryEntry = {
   key: 'default-upscale',
   displayName: 'Fake Default Upscale Engine',
   operations: ['UPSCALE'],
+  capabilities: { t2i: false, i2i: true },
 };
 
 export const DEFAULT_MODEL_REGISTRY: ModelRegistryEntry[] = [
@@ -85,6 +98,7 @@ export const KIE_NANO_BANANA_2_MODEL: ModelRegistryEntry = {
   displayName: 'Google Nano Banana 2',
   enabled: true,
   operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+  capabilities: { t2i: true, i2i: true },
   // 文档另支持 'auto'（模型自选比例），UI 只给显式比例。
   ratios: ['1:1', '2:3', '3:2', '1:4', '4:1', '3:4', '4:3', '4:5', '5:4', '1:8', '8:1', '9:16', '16:9', '21:9'],
   resolutionTiers: ['1K', '2K', '4K'],
@@ -109,6 +123,8 @@ export const KIE_NANO_BANANA_2_LITE_MODEL: ModelRegistryEntry = {
   displayName: 'Google Nano Banana 2 Lite',
   enabled: true,
   operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+  capabilities: { t2i: true, i2i: true },
+  rules: ['只出 1K 图，无分辨率档位可选'],
   ratios: ['1:1', '2:3', '3:2', '1:4', '4:1', '3:4', '4:3', '4:5', '5:4', '1:8', '8:1', '9:16', '16:9', '21:9'],
   resolutionTiers: ['1K'],
   maxReferenceImages: 10,
@@ -155,6 +171,8 @@ export const KIE_GPT_IMAGE_2_5_FLARE_GENERATE: ModelRegistryEntry = {
   modelId: 'gpt-image-2-5-flare-text-to-image',
   displayName: 'GPT Image 2.5 Flare (text-to-image)',
   operations: ['GENERATE'],
+  capabilities: { t2i: true, i2i: false },
+  rules: ['该模型只支持纯文生图，不能连接参考图'],
   maxReferenceImages: 0,
 };
 
@@ -164,6 +182,8 @@ export const KIE_GPT_IMAGE_2_5_FLARE_EDIT: ModelRegistryEntry = {
   modelId: 'gpt-image-2-5-flare-image-to-image',
   displayName: 'GPT Image 2.5 Flare (image-to-image)',
   operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+  capabilities: { t2i: false, i2i: true },
+  rules: ['该模型必须连接参考图（图生图）'],
   maxReferenceImages: 16,
 };
 
@@ -173,6 +193,8 @@ export const KIE_GPT_IMAGE_2_5_SUNBURST_GENERATE: ModelRegistryEntry = {
   modelId: 'gpt-image-2-5-sunburst-text-to-image',
   displayName: 'GPT Image 2.5 Sunburst (text-to-image)',
   operations: ['GENERATE'],
+  capabilities: { t2i: true, i2i: false },
+  rules: ['该模型只支持纯文生图，不能连接参考图'],
   maxReferenceImages: 0,
 };
 
@@ -182,6 +204,8 @@ export const KIE_GPT_IMAGE_2_5_SUNBURST_EDIT: ModelRegistryEntry = {
   modelId: 'gpt-image-2-5-sunburst-image-to-image',
   displayName: 'GPT Image 2.5 Sunburst (image-to-image)',
   operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+  capabilities: { t2i: false, i2i: true },
+  rules: ['该模型必须连接参考图（图生图）'],
   maxReferenceImages: 16,
 };
 
@@ -198,6 +222,7 @@ export const KIE_NANO_BANANA_PRO_MODEL: ModelRegistryEntry = {
   displayName: 'Google Nano Banana Pro',
   enabled: true,
   operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+  capabilities: { t2i: true, i2i: true },
   // 文档另支持 'auto'（模型自选比例），UI 只给显式比例。
   ratios: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
   resolutionTiers: ['1K', '2K', '4K'],
@@ -222,6 +247,8 @@ export const KIE_GPT_IMAGE_2_GENERATE_MODEL: ModelRegistryEntry = {
   displayName: 'GPT Image 2 (text-to-image)',
   enabled: true,
   operations: ['GENERATE'],
+  capabilities: { t2i: true, i2i: false },
+  rules: ['该模型只支持纯文生图，不能连接参考图'],
   ratios: ['1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16'],
   resolutionTiers: ['1K', '2K'],
   maxReferenceImages: 0,
@@ -243,6 +270,8 @@ export const KIE_GPT_IMAGE_2_EDIT_MODEL: ModelRegistryEntry = {
   displayName: 'GPT Image 2 (image-to-image)',
   enabled: true,
   operations: ['GENERATE', 'EDIT', 'INPAINT', 'OUTPAINT', 'REMOVE_BACKGROUND'],
+  capabilities: { t2i: false, i2i: true },
+  rules: ['该模型必须连接参考图（图生图）'],
   ratios: ['1:1', '9:16', '16:9', '4:3', '3:4'],
   resolutionTiers: ['1K', '2K'],
   maxReferenceImages: 16,
@@ -332,4 +361,42 @@ export function resolveAutoModelKey(
     if (getModelByKey(key, registry)) return key;
   }
   return listEnabledModels(registry, 'GENERATE')[0]?.key;
+}
+
+export type ModelRunInput = {
+  /** 本次运行是否带参考图（references / image 端口有输入）。 */
+  hasReferences: boolean;
+  /** 仅对有比例概念的节点（generate / outpaint）传。 */
+  ratio?: string;
+  /** 仅对有分辨率概念的节点（generate / upscale）传。 */
+  resolution?: string;
+};
+
+/**
+ * 提交前校验：模型能力（t2i/i2i 分面）与比例/分辨率档位。
+ * 返回中文错误列表，空数组 = 通过。UI 与 Agent 在提交前调用，
+ * db createRun 在落库前再拦一次（GenerationValidationError）。
+ */
+export function validateModelRunInput(
+  entry: ModelRegistryEntry,
+  input: ModelRunInput,
+): string[] {
+  const errors: string[] = [];
+  if (!input.hasReferences && !entry.capabilities.t2i) {
+    errors.push(`「${entry.displayName}」只支持图生图，必须连接参考图`);
+  }
+  if (input.hasReferences && !entry.capabilities.i2i) {
+    errors.push(`「${entry.displayName}」只支持纯文生图，不能连接参考图`);
+  }
+  if (input.ratio && !entry.ratios.includes(input.ratio)) {
+    errors.push(
+      `「${entry.displayName}」不支持比例 ${input.ratio}（可用：${entry.ratios.join('、')}）`,
+    );
+  }
+  if (input.resolution && !entry.resolutionTiers.includes(input.resolution)) {
+    errors.push(
+      `「${entry.displayName}」不支持清晰度 ${input.resolution}（可用：${entry.resolutionTiers.join('、')}）`,
+    );
+  }
+  return errors;
 }

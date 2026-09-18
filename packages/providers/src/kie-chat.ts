@@ -44,6 +44,11 @@ export type KieChatConfig = {
   model: string;
   /** Chat completions path. Default derived from the model slug. */
   chatPath?: string;
+  /**
+   * 端点形态：openai（默认，/{slug}/v1/chat/completions）或
+   * anthropic（/claude/v1/messages，Anthropic Messages 请求/响应结构）。
+   */
+  apiStyle?: 'openai' | 'anthropic';
   timeoutMs?: number;
   /** Test hook: inject a fetch implementation. */
   fetchImpl?: typeof fetch;
@@ -61,6 +66,9 @@ export function kieChatPathForModel(model: string): string {
   const slug = model.trim().replace(/^\/+|\/+$/g, '');
   return `/${slug}/v1/chat/completions`;
 }
+
+/** Anthropic Messages 形态的固定路径（kie 按 Claude 官方路径暴露）。 */
+export const KIE_ANTHROPIC_MESSAGES_PATH = '/claude/v1/messages';
 
 /** Extract the first JSON object from raw model text (tolerates stray prose/fences). */
 export function extractJsonObject(raw: string): unknown {
@@ -118,8 +126,11 @@ export async function kieChatCompletion(
   input: KieChatCompletionInput,
 ): Promise<KieChatCompletionResult> {
   const { config } = input;
+  const style = config.apiStyle ?? 'openai';
   const baseUrl = (config.baseUrl ?? KIE_DEFAULT_BASE_URL).replace(/\/+$/, '');
-  const chatPath = config.chatPath ?? kieChatPathForModel(config.model);
+  const chatPath =
+    config.chatPath ??
+    (style === 'anthropic' ? KIE_ANTHROPIC_MESSAGES_PATH : kieChatPathForModel(config.model));
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const fetchImpl = config.fetchImpl ?? fetch;
   const url = `${baseUrl}${chatPath}`;
@@ -135,16 +146,20 @@ export async function kieChatCompletion(
         'content-type': 'application/json',
         authorization: `Bearer ${config.apiKey}`,
       },
-      body: JSON.stringify({
-        model: config.model,
-        messages: input.messages.map((m) => ({
-          role: m.role,
-          content: [{ type: 'text', text: m.content }],
-        })),
-        temperature: input.temperature ?? 0.7,
-        ...(input.jsonMode ? { response_format: { type: 'json_object' } } : {}),
-        stream: false,
-      }),
+      body: JSON.stringify(
+        style === 'anthropic'
+          ? toAnthropicBody(config.model, input)
+          : {
+              model: config.model,
+              messages: input.messages.map((m) => ({
+                role: m.role,
+                content: [{ type: 'text', text: m.content }],
+              })),
+              temperature: input.temperature ?? 0.7,
+              ...(input.jsonMode ? { response_format: { type: 'json_object' } } : {}),
+              stream: false,
+            },
+      ),
       signal: controller.signal,
     });
   } catch (e) {
@@ -165,17 +180,49 @@ export async function kieChatCompletion(
     code?: number;
     msg?: string;
     choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }>;
+    // Anthropic Messages shape
+    content?: Array<{ type?: string; text?: string }>;
   };
   if (typeof payload.code === 'number' && payload.code >= 400) {
     throw normalizeHttpError(payload.code, payload.msg ?? '');
   }
-  const rawContent = payload.choices?.[0]?.message?.content;
-  const text = Array.isArray(rawContent)
-    ? rawContent.map((p) => p.text ?? '').join('')
-    : rawContent;
+  let text: string | undefined;
+  if (style === 'anthropic') {
+    text = (payload.content ?? [])
+      .filter((p) => p.type === 'text' || typeof p.text === 'string')
+      .map((p) => p.text ?? '')
+      .join('');
+  } else {
+    const rawContent = payload.choices?.[0]?.message?.content;
+    text = Array.isArray(rawContent)
+      ? rawContent.map((p) => p.text ?? '').join('')
+      : rawContent;
+  }
   if (!text) {
     throw new ChatProviderError('VALIDATION', 'LLM returned empty content');
   }
 
   return { text, latencyMs: Date.now() - started };
+}
+
+/**
+ * Anthropic Messages 请求体：system 消息提到顶层 system 字段，
+ * messages 只留 user/assistant（Anthropic 不接受 system role），
+ * max_tokens 必填。jsonMode 无对应参数，忽略。
+ */
+function toAnthropicBody(model: string, input: KieChatCompletionInput) {
+  const system = input.messages
+    .filter((m) => m.role === 'system')
+    .map((m) => m.content)
+    .join('\n');
+  const messages = input.messages
+    .filter((m) => m.role !== 'system')
+    .map((m) => ({ role: m.role, content: m.content }));
+  return {
+    model,
+    max_tokens: 4096,
+    temperature: input.temperature ?? 0.7,
+    ...(system ? { system } : {}),
+    messages,
+  };
 }

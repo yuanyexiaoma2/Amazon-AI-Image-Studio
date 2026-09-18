@@ -8,21 +8,16 @@ import {
 } from '../src/node-configs.js';
 
 describe('W3-05 node config schemas', () => {
-  it('covers all 11 palette node types', () => {
-    expect(PALETTE_NODE_CONFIG_TYPES).toHaveLength(11);
-    expect(PALETTE_NODE_CONFIG_TYPES).toEqual([
-      'source_image',
-      'product_truth',
-      'prompt',
-      'remove_background',
-      'generate',
-      'replace_background',
-      'inpaint',
-      'outpaint',
-      'upscale',
-      'qa_gate',
-      'export',
-    ]);
+  it('covers the 3 content-card palette node types', () => {
+    expect(PALETTE_NODE_CONFIG_TYPES).toEqual(['source_image', 'prompt', 'generate']);
+  });
+
+  it('generate config carries inline prompt (无文本卡连线时的兜底)', () => {
+    const cfg = defaultNodeConfig('generate') as { prompt?: string };
+    expect(cfg.prompt).toBe('');
+    const parsed = validateNodeConfig('generate', { prompt: '一只猫坐在窗台上' });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect((parsed.config as { prompt?: string }).prompt).toBe('一只猫坐在窗台上');
   });
 
   it('includes system approval_selector schema', () => {

@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { makeApiError } from '@studio/contracts';
+import { makeApiError, PatchChatSessionRequestSchema } from '@studio/contracts';
 import { prisma, ChatRepository } from '@studio/db';
+import { WORKFLOW_WRITE_ROLES } from '@studio/domain';
 import { getOrCreateRequestId } from '@/lib/request-id';
-import { requireWorkspaceMember } from '@/lib/workspace-access';
+import { requireWorkspaceMember, requireWorkspaceRoles } from '@/lib/workspace-access';
 import { serializeChatMessage, serializeChatSession } from '@/lib/chat-serialize';
 
 type Ctx = {
@@ -45,4 +46,42 @@ export async function GET(request: Request, context: Ctx) {
     },
     { headers: { 'x-request-id': requestId } },
   );
+}
+
+/** PATCH /workspaces/{ws}/projects/{pid}/chat-sessions/{sid} — 重命名会话（自动标题用）。 */
+export async function PATCH(request: Request, context: Ctx) {
+  const requestId = getOrCreateRequestId(request.headers.get('x-request-id'));
+  const { workspaceId, projectId, sessionId } = await context.params;
+  const access = await requireWorkspaceRoles(workspaceId, requestId, [...WORKFLOW_WRITE_ROLES]);
+  if (!access.ok) return access.response;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(makeApiError('VALIDATION_ERROR', 'Invalid JSON body', requestId), {
+      status: 400,
+      headers: { 'x-request-id': requestId },
+    });
+  }
+  const parsed = PatchChatSessionRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      makeApiError('VALIDATION_ERROR', 'Invalid patch chat session payload', requestId, parsed.error.flatten()),
+      { status: 400, headers: { 'x-request-id': requestId } },
+    );
+  }
+
+  const chat = new ChatRepository(prisma);
+  const existing = await chat.getSession(workspaceId, sessionId);
+  if (!existing || existing.projectId !== projectId) {
+    return NextResponse.json(makeApiError('NOT_FOUND', 'Chat session not found', requestId), {
+      status: 404,
+      headers: { 'x-request-id': requestId },
+    });
+  }
+  const updated = await chat.renameSession(workspaceId, sessionId, parsed.data.title);
+  return NextResponse.json(serializeChatSession(updated!), {
+    headers: { 'x-request-id': requestId },
+  });
 }

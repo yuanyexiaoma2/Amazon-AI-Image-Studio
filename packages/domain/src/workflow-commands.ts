@@ -204,6 +204,16 @@ export function applyWorkflowCommands(
             index,
           );
         }
+        const duplicateEdge = draft.edges.some(
+          (e) =>
+            e.source === command.source &&
+            e.target === command.target &&
+            (e.sourceHandle ?? null) === (command.sourceHandle ?? null) &&
+            (e.targetHandle ?? null) === (command.targetHandle ?? null),
+        );
+        if (duplicateEdge) {
+          break;
+        }
         const candidate: GraphEdge = {
           id: edgeId,
           source: command.source,

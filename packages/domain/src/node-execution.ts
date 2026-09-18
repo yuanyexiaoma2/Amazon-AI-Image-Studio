@@ -85,10 +85,16 @@ export function extractPromptFromInputs(
       : typeof node.config?.shotBriefId === 'string'
         ? (node.config.shotBriefId as string)
         : null;
+  const configPrompt =
+    typeof node.config?.prompt === 'string' ? (node.config.prompt as string).trim() : '';
+  // 连线文本为主体；config.prompt 作为「后缀」追加（套装派生：文本卡写产品描述，
+  // 各生图卡挂白底/场景/细节后缀）。无连线时 config.prompt 单独生效。
   const prompt =
-    textFromPort ??
-    (typeof node.config?.prompt === 'string' ? (node.config.prompt as string) : null) ??
-    `Execute ${node.type} node ${node.id}`;
+    textFromPort !== null
+      ? configPrompt
+        ? `${textFromPort}，${configPrompt}`
+        : textFromPort
+      : configPrompt || `Execute ${node.type} node ${node.id}`;
   return { prompt, negativePrompt: negFromPort, shotBriefId };
 }
 
