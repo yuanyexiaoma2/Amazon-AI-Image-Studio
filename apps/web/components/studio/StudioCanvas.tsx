@@ -41,11 +41,6 @@ import {
   type WorkflowDraftPayload,
 } from './use-workflow-commands';
 import { useConfigOptions } from './use-config-options';
-import {
-  STARTER_TEMPLATES,
-  buildStarterTemplateCommands,
-  type StarterTemplateId,
-} from './starter-templates';
 import { buildSuiteCommands } from './suite-template';
 import { IMAGE_FILE_RE, useAssetUpload } from '@/lib/use-asset-upload';
 import { ChatPanel } from './ChatPanel';
@@ -141,7 +136,6 @@ function StudioCanvasInner(props: {
   const [narrow, setNarrow] = useState(false);
   const [narrowDismissed, setNarrowDismissed] = useState(false);
   const [railPanel, setRailPanel] = useState<RailPanelKind | null>(null);
-  const [starterDismissed, setStarterDismissed] = useState(false);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const [runAllBusy, setRunAllBusy] = useState(false);
   const [runAllMsg, setRunAllMsg] = useState<RunAllOutcome | null>(null);
@@ -218,13 +212,6 @@ function StudioCanvasInner(props: {
   nodesRef.current = nodes;
   edgesRef.current = edges;
   draftRef.current = draft;
-
-  // Re-offer starter templates whenever the canvas becomes empty again (e.g.
-  // after undoing a template batch) — "dismissed" only sticks while the
-  // canvas stays empty (空白画布 choice).
-  useEffect(() => {
-    if (nodes.length > 0 && starterDismissed) setStarterDismissed(false);
-  }, [nodes.length, starterDismissed]);
 
   const { uploadAsset, uploading: railUploading } = useAssetUpload(workspaceId, projectId);
 
@@ -1471,51 +1458,6 @@ function StudioCanvasInner(props: {
     [commands, handleCommandResult, makeRollback, screenToFlowPosition, setNodes, workspaceId],
   );
 
-  // Starter templates: one applyNow batch (one undo step), then adopt the
-  // authoritative graph from the response and fit the view.
-  const applyTemplate = useCallback(
-    (templateId: StarterTemplateId) => {
-      if (templateId === 'blank') {
-        setStarterDismissed(true);
-        return;
-      }
-      setStarterDismissed(true);
-      setStatus('正在应用模板…');
-      const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
-      void commands
-        .applyNow(buildStarterTemplateCommands(templateId), makeRollback(snapshot))
-        .then((r) => {
-          handleCommandResult(r);
-          if (r.ok) {
-            // Select the key node: the batch's first 参考图 (source_image),
-            // falling back to the first added node.
-            const pick =
-              r.batch.graph.nodes.find((n) => n.type === 'source_image') ??
-              r.batch.graph.nodes[0];
-            const flowNodes = toFlowNodes(r.batch.graph, workspaceId).map((n) => ({
-              ...n,
-              selected: n.id === pick?.id,
-            }));
-            applyLocalSnapshot({
-              nodes: flowNodes,
-              edges: toFlowEdges(r.batch.graph),
-            });
-            if (pick) {
-              const pickId = pick.id;
-              setSelectedIds((prev) =>
-                prev.length === 1 && prev[0] === pickId ? prev : [pickId],
-              );
-            }
-            setStatus(`已应用模板 · 修订 ${r.batch.revisionNumber}`);
-            setTimeout(() => void fitView({ padding: 0.2, duration: 200 }), 50);
-          } else {
-            setStarterDismissed(false);
-          }
-        });
-    },
-    [commands, handleCommandResult, makeRollback, applyLocalSnapshot, workspaceId, fitView],
-  );
-
   // 左栏「套装」：一句话 → 1 文本卡 + 3 生图卡（白底/场景/细节），一个批次，采纳权威图。
   const addSuite = useCallback(
     (description: string) => {
@@ -1931,25 +1873,11 @@ function StudioCanvasInner(props: {
             </button>
           </div>
         )}
-        {draft !== null && nodes.length === 0 && !starterDismissed && (
+        {draft !== null && nodes.length === 0 && (
           <div className="starter-overlay">
-            <div className="starter-panel" role="dialog" aria-label="画布起始模板">
-              <div style={{ fontWeight: 700 }}>三步出图：选模板 → 在卡片上上传图片、写提示词 → ▶ 运行整图</div>
-              <div className="starter-grid">
-                {STARTER_TEMPLATES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    className="starter-card"
-                    onClick={() => applyTemplate(t.id)}
-                  >
-                    <span className="starter-card-title">{t.title}</span>
-                    <span className="starter-card-desc">{t.description}</span>
-                  </button>
-                ))}
-              </div>
+            <div className="starter-panel" role="note" aria-label="空画布提示">
               <div className="faint" style={{ fontSize: 'var(--font-size-sm)' }}>
-                也可以直接把图片文件拖进画布，或点左侧「＋」、双击画布空白处新建卡片。
+                双击空白处新建卡片，或点左侧「＋」添加 / 生成套装，也可以直接把图片文件拖进来。
               </div>
             </div>
           </div>
