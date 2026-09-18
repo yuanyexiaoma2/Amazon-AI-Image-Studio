@@ -145,6 +145,7 @@ export const NODE_TYPE_ZH: Record<string, string> = {
 /** Node config field keys → 中文（报错文案里的字段名）。 */
 export const CONFIG_FIELD_ZH: Record<string, string> = {
   text: '提示词内容',
+  prompt: '提示词',
   negative: '反向提示词',
   locale: '语言地区',
   slot: '槽位',

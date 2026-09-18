@@ -1152,3 +1152,278 @@ code {
   font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
+
+/* ===== V2 内容卡片画布（Phase 2） ===== */
+
+.studio-card {
+  position: relative;
+  width: 240px;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-emph);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--font-size-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+.studio-card-generate {
+  width: 280px;
+}
+
+.studio-card-selected {
+  border: 2px solid var(--accent-strong);
+  box-shadow: 0 0 0 3px var(--accent-soft-bg);
+}
+
+.studio-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: 6px;
+}
+
+.studio-card-title {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+.studio-card-run {
+  padding: 2px 10px;
+  font-size: var(--font-size-xs);
+  box-shadow: none;
+}
+
+.studio-card-textarea {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  min-height: 56px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.studio-card-textarea:focus {
+  outline: none;
+  border-color: var(--accent-strong);
+}
+
+.studio-card-preview {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--image-well);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.studio-card-preview-img {
+  border: none;
+  background: transparent;
+}
+
+.studio-card-upload {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  width: 100%;
+  padding: 22px 12px;
+  background: var(--bg);
+  border: 1px dashed var(--border-emph);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.studio-card-upload:hover {
+  border-color: var(--accent-strong);
+  color: var(--text);
+}
+
+.studio-card-foot {
+  margin-top: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-card-prompt {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  max-height: 84px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.studio-card-prompt-src {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+}
+
+/* 卡片左右「+」连接钮（React Flow Handle 的圆形加号皮肤） */
+.react-flow__handle.studio-card-handle {
+  width: 22px;
+  height: 22px;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border-emph);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.react-flow__handle.studio-card-handle::after {
+  content: '+';
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.react-flow__handle.studio-card-handle:hover,
+.react-flow__handle.studio-card-handle.connectingto {
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
+}
+
+.react-flow__handle.studio-card-handle-out {
+  right: -11px;
+}
+
+.react-flow__handle.studio-card-handle-in {
+  left: -11px;
+}
+
+/* 双击空白处的三选一建点菜单 */
+.studio-create-menu {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 96px;
+  background: var(--surface);
+  border: 1px solid var(--border-emph);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.studio-create-menu button {
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: var(--font-size-sm);
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.studio-create-menu button:hover {
+  background: var(--accent-soft-bg);
+}
+
+/* 底部浮动提示词条 */
+.prompt-bar {
+  width: min(620px, 92vw);
+  background: var(--surface);
+  border: 1px solid var(--border-emph);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  padding: 10px 12px 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.prompt-bar-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prompt-bar-icon {
+  color: var(--accent-strong);
+  font-size: 16px;
+  flex: 0 0 auto;
+}
+
+.prompt-bar-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--font-size-md);
+  font-family: inherit;
+  outline: none;
+}
+
+.prompt-bar-input::placeholder {
+  color: var(--text-faint);
+}
+
+.prompt-bar-submit {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent-strong);
+  color: #ffffff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.prompt-bar-submit:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.prompt-bar-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.prompt-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.prompt-bar-select {
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-family: inherit;
+  max-width: 200px;
+}
+
+.prompt-bar-bound {
+  margin-left: auto;
+  font-size: 11px;
+}
