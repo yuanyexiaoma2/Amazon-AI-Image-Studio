@@ -40,7 +40,7 @@
 16. **W8 Phase 1:** W8-01…07 one milestone PR (eval/hardening/security/UAT docs). Fake only / 3 synthetic SKUs (ADR-0003). **VERIFIED** on main merge `c57e316` + tip CI `34699179820` + 审稿 APPROVED on PR #18.
 17. **W9 buffer + release:** docs only (`docs/release/go-no-go.md`, `backlog.md`, `monitoring.md`). **CONDITIONAL GO** for Fake/Phase 1; **NO-GO** real Production. W9-01 DONE (not self-VERIFIED). W9-02 `BLOCKED_EXTERNAL` — do not claim Production smoke passed. No new product modules (§19.9). No real keys.
 18. **P2-A (Phase 2 sole milestone):** kie.ai plug-and-play (`IMAGE_PROVIDER=kie`). One branch / one PR / one review; **do not merge** without 审稿 APPROVED. Owner self-use acceptance = real trial; formal eval only if multi-user/company formal use (ADR-0003). Never commit real keys.
-19. **V2 (current):** vision + roadmap in `docs/specs/v2-vision.md`. Order: **V2-A planner agent (PR #24, DONE) → PR-2 画布命令层/自由画布 → PR-1 UI 重构 → PR-4 聊天 Agent 面板**。单 KIE_API_KEY 双用途（生图 + LLM）。kie 集成坑见 v2-vision §5。
+19. **V2 (current):** vision + roadmap in `docs/specs/v2-vision.md`. Order: **V2-A planner agent (PR #24, DONE) → PR-2 画布命令层/自由画布 → PR-1 UI 重构 → PR-4 聊天 Agent 面板**。单 KIE_API_KEY 双用途（生图 + LLM）。kie 集成坑见 v2-vision §5。**PR-7（feat/canvas-content-cards）：画布重构为 LibTV 风格内容卡片范式**——palette 仅 source_image/prompt/generate 三卡（旧算子节点 palette:false 数据兼容）、generate 的 prompt/truth 端口可选（config.prompt 兜底）、双击建卡、「+」拖线生下游、底部浮动提示词条、深色主题+左图标栏+右常驻 Agent。
 
 ## Standard commands
 

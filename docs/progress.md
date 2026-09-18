@@ -736,3 +736,29 @@ One branch / one PR / one review each; merge unlocks the next segment.
 **上线后修复（所有者试用反馈）：** 画布选中节点触发 React「Maximum update depth exceeded」死循环 —— 内联 `onSelectionChange` 每次渲染生成新引用，xyflow SelectionListener effect 反复触发 `setSelectedIds`（新数组）。修为稳定 `useCallback` + 内容相同则不 setState（commit `e5bb914`，tabbit 复测选中/取消 0 报错）。另：hydration mismatch 警告来自通义浏览器扩展注入 `<html>` 属性（diff 证据 `className="tongyi-design-pc"`），非应用问题。
 
 **Status:** **DONE**（不标 VERIFIED — 待 V2 rule 12b 全新上下文复审 + 所有者合并）。
+
+---
+
+## PR-7 — 内容卡片画布重构（LibTV/TapNow 范式）(DONE)
+
+**Branch:** `feat/canvas-content-cards`（stacked on `feat/local-workbench` / PR-6 未合并）
+**Owner ruling（2026-09-18，会话口述）：** 「推翻一切重构」为 LibTV 风格自由画布个人生图工作台（参考 LibTV 截图 + TapNow/LibTV 公开调研）。范围裁决：**换皮重构**——命令层/kie 适配器/聊天 Agent/持久化全部保留，节点模型与交互/界面重写；节点收敛为内容卡片；生成入口=底部浮动提示词条+节点内；第一版含图片生成核心+素材库/历史+聊天 Agent，不做模板组/画布 fork。
+
+| ID | Task | Status | Evidence / notes |
+|---|---|---|---|
+| PR-7-01 | 节点模型收敛 | DONE | domain `workflow-graph.ts`：palette 收敛为 source_image/prompt/generate 三种内容卡（新增 `cardKind: text/image/generate` 元数据），8 种旧算子节点 `palette:false`（数据兼容不迁移，旧画布照常渲染/校验）；generate 的 prompt/truth 端口改可选（个人工作台无 Truth Pack）。contracts：`GenerateConfigSchema` 新增 `config.prompt` 兜底（无文本卡连线时的内联提示词），`PALETTE_NODE_CONFIG_TYPES` 收敛为 3。chat-agent 系统提示词改三卡片语义（文本→prompt、图片→references、可直写 config.prompt）（commit `6a9facc`） |
+| PR-7-02 | 卡片节点 + 双击建点 + 「+」拖线生下游 | DONE | `StudioCanvas.tsx` 2090→~1750 行；节点渲染拆到 `components/studio/nodes/`（TextCard/ImageCard/GenerateCard/LegacyNodeCard，单一 nodeType + dispatcher 按 cardKind 分发——旧 graphJson 渲染类型恒为 'studio'，dispatcher 最稳）。双击 pane 三选一建卡（xyflow 无 onPaneDoubleClick prop，自行判断 target；同时发现双击缩放冲突，关 `zoomOnDoubleClick`，commit `8f4344e`）。「+」= React Flow Handle + CSS 圆形加号；onConnectEnd 落空白 pane 时 spawn 下游生图卡并连线（先过 validateEdge，建点+连线一个批次=一次撤销单位）；从输入口反拖补上游文本/图片卡（commit `6907996`） |
+| PR-7-03 | 底部浮动提示词条 | DONE | `PromptBar.tsx`（Panel bottom-center）：✦ 图标 + 输入框（placeholder「描述任何你想要生成的内容」）+ 行内模型/比例/分辨率/数量 + ↑ 提交；绑定唯一选中的生图卡，未选中则在视图中心建卡后同批次 configure+run；绑定切换回填、打字中不被覆盖；模型选项与节点控件共用 `generate-options.ts` 防漂移（commit `6907996`） |
+| PR-7-04 | 深色主题 + 图标栏 + 常驻 Agent | DONE | `.studio-dark` 作用域变量强制深色（不影响登录/项目列表页），studio 路由顶栏同步深色（`site-header-dark`，commit `8f4344e`）。左 52px 图标栏（＋添加/🖼素材库/🕘生成历史/❓帮助）+ 飞出面板：素材缩略图拖入画布建图片卡（`application/studio-asset` drop 分支），TaskDrawer 迁入历史面板（结果图可拖回画布）。右栏 ChatPanel 常驻（属性 tab 退役，PropertiesPanel/MaskEditor 文件保留不挂载）。顶栏精简为 状态/撤销/重做/快照/▶运行整图 + ⋯ 菜单；`page.tsx` 去 ProjectStepper（commit `565a39e`） |
+| PR-7-05 | 全量验证 + 浏览器走查 | DONE | lint/typecheck/test/build 全绿（domain 156、contracts 25、providers 82、web 54 passed）。tabbit 真实浏览器走查（dev:local + Fake provider）：旧画布 4 节点兼容渲染 ✓、双击建文本卡 ✓、「+」拖线 445px 空白落点 spawn 生图卡+连线 ✓（7→8 节点、2→3 边）、浮动条提交→建卡+run→node-results API 返回生成图 ✓（Fake）、撤销×4+删除清理走查残留 ✓。截图 `docs/screenshots/pr-7/`（整体概览/双击菜单/深色顶栏）。走查账号 walkthrough@local.dev 残留 dev DB；画布已还原到走查前 4 节点 |
+
+### PR-7 commands / evidence (implementer)
+
+| Command | Result |
+|---|---|
+| `pnpm lint` / `typecheck` / `test` / `build` | Exit 0 全绿，2026-09-18 Asia/Shanghai |
+| tabbit 浏览器走查（`dev:local` :3000，Fake provider） | 上述 6 项交互全过；期间修复双击缩放冲突 |
+| Provider | 全程 **Fake**；未读未用真实 KIE_API_KEY |
+| 进程清理 | 验证后 dev server 已杀，:3000 无监听 |
+
+**不修仅记录：** 蒙版编辑器入口随 PropertiesPanel 退役（replace_background/inpaint 已不在 palette；MaskEditor 文件保留，需要时在 Legacy 卡重挂）；`globals.css` 留有 `.studio-drawer`/`.palette-btn` 等死样式待清理；tabbit 截图偶发 capture 超时（环境问题，页面 rAF/控制台健康，重试即恢复）；走查期间 Docker Desktop 未运行，已代启动并拉起 postgres/redis/minio 容器。
