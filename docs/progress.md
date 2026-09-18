@@ -751,14 +751,22 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | PR-7-03 | 底部浮动提示词条 | DONE | `PromptBar.tsx`（Panel bottom-center）：✦ 图标 + 输入框（placeholder「描述任何你想要生成的内容」）+ 行内模型/比例/分辨率/数量 + ↑ 提交；绑定唯一选中的生图卡，未选中则在视图中心建卡后同批次 configure+run；绑定切换回填、打字中不被覆盖；模型选项与节点控件共用 `generate-options.ts` 防漂移（commit `6907996`） |
 | PR-7-04 | 深色主题 + 图标栏 + 常驻 Agent | DONE | `.studio-dark` 作用域变量强制深色（不影响登录/项目列表页），studio 路由顶栏同步深色（`site-header-dark`，commit `8f4344e`）。左 52px 图标栏（＋添加/🖼素材库/🕘生成历史/❓帮助）+ 飞出面板：素材缩略图拖入画布建图片卡（`application/studio-asset` drop 分支），TaskDrawer 迁入历史面板（结果图可拖回画布）。右栏 ChatPanel 常驻（属性 tab 退役，PropertiesPanel/MaskEditor 文件保留不挂载）。顶栏精简为 状态/撤销/重做/快照/▶运行整图 + ⋯ 菜单；`page.tsx` 去 ProjectStepper（commit `565a39e`） |
 | PR-7-05 | 全量验证 + 浏览器走查 | DONE | lint/typecheck/test/build 全绿（domain 156、contracts 25、providers 82、web 54 passed）。tabbit 真实浏览器走查（dev:local + Fake provider）：旧画布 4 节点兼容渲染 ✓、双击建文本卡 ✓、「+」拖线 445px 空白落点 spawn 生图卡+连线 ✓（7→8 节点、2→3 边）、浮动条提交→建卡+run→node-results API 返回生成图 ✓（Fake）、撤销×4+删除清理走查残留 ✓。截图 `docs/screenshots/pr-7/`（整体概览/双击菜单/深色顶栏）。走查账号 walkthrough@local.dev 残留 dev DB；画布已还原到走查前 4 节点 |
+| PR-7-06 | A 模型能力分面 + 提交前校验 | DONE | domain `model-registry.ts`：`ModelRegistryEntry.capabilities{t2i,i2i}` + `rules[]`，`validateModelRunInput()`（无参考图禁 i2i-only、有参考图禁 t2i-only、超 maxReferenceImages）；createRun 提交前拦截（db `generation.ts`）。UI 侧 GenerateNodeControls/PromptBar 按 capabilities+连线状态禁用无效模型项（commits `c1b08ef`、`1267079`） |
+| PR-7-07 | B 上游变更→「需重跑」徽标 | DONE | node-results API 改 `{results, stale}` envelope：当前节点指纹（web `lib/node-fingerprint.ts`，config+上游输入）与最近成功 run 快照指纹比对。GenerateCardNode 琥珀色「需重跑」徽标（commits `3e0eb3d`、`3092ada`） |
+| PR-7-08 | C 图片卡快捷操作 | DONE | `nodes/context.ts` IMAGE_QUICK_ACTIONS：生成变体/换背景/抠图 → spawnGenerateFrom 建生图卡（预填后缀提示词）+ 自动连线图片卡→references（commit `dfb8436`） |
+| PR-7-09 | D 一句话→套装派生 | DONE | `suite-template.ts` buildSuiteCommands：文本卡（主体描述）+ 白底/场景/细节三张生图卡 + 连线，左栏「＋」面板第四项。**语义变更**：连线文本为主体，生图卡 config.prompt 作后缀拼接（node-execution.ts）（commit `baef455`） |
+| PR-7-10 | E/F/G Agent 协议加固 | DONE | 三卡 config 加 `title`（CardTitle 双击行内编辑）；Agent 侧 `resolve-agent-node-ids.ts` 支持 @卡片名（id 优先→title 精确匹配→重名/查无中文报错）（commit `b092c10`、`3092ada`）；connect 幂等跳过完全相同边（`fab45e2`）；Agent 命令白名单 `agent-command-guard.ts`（仅三卡片 addNode、单批 removeNode ≤2）（`85c78d1`） |
+| PR-7-11 | H 结果一键下载 | DONE | GenerateNodeResults 缩略图 hover ⤓ → download-url 预签名 → 下载 `卡片名-N.png`（commit `390b715`） |
+| PR-7-12 | 自主 UX 修正 | DONE | Legacy 算子卡固定宽度防碎块重叠 + 清理死样式（`ddedf48`）；走查修复 2 项（`1a350ec`）：①「需重跑」此前只在 run 活跃期 3s 轮询，run 结束后改提示词徽标不更新——handleCommandResult 在任意落表修订后 refreshNodeResults()；②下载 a[download] 指跨源 MinIO 被浏览器忽略导致整页跳离画布——改 blob objectURL 下载，失败回退新标签页 |
+| PR-7-13 | 二轮全量验证 + 浏览器走查 | DONE | lint/typecheck/test/build 全绿（web 71 passed、domain 167、contracts 25、providers 82）。tabbit 走查（dev:local :3001，Fake）：左栏套装入口 ✓、套装创建 4→8 节点含连线 ✓、抠图快捷操作 8→9 ✓、▶ 运行→Fake 出图 ✓、改提示词→「需重跑」徽标即时出现 ✓（API stale:true + UI 渲染）、标题双击改名「抠图→白底抠图卡」✓、download-url API 200 + blob 下载不跳页 ✓（CORS 通；Tabbit harness 不落盘 download 事件，真实浏览器行为为另存为）。模型禁用态：fake 注册表 3 项均 t2i+i2i 双全，无 i2i-only 生成模型可演示置灰（校验逻辑由 domain 单测覆盖）。走查残留卡片已全部删除，画布还原原有 4 节点 |
 
 ### PR-7 commands / evidence (implementer)
 
 | Command | Result |
 |---|---|
-| `pnpm lint` / `typecheck` / `test` / `build` | Exit 0 全绿，2026-09-18 Asia/Shanghai |
-| tabbit 浏览器走查（`dev:local` :3000，Fake provider） | 上述 6 项交互全过；期间修复双击缩放冲突 |
+| `pnpm lint` / `typecheck` / `test` / `build` | Exit 0 全绿，2026-09-18 Asia/Shanghai（一轮）/ 2026-09-19（二轮 A–H 后） |
+| tabbit 浏览器走查（`dev:local` :3000/:3001，Fake provider） | 一轮 6 项交互全过（修复双击缩放冲突）；二轮 A–H 全过（修复 stale 即时刷新 + 下载跨源跳页） |
 | Provider | 全程 **Fake**；未读未用真实 KIE_API_KEY |
-| 进程清理 | 验证后 dev server 已杀，:3000 无监听 |
+| 进程清理 | 两轮验证后 dev server 均已杀，:3000/:3001 无监听；tabbit task 已 finish |
 
-**不修仅记录：** 蒙版编辑器入口随 PropertiesPanel 退役（replace_background/inpaint 已不在 palette；MaskEditor 文件保留，需要时在 Legacy 卡重挂）；`globals.css` 留有 `.studio-drawer`/`.palette-btn` 等死样式待清理；tabbit 截图偶发 capture 超时（环境问题，页面 rAF/控制台健康，重试即恢复）；走查期间 Docker Desktop 未运行，已代启动并拉起 postgres/redis/minio 容器。
+**不修仅记录：** 蒙版编辑器入口随 PropertiesPanel 退役（replace_background/inpaint 已不在 palette；MaskEditor 文件保留，需要时在 Legacy 卡重挂）；`.studio-drawer`/`.palette-btn` 死样式已于 `ddedf48` 清理；tabbit 截图偶发 capture 超时（环境问题，页面 rAF/控制台健康，重试即恢复）；fake 注册表无 i2i-only 生成模型，模型禁用态仅单测覆盖未做 UI 演示。
