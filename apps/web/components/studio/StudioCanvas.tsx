@@ -50,7 +50,7 @@ import { IMAGE_FILE_RE, useAssetUpload } from '@/lib/use-asset-upload';
 import { ChatPanel } from './ChatPanel';
 import { applyConfigEdit } from './config-options';
 import { zh, RUN_STATUS_ZH, NODE_TYPE_ZH, CONFIG_FIELD_ZH, formatCommandErrorZh } from '@/lib/zh-labels';
-import { NodeActionContext, PORT_LABEL_ZH, type NodeActionContextValue } from './nodes/context';
+import { NodeActionContext, PORT_LABEL_ZH, type ImageQuickAction, type NodeActionContextValue } from './nodes/context';
 import { studioNodeTypes } from './nodes';
 import { PromptBar, type PromptBarValues } from './PromptBar';
 import { LeftRail, type RailPanelKind } from './rail/LeftRail';
@@ -993,6 +993,76 @@ function StudioCanvasInner(props: {
     [commands, handleCommandResult],
   );
 
+  // 图片卡快捷操作：右侧派生一张生图卡（预填提示词/数量/标题），自动连参考图，一个批次。
+  const spawnGenerateFrom = useCallback(
+    (sourceId: string, preset: ImageQuickAction) => {
+      const source = nodesRef.current.find((n) => n.id === sourceId);
+      if (!source) return;
+      const id = `n-generate-${Date.now()}`;
+      const pos = { x: source.position.x + 300, y: source.position.y };
+      const config: Record<string, unknown> = {
+        ...(defaultNodeConfig('generate') as Record<string, unknown>),
+        prompt: preset.prompt,
+        count: preset.count,
+        title: preset.title,
+      };
+      const edgeId = `e-${sourceId}-image-${id}-references-${Date.now()}`;
+      const candidate: GraphEdge = {
+        id: edgeId,
+        source: sourceId,
+        sourceHandle: 'image',
+        target: id,
+        targetHandle: 'references',
+      };
+      const graphWithNew: WorkflowGraph = {
+        schemaVersion: 1,
+        nodes: [
+          ...fromFlow(nodesRef.current, edgesRef.current).nodes,
+          { id, type: 'generate', position: pos, config },
+        ],
+        edges: fromFlow(nodesRef.current, edgesRef.current).edges,
+      };
+      const check = validateEdge(graphWithNew, candidate);
+      if (!check.ok) {
+        setEdgeError(check.issues.map((i) => i.message).join('; '));
+        return;
+      }
+      setEdgeError(null);
+      const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+      const next: Node = {
+        id,
+        type: 'studio',
+        position: pos,
+        selected: true,
+        data: { label: nodeLabelZh('generate'), nodeType: 'generate', config, workspaceId },
+      };
+      const nextNodes = [...nodesRef.current.map((n) => ({ ...n, selected: false })), next];
+      const nextEdges = [...edgesRef.current, { ...candidate } as Edge];
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      nodesRef.current = nextNodes;
+      edgesRef.current = nextEdges;
+      setSelectedIds((prev) => (prev.length === 1 && prev[0] === id ? prev : [id]));
+      void commands
+        .applyNow(
+          [
+            { type: 'addNode', nodeType: 'generate', nodeId: id, position: pos, config },
+            {
+              type: 'connect',
+              edgeId,
+              source: sourceId,
+              sourceHandle: 'image',
+              target: id,
+              targetHandle: 'references',
+            },
+          ],
+          makeRollback(snapshot),
+        )
+        .then(handleCommandResult);
+    },
+    [setNodes, setEdges, commands, handleCommandResult, makeRollback, workspaceId],
+  );
+
   const nodeActions = useMemo<NodeActionContextValue>(
     () => ({
       uploadIntoNode,
@@ -1001,6 +1071,7 @@ function StudioCanvasInner(props: {
       models: configOptions.models,
       resultImages: (nodeId) => nodeResults[nodeId] ?? [],
       isStale: (nodeId) => nodeStale[nodeId] === true,
+      spawnGenerateFrom,
       runNode: (nodeId) => void runNode(nodeId),
       runBusy,
       connectedPromptText: (nodeId) => connectedPromptByNode.get(nodeId) ?? null,
@@ -1012,6 +1083,7 @@ function StudioCanvasInner(props: {
       configOptions.models,
       nodeResults,
       nodeStale,
+      spawnGenerateFrom,
       runNode,
       runBusy,
       connectedPromptByNode,

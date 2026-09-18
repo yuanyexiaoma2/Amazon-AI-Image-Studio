@@ -1316,6 +1316,31 @@ code {
   text-overflow: ellipsis;
 }
 
+/* 图片卡底部快捷操作（生成变体 / 换背景 / 抠图） */
+.studio-card-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.studio-card-action {
+  flex: 1;
+  padding: 3px 0;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.studio-card-action:hover {
+  color: var(--accent-text);
+  border-color: var(--accent-strong);
+  background: var(--accent-soft-bg);
+}
+
 .studio-card-prompt {
   background: var(--bg);
   border: 1px solid var(--border);

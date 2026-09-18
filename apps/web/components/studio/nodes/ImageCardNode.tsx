@@ -3,7 +3,7 @@
 import { useContext } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { AssetImage } from '../../asset-image';
-import { NodeActionContext } from './context';
+import { NodeActionContext, IMAGE_QUICK_ACTIONS } from './context';
 import { CardTitle } from './CardTitle';
 
 /** 图片卡：大图预览；未绑定素材时显示上传入口；底部小字显示文件名。 */
@@ -44,6 +44,24 @@ export function ImageCardNode(props: NodeProps) {
           <span className="faint">或直接把图片文件拖进画布</span>
         </button>
       )}
+      {versionId ? (
+        <div className="studio-card-actions nodrag">
+          {IMAGE_QUICK_ACTIONS.map((a) => (
+            <button
+              key={a.key}
+              type="button"
+              className="studio-card-action"
+              title={`${a.prompt} — 在右侧新建生图卡并连好参考图`}
+              onClick={(e) => {
+                e.stopPropagation();
+                actions.spawnGenerateFrom(props.id, a);
+              }}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {meta ? <div className="studio-card-foot faint">{meta}</div> : null}
       <Handle
         id="image"

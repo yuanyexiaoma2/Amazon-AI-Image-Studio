@@ -17,6 +17,39 @@ export const PORT_LABEL_ZH: Record<string, string> = {
   assets: '已选定图',
 };
 
+/** 图片卡底部快捷操作预设：全部走生图卡 + i2i 模型智能匹配（不用 legacy 算子节点）。 */
+export type ImageQuickAction = {
+  key: string;
+  label: string;
+  prompt: string;
+  count: number;
+  title: string;
+};
+
+export const IMAGE_QUICK_ACTIONS: ImageQuickAction[] = [
+  {
+    key: 'variant',
+    label: '生成变体',
+    prompt: '保持主体完全一致，生成风格变体',
+    count: 4,
+    title: '风格变体',
+  },
+  {
+    key: 'background',
+    label: '换背景',
+    prompt: '保持主体不变，替换为简洁高级的场景背景',
+    count: 2,
+    title: '换背景',
+  },
+  {
+    key: 'cutout',
+    label: '抠图',
+    prompt: '抠出主体，输出干净纯色背景',
+    count: 1,
+    title: '抠图',
+  },
+];
+
 /** 卡片节点可用的画布操作，由 StudioCanvasInner 提供。 */
 export type NodeActionContextValue = {
   uploadIntoNode: (nodeId: string) => void;
@@ -27,6 +60,8 @@ export type NodeActionContextValue = {
   resultImages: (nodeId: string) => string[];
   /** nodeId → 最近成功结果是否已过期（上游内容变更，建议重跑）。 */
   isStale: (nodeId: string) => boolean;
+  /** 图片卡快捷操作：在右侧派生一张连好参考图的生图卡并选中。 */
+  spawnGenerateFrom: (sourceNodeId: string, preset: ImageQuickAction) => void;
   /** 单节点运行（scope: NODES）。 */
   runNode: (nodeId: string) => void;
   runBusy: boolean;
@@ -43,6 +78,7 @@ export const NodeActionContext = createContext<NodeActionContextValue>({
   models: null,
   resultImages: () => [],
   isStale: () => false,
+  spawnGenerateFrom: () => {},
   runNode: () => {},
   runBusy: false,
   connectedPromptText: () => null,
