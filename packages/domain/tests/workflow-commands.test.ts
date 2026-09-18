@@ -205,13 +205,22 @@ describe('applyWorkflowCommands — connect', () => {
     );
   });
 
-  it('rejects duplicate edge', () => {
+  it('connect 已存在的相同边 → 幂等跳过（不抛错、图不变）', () => {
+    const before = baseGraph();
+    const result = applyWorkflowCommands(before, [
+      { type: 'connect', source: 'p', sourceHandle: 'prompt', target: 'g', targetHandle: 'prompt' },
+    ]);
+    expect(result.graph.edges).toEqual(before.edges);
+    expect(result.graph.nodes).toEqual(before.nodes);
+  });
+
+  it('同端点但端口不同的边仍会走校验（不允许双输入）', () => {
     expectCommandError(
       () =>
         applyWorkflowCommands(baseGraph(), [
-          { type: 'connect', source: 'p', sourceHandle: 'prompt', target: 'g', targetHandle: 'prompt' },
+          { type: 'connect', source: 'p', sourceHandle: 'prompt', target: 'g', targetHandle: 'references' },
         ]),
-      'DUPLICATE_EDGE',
+      'PORT_TYPE_MISMATCH',
       0,
     );
   });
