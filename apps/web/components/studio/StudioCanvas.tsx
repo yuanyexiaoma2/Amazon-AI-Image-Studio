@@ -90,6 +90,8 @@ type NodeActionContextValue = {
   missingPorts: (nodeId: string) => string[];
   updateConfig: (nodeId: string, key: string, raw: string) => void;
   models: ModelOptionItem[] | null;
+  /** nodeId → 已生成图片的 assetVersionIds（当前快照修订的 SUCCEEDED 结果）。 */
+  resultImages: (nodeId: string) => string[];
 };
 
 const NodeActionContext = createContext<NodeActionContextValue>({
@@ -97,6 +99,7 @@ const NodeActionContext = createContext<NodeActionContextValue>({
   missingPorts: () => [],
   updateConfig: () => {},
   models: null,
+  resultImages: () => [],
 });
 
 function toFlowNodes(graph: WorkflowGraph, workspaceId: string): Node[] {
@@ -240,7 +243,13 @@ function StudioNodeView(props: NodeProps) {
         </div>
       ) : null}
       {nodeType === 'generate' ? (
-        <GenerateNodeControls nodeId={props.id} config={data.config} />
+        <>
+          <GenerateNodeControls nodeId={props.id} config={data.config} />
+          <GenerateNodeResults
+            workspaceId={data.workspaceId ?? null}
+            versionIds={actions.resultImages(props.id)}
+          />
+        </>
       ) : null}
       {def && def.inputPorts.length > 0 ? (
         <div className="studio-node-ports">
@@ -376,6 +385,46 @@ function GenerateNodeControls(props: { nodeId: string; config?: Record<string, u
   );
 }
 
+/** 生成节点结果缩略图：一行小图，点击在新标签页打开大图（预签名 URL）。 */
+function GenerateNodeResults(props: { workspaceId: string | null; versionIds: string[] }) {
+  const { workspaceId, versionIds } = props;
+  if (versionIds.length === 0) return null;
+
+  const openLarge = (versionId: string) => {
+    if (!workspaceId) return;
+    void fetch(
+      `/api/workspaces/${workspaceId}/asset-versions/${versionId}/download-url?kind=NORMALIZED_PNG`,
+      { credentials: 'include' },
+    )
+      .then(async (res) => {
+        if (!res.ok) return;
+        const json = await res.json().catch(() => null);
+        if (json?.url) window.open(json.url as string, '_blank', 'noopener');
+      })
+      .catch(() => undefined);
+  };
+
+  return (
+    <div
+      className="studio-node-results nodrag"
+      style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {versionIds.map((id) => (
+        <button
+          key={id}
+          type="button"
+          title="点击看大图"
+          style={{ border: 'none', background: 'none', padding: 0, cursor: 'zoom-in' }}
+          onClick={() => openLarge(id)}
+        >
+          <AssetImage workspaceId={workspaceId} versionId={id} size={40} alt="生成结果" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const nodeTypes: NodeTypes = { studio: StudioNodeView };
 
 function StudioCanvasInner(props: {
@@ -406,6 +455,8 @@ function StudioCanvasInner(props: {
   const [runAllBusy, setRunAllBusy] = useState(false);
   const [runAllMsg, setRunAllMsg] = useState<RunAllOutcome | null>(null);
   const [drawerExpanded, setDrawerExpanded] = useState(false);
+  const [nodeResults, setNodeResults] = useState<Record<string, string[]>>({});
+  const [runsActive, setRunsActive] = useState(false);
   const revisionRef = useRef(0);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -456,12 +507,36 @@ function StudioCanvasInner(props: {
 
   const getWorkflowId = useCallback(() => draftRef.current?.workflowId ?? null, []);
 
+  // 拉取当前工作流的节点生成结果（nodeId → imageAssetVersionIds）。
+  // 服务端默认取 currentRevisionId（最近一次 run 的快照修订），按修订天然隔离旧结果。
+  const refreshNodeResults = useCallback(async () => {
+    const wfId = draftRef.current?.workflowId;
+    if (!wfId) return;
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/workflows/${wfId}/node-results`, {
+        credentials: 'include',
+      });
+      if (!res.ok) return;
+      const json = (await res.json().catch(() => null)) as Record<string, string[]> | null;
+      if (json && typeof json === 'object') setNodeResults(json);
+    } catch {
+      /* 轮询失败保持旧数据 */
+    }
+  }, [workspaceId]);
+
   const handleCommandResult = useCallback((result: CommandResult) => {
     if (result.ok) {
       const b = result.batch;
       setDraft((prev) => (prev ? { ...prev, name: b.name, revisionNumber: b.revisionNumber } : prev));
       setCmdError(null);
       setStatus(`已保存 · 修订 ${b.revisionNumber}`);
+      if (b.run) {
+        // Run 已提交：拉结果兜底（inline 同步完成时 TaskDrawer 可能来不及看到
+        // 活跃态，轮询不启动；多次延时刷新覆盖结果落表的时点）。
+        void refreshNodeResults();
+        setTimeout(() => void refreshNodeResults(), 3000);
+        setTimeout(() => void refreshNodeResults(), 8000);
+      }
       return;
     }
     const f = result.failure;
@@ -487,7 +562,7 @@ function StudioCanvasInner(props: {
     const reason = formatCommandErrorZh(f.message);
     setCmdError(reason);
     setStatus(`操作失败：${reason}`);
-  }, []);
+  }, [refreshNodeResults]);
 
   const commands = useWorkflowCommands({
     workspaceId,
@@ -589,6 +664,25 @@ function StudioCanvasInner(props: {
     applyDraft(got);
     setStatus(`已加载 · 修订 ${got.revisionNumber}`);
   }, [workspaceId, projectId, requestedWorkflowId, applyDraft]);
+
+  // 节点生成结果（缩略图）：挂载/切换工作流时拉一次；run 活跃期间 3 秒轮询；
+  // run 全部结束后 effect 清理时再拉一次收尾。服务端默认取 currentRevisionId
+  // （最近一次 run 的快照修订），按修订天然隔离旧结果。
+  const resultsWorkflowId = draft?.workflowId ?? null;
+
+  useEffect(() => {
+    setNodeResults({});
+    void refreshNodeResults();
+  }, [resultsWorkflowId, refreshNodeResults]);
+
+  useEffect(() => {
+    if (!runsActive) return;
+    const t = setInterval(() => void refreshNodeResults(), 3000);
+    return () => {
+      clearInterval(t);
+      void refreshNodeResults();
+    };
+  }, [runsActive, refreshNodeResults]);
 
   useEffect(() => {
     void loadOrCreate();
@@ -1028,8 +1122,9 @@ function StudioCanvasInner(props: {
       missingPorts: (nodeId) => missingPortsByNode.get(nodeId) ?? [],
       updateConfig: (nodeId, key, raw) => updateNodeConfig(nodeId, key, raw),
       models: configOptions.models,
+      resultImages: (nodeId) => nodeResults[nodeId] ?? [],
     }),
-    [uploadIntoNode, missingPortsByNode, configOptions.models],
+    [uploadIntoNode, missingPortsByNode, configOptions.models, nodeResults],
   );
 
   const handleUndoRedo = useCallback(
@@ -1672,6 +1767,7 @@ function StudioCanvasInner(props: {
         busy={runAllBusy}
         msg={runAllMsg}
         onRunAll={triggerRunAll}
+        onActiveChange={setRunsActive}
       />
     </div>
   );
@@ -1688,8 +1784,10 @@ function TaskDrawer(props: {
   busy: boolean;
   msg: RunAllOutcome | null;
   onRunAll: () => Promise<void>;
+  /** 有 run 处于 QUEUED/RUNNING 时置 true（驱动节点结果轮询）。 */
+  onActiveChange?: (active: boolean) => void;
 }) {
-  const { workspaceId, projectId, ready, expanded, onToggleExpanded, onExpand, busy, msg, onRunAll } =
+  const { workspaceId, projectId, ready, expanded, onToggleExpanded, onExpand, busy, msg, onRunAll, onActiveChange } =
     props;
   const [runs, setRuns] = useState<
     Array<{
@@ -1749,9 +1847,15 @@ function TaskDrawer(props: {
   }, [workspaceId, projectId, refresh]);
 
   // Auto-expand while anything is queued/running.
+  const anyActive = runs.some((r) => r.status === 'RUNNING' || r.status === 'QUEUED');
   useEffect(() => {
-    if (runs.some((r) => r.status === 'RUNNING' || r.status === 'QUEUED')) onExpand();
-  }, [runs, onExpand]);
+    if (anyActive) onExpand();
+  }, [anyActive, onExpand]);
+
+  // 通知画布：是否有活跃 run（驱动节点结果 3 秒轮询与收尾刷新）。
+  useEffect(() => {
+    onActiveChange?.(anyActive);
+  }, [anyActive, onActiveChange]);
 
   async function runAll() {
     await onRunAll();
