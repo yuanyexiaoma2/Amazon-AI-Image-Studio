@@ -79,10 +79,10 @@ describe.skipIf(!run)('Node results API (real route handler)', () => {
     const workflowId = workflow.id;
     asSession(owner.user.id, owner.user.email);
 
-    // No snapshot yet → no currentRevisionId → empty map.
+    // No snapshot yet → no currentRevisionId → empty envelope.
     const empty = await getNodeResults(get('/node-results'), ctx(workspaceId, workflowId));
     expect(empty.status).toBe(200);
-    expect(await empty.json()).toEqual({});
+    expect(await empty.json()).toEqual({ results: {}, stale: {} });
 
     const { revision } = await workflows.snapshot({
       workspaceId,
@@ -126,15 +126,25 @@ describe.skipIf(!run)('Node results API (real route handler)', () => {
     // Default: resolves the workflow's currentRevisionId.
     const res = await getNodeResults(get('/node-results'), ctx(workspaceId, workflowId));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ 'n-gen-1': [v1, v2] });
+    const body = (await res.json()) as {
+      results: Record<string, string[]>;
+      stale: Record<string, boolean>;
+    };
+    expect(body.results).toEqual({ 'n-gen-1': [v1, v2] });
+    // 两个 SUCCEEDED 节点都不在 draft（空画布）里 → stale: true。
+    expect(body.stale).toEqual({ 'n-gen-1': true, 'n-rmbg-1': true });
 
-    // Explicit revisionId param yields the same map.
+    // Explicit revisionId param yields the same envelope.
     const byRevision = await getNodeResults(
       get(`/node-results?revisionId=${revision.id}`),
       ctx(workspaceId, workflowId),
     );
     expect(byRevision.status).toBe(200);
-    expect(await byRevision.json()).toEqual({ 'n-gen-1': [v1, v2] });
+    const byRevisionBody = (await byRevision.json()) as {
+      results: Record<string, string[]>;
+      stale: Record<string, boolean>;
+    };
+    expect(byRevisionBody.results).toEqual({ 'n-gen-1': [v1, v2] });
 
     // Unknown / cross-workflow revisionId → 404.
     const missing = await getNodeResults(

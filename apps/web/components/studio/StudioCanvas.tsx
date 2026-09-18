@@ -198,8 +198,12 @@ function StudioCanvasInner(props: {
         credentials: 'include',
       });
       if (!res.ok) return;
-      const json = (await res.json().catch(() => null)) as Record<string, string[]> | null;
-      if (json && typeof json === 'object') setNodeResults(json);
+      const json = (await res.json().catch(() => null)) as {
+        results?: Record<string, string[]>;
+        stale?: Record<string, boolean>;
+      } | null;
+      // stale 徽标 UI 下一批接入，本批只消费 results。
+      if (json && typeof json === 'object' && json.results) setNodeResults(json.results);
     } catch {
       /* 轮询失败保持旧数据 */
     }

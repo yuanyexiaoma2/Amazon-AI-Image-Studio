@@ -45,9 +45,11 @@ function RunResultThumbs(props: { workspaceId: string; workflowId: string; revis
     )
       .then(async (res) => {
         if (!res.ok) return;
-        const json = (await res.json().catch(() => null)) as Record<string, string[]> | null;
-        if (!alive || !json) return;
-        setIds(Object.values(json).flat());
+        const json = (await res.json().catch(() => null)) as {
+          results?: Record<string, string[]>;
+        } | null;
+        if (!alive || !json?.results) return;
+        setIds(Object.values(json.results).flat());
       })
       .catch(() => undefined);
     return () => {

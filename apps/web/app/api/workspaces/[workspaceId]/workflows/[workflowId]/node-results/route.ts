@@ -2,16 +2,20 @@ import { NextResponse } from 'next/server';
 import { makeApiError } from '@studio/contracts';
 import { prisma, NodeResultRepository, WorkflowRepository } from '@studio/db';
 import { getOrCreateRequestId } from '@/lib/request-id';
+import { computeDraftNodeFingerprints } from '@/lib/node-fingerprint';
 import { requireWorkspaceMember } from '@/lib/workspace-access';
 
 type Ctx = { params: Promise<{ workspaceId: string; workflowId: string }> };
 
 /**
  * GET /workspaces/{ws}/workflows/{wf}/node-results?revisionId=…
- * Returns `{ [nodeId]: imageAssetVersionIds[] }` for SUCCEEDED node results of
- * one workflow revision (defaults to the workflow's currentRevisionId — the
- * revision the latest run snapshotted). Drives generate-node thumbnails on
- * the canvas.
+ * Returns `{ results: { [nodeId]: imageAssetVersionIds[] }, stale: { [nodeId]: boolean } }`
+ * for SUCCEEDED node results of one workflow revision (defaults to the
+ * workflow's currentRevisionId — the revision the latest run snapshotted).
+ * Drives generate-node thumbnails on the canvas.
+ *
+ * stale 判定：用当前 draft 图重算节点 inputFingerprint，与该节点 SUCCEEDED
+ * 结果行存的 inputFingerprint 比对；不一致或节点已从 draft 删除 → stale。
  */
 export async function GET(request: Request, context: Ctx) {
   const requestId = getOrCreateRequestId(request.headers.get('x-request-id'));
@@ -44,19 +48,36 @@ export async function GET(request: Request, context: Ctx) {
     revisionId = revision.id;
   }
   if (!revisionId) {
-    return NextResponse.json({}, { headers: { 'x-request-id': requestId } });
+    return NextResponse.json(
+      { results: {}, stale: {} },
+      { headers: { 'x-request-id': requestId } },
+    );
   }
 
   const nodeResults = new NodeResultRepository(prisma);
   const rows = await nodeResults.listForRevision(workspaceId, revisionId);
-  const map: Record<string, string[]> = {};
+  const results: Record<string, string[]> = {};
   for (const row of rows) {
     if (row.status !== 'SUCCEEDED') continue;
     const out = row.outputJson as { imageAssetVersionIds?: unknown } | null;
     const ids = Array.isArray(out?.imageAssetVersionIds)
       ? out.imageAssetVersionIds.filter((v): v is string => typeof v === 'string')
       : [];
-    if (ids.length > 0) map[row.nodeId] = ids;
+    if (ids.length > 0) results[row.nodeId] = ids;
   }
-  return NextResponse.json(map, { headers: { 'x-request-id': requestId } });
+
+  const draftGraph = wf.draft ? workflows.parseGraph(wf.draft) : null;
+  const draftFingerprints = draftGraph
+    ? await computeDraftNodeFingerprints(prisma, workspaceId, draftGraph)
+    : {};
+  const stale: Record<string, boolean> = {};
+  for (const row of rows) {
+    if (row.status !== 'SUCCEEDED') continue;
+    const current = draftFingerprints[row.nodeId];
+    // 节点已从 draft 删除（或无 draft）→ stale；指纹缺失则无法判定，按不 stale。
+    stale[row.nodeId] =
+      current === undefined ? true : row.inputFingerprint !== null && row.inputFingerprint !== current;
+  }
+
+  return NextResponse.json({ results, stale }, { headers: { 'x-request-id': requestId } });
 }
