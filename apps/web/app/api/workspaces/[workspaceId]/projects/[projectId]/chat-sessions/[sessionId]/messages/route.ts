@@ -11,7 +11,7 @@ import {
 import { getOrCreateRequestId } from '@/lib/request-id';
 import { paidGateResponse, requireWorkspaceRoles } from '@/lib/workspace-access';
 import { serializeChatMessage } from '@/lib/chat-serialize';
-import { resolveChatModel } from '@/lib/chat-models';
+import { resolveChatModelOption } from '@/lib/chat-models';
 import { NODE_TYPE_ZH } from '@/lib/zh-labels';
 import { WORKFLOW_WRITE_ROLES, type WorkflowGraph } from '@studio/domain';
 
@@ -140,7 +140,8 @@ export async function POST(request: Request, context: Ctx) {
     }));
 
   // ── advisor turn ──────────────────────────────────────────────────────────
-  const modelSlug = resolveChatModel(parsed.data.model);
+  const modelOption = resolveChatModelOption(parsed.data.model);
+  const modelSlug = modelOption.slug;
   let reply: string;
   let providerName: string;
   let latencyMs = 0;
@@ -156,6 +157,7 @@ export async function POST(request: Request, context: Ctx) {
           apiKey,
           baseUrl: process.env.KIE_BASE_URL?.trim() || KIE_DEFAULT_BASE_URL,
           model: modelSlug,
+          apiStyle: modelOption.apiStyle,
         },
         messages: [
           { role: 'system', content: buildAdvisorSystemPrompt(graphSummary) },

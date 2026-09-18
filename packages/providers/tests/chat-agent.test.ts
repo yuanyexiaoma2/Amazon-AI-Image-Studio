@@ -335,4 +335,74 @@ describe('kieChatCompletion (shared client)', () => {
     });
     expect(text).toBe('parted');
   });
+
+  it('anthropic style: posts to /claude/v1/messages with top-level system and string content', async () => {
+    let seen: { url: string; init: RequestInit } | null = null;
+    const { text } = await kieChatCompletion({
+      config: {
+        apiKey: KEY,
+        model: 'claude-sonnet-4-6',
+        apiStyle: 'anthropic',
+        fetchImpl: okFetch(
+          { content: [{ type: 'text', text: 'Bonjour' }], stop_reason: 'end_turn' },
+          (url, init) => {
+            seen = { url, init };
+          },
+        ),
+      },
+      messages: [
+        { role: 'system', content: 'sys-prompt' },
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'hello' },
+        { role: 'user', content: 'again' },
+      ],
+    });
+    expect(text).toBe('Bonjour');
+    expect(seen!.url).toBe(`${KIE_DEFAULT_BASE_URL}/claude/v1/messages`);
+    const body = JSON.parse(String(seen!.init.body));
+    expect(body.model).toBe('claude-sonnet-4-6');
+    expect(body.system).toBe('sys-prompt');
+    expect(body.max_tokens).toBeGreaterThan(0);
+    // system 不进 messages；content 是纯字符串
+    expect(body.messages).toEqual([
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: 'hello' },
+      { role: 'user', content: 'again' },
+    ]);
+    expect(body.response_format).toBeUndefined();
+  });
+
+  it('anthropic style: joins multiple system messages and still maps 200-envelope errors', async () => {
+    let body: Record<string, unknown> = {};
+    await kieChatCompletion({
+      config: {
+        apiKey: KEY,
+        model: 'm',
+        apiStyle: 'anthropic',
+        fetchImpl: okFetch({ content: [{ type: 'text', text: 'ok' }] }, (_u, init) => {
+          body = JSON.parse(String(init.body));
+        }),
+      },
+      messages: [
+        { role: 'system', content: 'a' },
+        { role: 'system', content: 'b' },
+        { role: 'user', content: 'hi' },
+      ],
+    });
+    expect(body.system).toBe('a\nb');
+
+    // kie 200-envelope：422 "model is not supported" 走 normalizeHttpError 的 UNKNOWN 档
+    // （共享映射保持与 planner 一致，不单独改 4xx 语义）。
+    await expect(
+      kieChatCompletion({
+        config: {
+          apiKey: KEY,
+          model: 'm',
+          apiStyle: 'anthropic',
+          fetchImpl: okFetch({ code: 422, msg: 'The model is not supported' }),
+        },
+        messages: [{ role: 'user', content: 'hi' }],
+      }),
+    ).rejects.toMatchObject({ errorClass: 'UNKNOWN' });
+  });
 });

@@ -3,12 +3,14 @@
 /**
  * 创意参谋面板（原 V2 PR-4 画布助手改造，2026-09-19 owner ruling）：
  * 只当提示词优化 / 创意想法的参谋，不执行任何画布命令。
- * 头部可切换背后的大语言模型（kie Market LLM 白名单，见 lib/chat-models.ts），
+ * 底部输入栏可切换背后的大语言模型（kie Market LLM 白名单，见 lib/chat-models.ts），
  * 助手回复可通过「用作提示词」一键写入选中的生图卡。
  *
  * Session lifecycle: on workflowId change, reuse the newest session bound to
- * this workflow or create one. Sending a message is one synchronous advisor
- * turn (POST messages). 历史消息里遗留的 batchId 仍支持「撤销本轮」。
+ * this workflow or create one. 头部两个按钮：新建对话（开一个新 session）、
+ * 历史对话（列出本画布全部 session 并可切回）；首条消息自动成为会话标题。
+ * Sending a message is one synchronous advisor turn (POST messages).
+ * 历史消息里遗留的 batchId 仍支持「撤销本轮」。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -96,6 +98,20 @@ function extractPromptText(text: string): string {
   return (m ? (m[1] ?? '') : text).trim();
 }
 
+/** 历史对话列表的时间显示：今天显时分，否则显 月-日 时分。 */
+function formatSessionDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  return sameDay ? hm : `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hm}`;
+}
+
 /** content_json is a passthrough object — these extras ride alongside text. */
 type AssistantExtra = {
   budgetRejected?: unknown;
@@ -148,8 +164,48 @@ export function ChatPanel(props: {
   const { me } = useMe();
   const userName = me?.email?.split('@')[0] ?? null;
   const chatModels = listChatModels();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyItems, setHistoryItems] = useState<ChatSession[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [newChatBusy, setNewChatBusy] = useState(false);
 
   const base = `/api/workspaces/${workspaceId}/projects/${projectId}/chat-sessions`;
+
+  const loadSession = useCallback(
+    async (sessionId: string): Promise<boolean> => {
+      const detailRes = await fetch(`${base}/${sessionId}`);
+      const detail = await detailRes.json().catch(() => null);
+      if (!detailRes.ok) {
+        setError(`会话加载失败：${detail?.error?.message ?? detailRes.status}`);
+        return false;
+      }
+      const { messages: msgs, ...sessionRow } = detail as ChatSession & {
+        messages: ChatMessage[];
+      };
+      setSession(sessionRow);
+      setMessages(msgs ?? []);
+      return true;
+    },
+    [base],
+  );
+
+  const createSession = useCallback(async (): Promise<boolean> => {
+    const createRes = await fetch(base, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        workflowId,
+        title: DEFAULT_SESSION_TITLE,
+        budgetLimit: DEFAULT_BUDGET_LIMIT,
+      }),
+    });
+    const created = await createRes.json().catch(() => null);
+    if (!createRes.ok) {
+      setError(`会话创建失败：${created?.error?.message ?? createRes.status}`);
+      return false;
+    }
+    return loadSession(created.id as string);
+  }, [base, workflowId, loadSession]);
 
   const initSession = useCallback(async () => {
     if (!workflowId) return;
@@ -159,6 +215,7 @@ export function ChatPanel(props: {
     setHint(null);
     setSession(null);
     setMessages([]);
+    setHistoryOpen(false);
     try {
       const listRes = await fetch(`${base}?workflowId=${workflowId}`);
       const listJson = await listRes.json().catch(() => null);
@@ -166,45 +223,97 @@ export function ChatPanel(props: {
         setError(`会话列表加载失败：${listJson?.error?.message ?? listRes.status}`);
         return;
       }
-      let sessionId: string | undefined = listJson?.items?.[0]?.id;
-      if (!sessionId) {
-        const createRes = await fetch(base, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            workflowId,
-            title: DEFAULT_SESSION_TITLE,
-            budgetLimit: DEFAULT_BUDGET_LIMIT,
-          }),
-        });
-        const created = await createRes.json().catch(() => null);
-        if (!createRes.ok) {
-          setError(`会话创建失败：${created?.error?.message ?? createRes.status}`);
-          return;
-        }
-        sessionId = created.id as string;
+      const sessionId: string | undefined = listJson?.items?.[0]?.id;
+      if (sessionId) {
+        await loadSession(sessionId);
+      } else {
+        await createSession();
       }
-      const detailRes = await fetch(`${base}/${sessionId}`);
-      const detail = await detailRes.json().catch(() => null);
-      if (!detailRes.ok) {
-        setError(`会话加载失败：${detail?.error?.message ?? detailRes.status}`);
-        return;
-      }
-      const { messages: msgs, ...sessionRow } = detail as ChatSession & {
-        messages: ChatMessage[];
-      };
-      setSession(sessionRow);
-      setMessages(msgs ?? []);
     } catch {
       setError('网络错误 — 会话未加载');
     } finally {
       setLoading(false);
     }
-  }, [base, workflowId]);
+  }, [base, workflowId, loadSession, createSession]);
 
   useEffect(() => {
     void initSession();
   }, [initSession]);
+
+  const startNewChat = useCallback(async () => {
+    if (newChatBusy || !workflowId) return;
+    setNewChatBusy(true);
+    setError(null);
+    setHint(null);
+    try {
+      const ok = await createSession();
+      if (ok) {
+        setHistoryOpen(false);
+        setInput('');
+        inputRef.current?.focus();
+      }
+    } catch {
+      setError('网络错误 — 新建对话失败');
+    } finally {
+      setNewChatBusy(false);
+    }
+  }, [newChatBusy, workflowId, createSession]);
+
+  const toggleHistory = useCallback(async () => {
+    if (historyOpen) {
+      setHistoryOpen(false);
+      return;
+    }
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`${base}?workflowId=${workflowId}`);
+      const json = await res.json().catch(() => null);
+      if (res.ok) {
+        setHistoryItems((json?.items ?? []) as ChatSession[]);
+      } else {
+        setError(`历史对话加载失败：${json?.error?.message ?? res.status}`);
+      }
+    } catch {
+      setError('网络错误 — 历史对话未加载');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [historyOpen, base, workflowId]);
+
+  const pickSession = useCallback(
+    async (sessionId: string) => {
+      if (sessionId === session?.id) {
+        setHistoryOpen(false);
+        return;
+      }
+      setError(null);
+      setHint(null);
+      const ok = await loadSession(sessionId);
+      if (ok) setHistoryOpen(false);
+    },
+    [session?.id, loadSession],
+  );
+
+  /** 首条消息成功后，用它自动生成会话标题（静默失败不影响聊天）。 */
+  const maybeAutoTitle = useCallback(
+    (sessionId: string, firstUserText: string) => {
+      const title = firstUserText.replace(/\s+/g, ' ').trim().slice(0, 24);
+      if (!title) return;
+      void fetch(`${base}/${sessionId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title }),
+      })
+        .then((res) => {
+          if (res.ok) {
+            setSession((prev) => (prev && prev.id === sessionId ? { ...prev, title } : prev));
+          }
+        })
+        .catch(() => {});
+    },
+    [base],
+  );
 
   useEffect(() => {
     const el = msgsRef.current;
@@ -254,13 +363,18 @@ export function ChatPanel(props: {
         const assistantMessage = json.assistantMessage as ChatMessage;
         setMessages((prev) => [...prev, userMessage, assistantMessage]);
         setInput('');
+        // 首条消息 → 自动给会话起名，历史列表里才好认
+        const isFirstUserMsg = !messages.some((m) => m.role === 'USER');
+        if (isFirstUserMsg && (!session.title || session.title === DEFAULT_SESSION_TITLE)) {
+          maybeAutoTitle(session.id, content);
+        }
       } catch {
         setError('网络错误 — 消息未发送');
       } finally {
         setSending(false);
       }
     },
-    [base, input, model, sending, session],
+    [base, input, model, sending, session, messages, maybeAutoTitle],
   );
 
   const undoTurn = useCallback(
@@ -311,19 +425,95 @@ export function ChatPanel(props: {
   return (
     <>
       <div className="chat-head">
-        <strong>{session?.title ?? DEFAULT_SESSION_TITLE}</strong>
-        {props.onCollapse ? (
+        <strong className="chat-head-title" title={session?.title ?? DEFAULT_SESSION_TITLE}>
+          {session?.title ?? DEFAULT_SESSION_TITLE}
+        </strong>
+        <div className="chat-head-actions">
           <button
             type="button"
-            className="chat-collapse-btn"
-            onClick={props.onCollapse}
-            title="收起参谋面板"
-            aria-label="收起参谋面板"
+            className="chat-icon-btn"
+            onClick={() => void startNewChat()}
+            disabled={newChatBusy}
+            title="新建对话"
+            aria-label="新建对话"
           >
-            ⟨
+            <svg
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M12 20h8" />
+              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" />
+            </svg>
           </button>
-        ) : null}
+          <button
+            type="button"
+            className={historyOpen ? 'chat-icon-btn chat-icon-btn-active' : 'chat-icon-btn'}
+            onClick={() => void toggleHistory()}
+            title="历史对话"
+            aria-label="历史对话"
+            aria-expanded={historyOpen}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M3 3v5h5" />
+              <path d="M3.05 13a9 9 0 1 0 .5-5L3 8" />
+              <path d="M12 7v5l3.5 2" />
+            </svg>
+          </button>
+          {props.onCollapse ? (
+            <button
+              type="button"
+              className="chat-icon-btn"
+              onClick={props.onCollapse}
+              title="收起参谋面板"
+              aria-label="收起参谋面板"
+            >
+              ⟨
+            </button>
+          ) : null}
+        </div>
       </div>
+      {historyOpen && (
+        <div className="chat-history-pop" role="listbox" aria-label="历史对话列表">
+          {historyLoading ? (
+            <Spinner label="加载历史对话…" />
+          ) : historyItems.length === 0 ? (
+            <p className="chat-history-empty">还没有历史对话</p>
+          ) : (
+            historyItems.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                role="option"
+                aria-selected={s.id === session?.id}
+                className={
+                  s.id === session?.id ? 'chat-history-item chat-history-item-active' : 'chat-history-item'
+                }
+                onClick={() => void pickSession(s.id)}
+              >
+                <span className="chat-history-item-title">{s.title ?? DEFAULT_SESSION_TITLE}</span>
+                <span className="chat-history-item-date">{formatSessionDate(s.createdAt)}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
       {error &&
         (authRequired ? (
           <p role="alert" className="banner-error">
