@@ -149,6 +149,53 @@ function StudioCanvasInner(props: {
   const [nodeResults, setNodeResults] = useState<Record<string, string[]>>({});
   const [nodeStale, setNodeStale] = useState<Record<string, boolean>>({});
   const [runsActive, setRunsActive] = useState(false);
+  // 参谋面板：可折叠 + 拖拽调宽（localStorage 记忆）
+  const [asideW, setAsideW] = useState<number>(() => {
+    if (typeof window === 'undefined') return 320;
+    const v = Number(window.localStorage.getItem('studio.asideW'));
+    return Number.isFinite(v) && v >= 240 && v <= 640 ? v : 320;
+  });
+  const [asideCollapsed, setAsideCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('studio.asideCollapsed') === '1';
+  });
+  const asideDragRef = useRef<{ startX: number; startW: number } | null>(null);
+
+  const onAsideDragStart = useCallback((e: ReactMouseEvent) => {
+    e.preventDefault();
+    asideDragRef.current = { startX: e.clientX, startW: asideW };
+    const onMove = (ev: MouseEvent) => {
+      const start = asideDragRef.current;
+      if (!start) return;
+      // 右栏：向左拖变宽、向右拖变窄
+      const next = Math.min(640, Math.max(240, start.startW + (start.startX - ev.clientX)));
+      setAsideW(next);
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      setAsideW((w) => {
+        try {
+          window.localStorage.setItem('studio.asideW', String(w));
+        } catch {
+          /* 忽略 */
+        }
+        return w;
+      });
+      asideDragRef.current = null;
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [asideW]);
+
+  const toggleAside = useCallback((collapsed: boolean) => {
+    setAsideCollapsed(collapsed);
+    try {
+      window.localStorage.setItem('studio.asideCollapsed', collapsed ? '1' : '0');
+    } catch {
+      /* 忽略 */
+    }
+  }, []);
   const revisionRef = useRef(0);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -1688,6 +1735,9 @@ function StudioCanvasInner(props: {
           ? 'studio-dark studio-grid studio-grid-v2 studio-grid-below-stepper'
           : 'studio-dark studio-grid studio-grid-v2'
       }
+      style={{
+        gridTemplateColumns: asideCollapsed ? '52px 1fr 0px' : `52px 1fr ${asideW}px`,
+      }}
     >
       <LeftRail
         panel={railPanel}
@@ -1968,18 +2018,42 @@ function StudioCanvasInner(props: {
         )}
       </div>
 
-      <aside className="studio-aside studio-aside-right studio-aside-flex" aria-label="创意参谋">
-        <div className="chat-panel">
-          <ChatPanel
-            workspaceId={workspaceId}
-            projectId={projectId}
-            workflowId={draft?.workflowId ?? null}
-            getRevision={getRevision}
-            onGraphChanged={handleGraphChanged}
-            onUsePrompt={handleUsePrompt}
+      {!asideCollapsed ? (
+        <aside
+          className="studio-aside studio-aside-right studio-aside-flex"
+          aria-label="创意参谋"
+        >
+          <div
+            className="studio-aside-resizer"
+            onMouseDown={onAsideDragStart}
+            title="拖拽调整面板宽度"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整参谋面板宽度"
           />
-        </div>
-      </aside>
+          <div className="chat-panel">
+            <ChatPanel
+              workspaceId={workspaceId}
+              projectId={projectId}
+              workflowId={draft?.workflowId ?? null}
+              getRevision={getRevision}
+              onGraphChanged={handleGraphChanged}
+              onUsePrompt={handleUsePrompt}
+              onCollapse={() => toggleAside(true)}
+            />
+          </div>
+        </aside>
+      ) : (
+        <button
+          type="button"
+          className="chat-reopen-btn"
+          onClick={() => toggleAside(false)}
+          title="展开创意参谋"
+          aria-label="展开创意参谋"
+        >
+          ✦
+        </button>
+      )}
     </div>
   );
 }

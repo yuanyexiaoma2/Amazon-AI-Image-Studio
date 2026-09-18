@@ -120,6 +120,8 @@ export function ChatPanel(props: {
   onGraphChanged: (graph: WorkflowGraph, revisionNumber: number) => void;
   /** 把助手回复写入选中生图卡的提示词（未选中时由调用方提示）。 */
   onUsePrompt?: (text: string) => void;
+  /** 收起面板（由外层布局提供）。 */
+  onCollapse?: () => void;
 }) {
   const { workspaceId, projectId, workflowId, onUsePrompt } = props;
   const getRevisionRef = useRef(props.getRevision);
@@ -138,7 +140,8 @@ export function ChatPanel(props: {
   const [hint, setHint] = useState<string | null>(null);
   const [model, setModel] = useState<string>(() => {
     if (typeof window === 'undefined') return DEFAULT_CHAT_MODEL;
-    return window.localStorage.getItem(MODEL_STORAGE_KEY) || DEFAULT_CHAT_MODEL;
+    const stored = window.localStorage.getItem(MODEL_STORAGE_KEY);
+    return stored && listChatModels().some((m) => m.slug === stored) ? stored : DEFAULT_CHAT_MODEL;
   });
   const msgsRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -309,28 +312,17 @@ export function ChatPanel(props: {
     <>
       <div className="chat-head">
         <strong>{session?.title ?? DEFAULT_SESSION_TITLE}</strong>
-        <select
-          className="chat-model-select"
-          value={model}
-          disabled={sending}
-          aria-label="切换参谋模型"
-          title="切换背后的大语言模型"
-          onChange={(e) => {
-            setModel(e.target.value);
-            try {
-              window.localStorage.setItem(MODEL_STORAGE_KEY, e.target.value);
-            } catch {
-              /* 隐私模式写入失败忽略 */
-            }
-          }}
-        >
-          {chatModels.map((m) => (
-            <option key={m.slug} value={m.slug}>
-              {m.label}
-              {m.desc ? ` · ${m.desc}` : ''}
-            </option>
-          ))}
-        </select>
+        {props.onCollapse ? (
+          <button
+            type="button"
+            className="chat-collapse-btn"
+            onClick={props.onCollapse}
+            title="收起参谋面板"
+            aria-label="收起参谋面板"
+          >
+            ⟨
+          </button>
+        ) : null}
       </div>
       {error &&
         (authRequired ? (
@@ -458,6 +450,27 @@ export function ChatPanel(props: {
               }}
             />
             <div className="chat-input-bar">
+              <select
+                className="chat-model-select"
+                value={model}
+                disabled={sending}
+                aria-label="切换参谋模型"
+                title="切换背后的大语言模型"
+                onChange={(e) => {
+                  setModel(e.target.value);
+                  try {
+                    window.localStorage.setItem(MODEL_STORAGE_KEY, e.target.value);
+                  } catch {
+                    /* 隐私模式写入失败忽略 */
+                  }
+                }}
+              >
+                {chatModels.map((m) => (
+                  <option key={m.slug} value={m.slug}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
               <button
                 type="button"
                 className="chat-send"

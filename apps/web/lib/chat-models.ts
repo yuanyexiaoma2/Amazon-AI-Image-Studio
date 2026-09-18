@@ -14,9 +14,7 @@ export type ChatModelOption = {
 
 const DEFAULT_CHAT_MODELS: ChatModelOption[] = [
   { slug: 'gemini-3-flash', label: 'Gemini 3 Flash', desc: '快速 · 默认' },
-  { slug: 'gemini-3-1-pro', label: 'Gemini 3.1 Pro', desc: '深度推理 · 较慢' },
   { slug: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', desc: '文案细腻' },
-  { slug: 'gpt-5-2', label: 'GPT-5.2', desc: '通用强' },
 ];
 
 export const DEFAULT_CHAT_MODEL = DEFAULT_CHAT_MODELS[0]!.slug;
