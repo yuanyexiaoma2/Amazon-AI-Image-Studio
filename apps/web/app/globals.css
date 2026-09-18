@@ -700,9 +700,48 @@ code {
 }
 
 .studio-aside {
+  position: relative;
   padding: var(--space-3);
   overflow: auto;
   background: var(--panel);
+}
+
+.studio-aside-resizer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 20;
+}
+
+.studio-aside-resizer:hover,
+.studio-aside-resizer:active {
+  background: var(--accent-strong);
+  opacity: 0.5;
+}
+
+.chat-reopen-btn {
+  position: fixed;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--accent-soft-border);
+  background: var(--accent-soft-bg);
+  color: var(--accent-text);
+  font-size: 16px;
+  cursor: pointer;
+  z-index: 40;
+  box-shadow: var(--shadow-md);
+}
+
+.chat-reopen-btn:hover {
+  border-color: var(--accent-strong);
+  color: var(--text);
 }
 
 .studio-aside-right {
@@ -1079,8 +1118,25 @@ code {
 
 .chat-input-bar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
+}
+
+.chat-collapse-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chat-collapse-btn:hover {
+  background: var(--surface-raised);
+  color: var(--text);
 }
 
 .chat-send {
