@@ -1,27 +1,27 @@
 'use client';
 
 /**
- * V2 PR-4 — chat agent panel (the third canvas operator).
+ * 创意参谋面板（原 V2 PR-4 画布助手改造，2026-09-19 owner ruling）：
+ * 只当提示词优化 / 创意想法的参谋，不执行任何画布命令。
+ * 头部可切换背后的大语言模型（kie Market LLM 白名单，见 lib/chat-models.ts），
+ * 助手回复可通过「用作提示词」一键写入选中的生图卡。
  *
  * Session lifecycle: on workflowId change, reuse the newest session bound to
- * this workflow or create one (default title 画布助手, budget $5). Sending a
- * message is one synchronous agent turn (POST messages); the reply may carry
- * an applied command batch (batchId) and/or a run. After any canvas mutation
- * the latest draft graph is re-fetched and handed to onGraphChanged so the
- * canvas state and its optimistic-concurrency revision stay in sync with the
- * server. A turn's batch can be rolled back through the existing
- * commands/undo endpoint.
+ * this workflow or create one. Sending a message is one synchronous advisor
+ * turn (POST messages). 历史消息里遗留的 batchId 仍支持「撤销本轮」。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { ChatMessage, ChatSession } from '@studio/contracts';
-import { microunitsToAmount, type WorkflowGraph } from '@studio/domain';
-import { zh, COMMAND_TYPE_ZH, RUN_STATUS_ZH } from '@/lib/zh-labels';
+import { type WorkflowGraph } from '@studio/domain';
+import { zh, COMMAND_TYPE_ZH } from '@/lib/zh-labels';
 import { useMe } from '@/lib/use-me';
-import { Badge, Button, EmptyState, ErrorBanner, Spinner, type BadgeTone } from '../ui';
+import { listChatModels, DEFAULT_CHAT_MODEL } from '@/lib/chat-models';
+import { Badge, Button, EmptyState, ErrorBanner, Spinner } from '../ui';
 
-const DEFAULT_SESSION_TITLE = '画布助手';
+const DEFAULT_SESSION_TITLE = '创意参谋';
 const DEFAULT_BUDGET_LIMIT = { currency: 'USD', amount: 5 };
+const MODEL_STORAGE_KEY = 'studio.chatModel';
 
 function cardIcon(kind: 'flow' | 'run' | 'bg') {
   const paths = {
@@ -59,39 +59,48 @@ function cardIcon(kind: 'flow' | 'run' | 'bg') {
   );
 }
 
-const SUGGESTIONS: Array<{ icon: 'flow' | 'run' | 'bg'; title: string; desc: string; prompt: string }> = [
+const SUGGESTIONS: Array<{
+  icon: 'flow' | 'run' | 'bg';
+  title: string;
+  desc: string;
+  prompt: string;
+  /** fill = 填入输入框等用户补充；send = 直接发送。 */
+  action: 'fill' | 'send';
+}> = [
   {
     icon: 'flow',
-    title: '搭建生图流程',
-    desc: '文本卡写提示词，连线到生图卡',
-    prompt: '帮我搭建一个生图流程：新建一张文本卡写好提示词，再建一张生图卡并连线',
+    title: '优化我的提示词',
+    desc: '粘贴粗糙想法，改写成可出片的提示词',
+    prompt: '帮我优化这条提示词（输出英文、可直接用于生图）：',
+    action: 'fill',
   },
   {
     icon: 'bg',
-    title: '搭建换背景流程',
-    desc: '图片卡作参考，生图卡换背景',
-    prompt: '帮我搭建一个换背景流程：新建图片卡和生图卡并连线，生图卡提示词写换背景',
+    title: '卖点 → 画面',
+    desc: '把产品卖点翻译成画面创意',
+    prompt: '帮我把这个产品卖点翻译成 3 个画面创意：',
+    action: 'fill',
   },
   {
     icon: 'run',
-    title: '运行整张画布',
-    desc: '按当前连线从头跑一遍',
-    prompt: '运行整图',
+    title: '给我场景灵感',
+    desc: '5 个适合本品的使用场景方向',
+    prompt: '给我 5 个适合这款产品主图和 A+ 图的使用场景创意，每个方向附一条英文提示词',
+    action: 'send',
   },
 ];
+
+/** 从助手回复中提取提示词：优先取第一个 ``` 代码块，否则取全文。 */
+function extractPromptText(text: string): string {
+  const m = text.match(/```[a-z]*\n?([\s\S]*?)```/i);
+  return (m ? (m[1] ?? '') : text).trim();
+}
 
 /** content_json is a passthrough object — these extras ride alongside text. */
 type AssistantExtra = {
   budgetRejected?: unknown;
   error?: unknown;
 };
-
-function runTone(status: string): BadgeTone {
-  if (status === 'SUCCEEDED') return 'ok';
-  if (status.startsWith('FAILED') || status === 'CANCELLED') return 'danger';
-  if (status === 'RUNNING' || status === 'QUEUED') return 'accent';
-  return 'default';
-}
 
 /** 命令类型列表 → 中文摘要，如「添加节点×2、连线」。 */
 function summarizeTypes(types: string[]): string {
@@ -109,8 +118,10 @@ export function ChatPanel(props: {
   /** Live optimistic-concurrency revision of the canvas draft (revisionRef). */
   getRevision: () => number;
   onGraphChanged: (graph: WorkflowGraph, revisionNumber: number) => void;
+  /** 把助手回复写入选中生图卡的提示词（未选中时由调用方提示）。 */
+  onUsePrompt?: (text: string) => void;
 }) {
-  const { workspaceId, projectId, workflowId } = props;
+  const { workspaceId, projectId, workflowId, onUsePrompt } = props;
   const getRevisionRef = useRef(props.getRevision);
   getRevisionRef.current = props.getRevision;
   const onGraphChangedRef = useRef(props.onGraphChanged);
@@ -118,7 +129,6 @@ export function ChatPanel(props: {
 
   const [session, setSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [runByMessage, setRunByMessage] = useState<Record<string, { status: string }>>({});
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [undoBusyId, setUndoBusyId] = useState<string | null>(null);
@@ -126,9 +136,15 @@ export function ChatPanel(props: {
   const [error, setError] = useState<string | null>(null);
   const [authRequired, setAuthRequired] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
+  const [model, setModel] = useState<string>(() => {
+    if (typeof window === 'undefined') return DEFAULT_CHAT_MODEL;
+    return window.localStorage.getItem(MODEL_STORAGE_KEY) || DEFAULT_CHAT_MODEL;
+  });
   const msgsRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const { me } = useMe();
   const userName = me?.email?.split('@')[0] ?? null;
+  const chatModels = listChatModels();
 
   const base = `/api/workspaces/${workspaceId}/projects/${projectId}/chat-sessions`;
 
@@ -140,7 +156,6 @@ export function ChatPanel(props: {
     setHint(null);
     setSession(null);
     setMessages([]);
-    setRunByMessage({});
     try {
       const listRes = await fetch(`${base}?workflowId=${workflowId}`);
       const listJson = await listRes.json().catch(() => null);
@@ -193,82 +208,57 @@ export function ChatPanel(props: {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, sending]);
 
-  const pullGraph = useCallback(async () => {
-    if (!workflowId) return;
-    const res = await fetch(`/api/workspaces/${workspaceId}/workflows/${workflowId}`);
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
-      setError(`画布刷新失败：${json?.error?.message ?? res.status}`);
-      return;
-    }
-    onGraphChangedRef.current(json.graph as WorkflowGraph, json.revisionNumber as number);
-  }, [workspaceId, workflowId]);
-
   const send = useCallback(
     async (rawContent?: string) => {
       const content = (rawContent ?? input).trim();
       if (!content || !session || sending) return;
-    setSending(true);
-    setError(null);
-    setAuthRequired(false);
-    setHint(null);
-    try {
-      const res = await fetch(`${base}/${session.id}/messages`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ content }),
-      });
-      const json = await res.json().catch(() => null);
-      if (!res.ok) {
-        const code = json?.error?.code as string | undefined;
-        if (res.status === 401) {
-          // LOCAL_MODE: browsing needs no login; generation/chat turns do.
-          setAuthRequired(true);
-          setError('生图需要登录账号');
-        } else {
-          setAuthRequired(false);
-          setError(
-            code === 'CHAT_AUTH_FAILED'
-              ? '画布助手认证失败 — 请检查助手模型的密钥配置。'
-              : code === 'CHAT_UNAVAILABLE'
-                ? '画布助手暂不可用 — 请稍后重试。'
-                : `发送失败：${json?.error?.message ?? res.status}`,
-          );
+      setSending(true);
+      setError(null);
+      setAuthRequired(false);
+      setHint(null);
+      try {
+        const res = await fetch(`${base}/${session.id}/messages`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ content, model }),
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok) {
+          const code = json?.error?.code as string | undefined;
+          if (res.status === 401) {
+            // LOCAL_MODE: browsing needs no login; advisor turns do.
+            setAuthRequired(true);
+            setError('使用参谋需要登录账号');
+          } else {
+            setAuthRequired(false);
+            setError(
+              code === 'CHAT_AUTH_FAILED'
+                ? '参谋模型认证失败 — 请检查助手模型的密钥配置。'
+                : code === 'CHAT_UNAVAILABLE'
+                  ? '参谋暂不可用 — 请稍后重试或切换模型。'
+                  : `发送失败：${json?.error?.message ?? res.status}`,
+            );
+          }
+          // The USER message is persisted even when the turn fails — resync.
+          const detailRes = await fetch(`${base}/${session.id}`);
+          const detail = await detailRes.json().catch(() => null);
+          if (detailRes.ok && detail) {
+            setMessages((detail as { messages?: ChatMessage[] }).messages ?? []);
+          }
+          return;
         }
-        // The USER message is persisted even when the turn fails — resync.
-        const detailRes = await fetch(`${base}/${session.id}`);
-        const detail = await detailRes.json().catch(() => null);
-        if (detailRes.ok && detail) {
-          setMessages((detail as { messages?: ChatMessage[] }).messages ?? []);
-        }
-        return;
+        const userMessage = json.userMessage as ChatMessage;
+        const assistantMessage = json.assistantMessage as ChatMessage;
+        setMessages((prev) => [...prev, userMessage, assistantMessage]);
+        setInput('');
+      } catch {
+        setError('网络错误 — 消息未发送');
+      } finally {
+        setSending(false);
       }
-      const userMessage = json.userMessage as ChatMessage;
-      const assistantMessage = json.assistantMessage as ChatMessage;
-      setMessages((prev) => [...prev, userMessage, assistantMessage]);
-      const run = json.run as { status?: string; estimateMicrounits?: number } | undefined;
-      if (run?.status) {
-        setRunByMessage((prev) => ({
-          ...prev,
-          [assistantMessage.id]: { status: String(run.status) },
-        }));
-      }
-      setInput('');
-      if (json.batchId || run) {
-        await pullGraph();
-      }
-      if (typeof run?.estimateMicrounits === 'number') {
-        const spent = run.estimateMicrounits;
-        setSession((prev) =>
-          prev ? { ...prev, spentMicrounits: prev.spentMicrounits + spent } : prev,
-        );
-      }
-    } catch {
-      setError('网络错误 — 消息未发送');
-    } finally {
-      setSending(false);
-    }
-  }, [base, input, pullGraph, sending, session]);
+    },
+    [base, input, model, sending, session],
+  );
 
   const undoTurn = useCallback(
     async (message: ChatMessage) => {
@@ -312,35 +302,40 @@ export function ChatPanel(props: {
   );
 
   if (!workflowId) {
-    return <EmptyState>画布加载完成后即可与画布助手对话。</EmptyState>;
+    return <EmptyState>画布加载完成后即可与创意参谋对话。</EmptyState>;
   }
-
-  const budget = session?.budgetLimit ?? null;
-  const remaining =
-    budget && session ? budget.amount - microunitsToAmount(session.spentMicrounits) : null;
 
   return (
     <>
       <div className="chat-head">
         <strong>{session?.title ?? DEFAULT_SESSION_TITLE}</strong>
-        {budget && remaining !== null ? (
-          <Badge
-            tone={remaining > 0 ? 'accent' : 'warn'}
-          >
-            <span title={`预算剩余 $${remaining.toFixed(2)} / $${budget.amount.toFixed(2)}`}>
-              预算 ${remaining.toFixed(2)}
-            </span>
-          </Badge>
-        ) : (
-          <span className="faint" style={{ fontSize: 'var(--font-size-xs)' }}>
-            未设预算 — 助手不会触发运行
-          </span>
-        )}
+        <select
+          className="chat-model-select"
+          value={model}
+          disabled={sending}
+          aria-label="切换参谋模型"
+          title="切换背后的大语言模型"
+          onChange={(e) => {
+            setModel(e.target.value);
+            try {
+              window.localStorage.setItem(MODEL_STORAGE_KEY, e.target.value);
+            } catch {
+              /* 隐私模式写入失败忽略 */
+            }
+          }}
+        >
+          {chatModels.map((m) => (
+            <option key={m.slug} value={m.slug}>
+              {m.label}
+              {m.desc ? ` · ${m.desc}` : ''}
+            </option>
+          ))}
+        </select>
       </div>
       {error &&
         (authRequired ? (
           <p role="alert" className="banner-error">
-            生图需要登录账号 — <Link href="/login">去登录</Link>
+            使用参谋需要登录账号 — <Link href="/login">去登录</Link>
           </p>
         ) : (
           <ErrorBanner message={error} onRetry={session ? undefined : () => void initSession()} />
@@ -368,7 +363,14 @@ export function ChatPanel(props: {
                       type="button"
                       className="chat-suggest-card"
                       disabled={!session || sending}
-                      onClick={() => void send(s.prompt)}
+                      onClick={() => {
+                        if (s.action === 'fill') {
+                          setInput(s.prompt);
+                          inputRef.current?.focus();
+                        } else {
+                          void send(s.prompt);
+                        }
+                      }}
                     >
                       <span className="chat-suggest-icon">{cardIcon(s.icon)}</span>
                       <span className="chat-suggest-body">
@@ -387,7 +389,6 @@ export function ChatPanel(props: {
               if (m.role === 'SYSTEM') return null;
               const extra = m.content as AssistantExtra;
               const summary = m.content.commandsSummary;
-              const runInfo = runByMessage[m.id];
               const errObj =
                 extra.error && typeof extra.error === 'object'
                   ? (extra.error as { code?: string; message?: string })
@@ -400,13 +401,21 @@ export function ChatPanel(props: {
                   <div>{m.content.text}</div>
                   {m.role === 'ASSISTANT' && (
                     <div className="chat-msg-meta">
+                      {onUsePrompt && (
+                        <button
+                          type="button"
+                          className="chat-use-prompt"
+                          title="把这条回复（优先取代码块）写入选中生图卡的提示词"
+                          onClick={() => onUsePrompt(extractPromptText(m.content.text))}
+                        >
+                          用作提示词
+                        </button>
+                      )}
+                      {m.modelId && <span className="chat-msg-model faint">{m.modelId}</span>}
                       {summary && summary.count > 0 && (
                         <Badge tone="accent">
                           已应用 {summary.count} 条命令（{summarizeTypes(summary.types)}）
                         </Badge>
-                      )}
-                      {runInfo && (
-                        <Badge tone={runTone(runInfo.status)}>运行{zh(RUN_STATUS_ZH, runInfo.status)}</Badge>
                       )}
                       {extra.budgetRejected === true && (
                         <Badge tone="warn">预算不足，未执行运行</Badge>
@@ -430,13 +439,14 @@ export function ChatPanel(props: {
                 </div>
               );
             })}
-            {sending && <Spinner label="助手思考中…" />}
+            {sending && <Spinner label="参谋思考中…" />}
           </div>
           <div className="chat-input-box">
             <textarea
+              ref={inputRef}
               className="chat-input"
               value={input}
-              placeholder="描述画布操作，Enter 发送 · Shift+Enter 换行"
+              placeholder="问参谋：优化提示词、要场景创意…（Enter 发送）"
               rows={2}
               disabled={sending}
               onChange={(e) => setInput(e.target.value)}
