@@ -552,12 +552,12 @@ code {
 }
 
 .studio-node .react-flow__handle.studio-handle-in {
-  left: -17px;
+  left: -14px;
   background: var(--accent-strong);
 }
 
 .studio-node .react-flow__handle.studio-handle-out {
-  right: -17px;
+  right: -14px;
   background: var(--ok-soft);
 }
 
@@ -705,10 +705,6 @@ code {
   background: var(--panel);
 }
 
-.studio-aside-left {
-  border-right: 1px solid var(--border);
-}
-
 .studio-aside-right {
   border-left: 1px solid var(--border);
 }
@@ -718,43 +714,25 @@ code {
   min-width: 0;
 }
 
+/* 旧类型算子节点的紧凑回退卡片：固定宽度，避免小碎块与相邻卡片视觉重叠 */
 .studio-node {
-  min-width: 150px;
-  padding: 10px 12px;
-  border-radius: var(--radius-lg);
+  width: 200px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
   border: 1px solid var(--border-emph);
-  background: var(--surface);
-  color: var(--text);
-  font-size: var(--font-size-sm);
+  background: var(--panel);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
   box-shadow: var(--shadow-sm);
+}
+
+.studio-node > div:first-child {
+  color: var(--text);
 }
 
 .studio-node-selected {
   border: 2px solid var(--accent-strong);
   box-shadow: 0 0 0 3px var(--accent-soft-bg);
-}
-
-.palette-btn {
-  display: block;
-  width: 100%;
-  text-align: left;
-  margin-bottom: 6px;
-  padding: 7px 10px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-size: var(--font-size-sm);
-  font-family: inherit;
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease;
-}
-
-.palette-btn:hover {
-  border-color: var(--accent-strong);
-  background: var(--accent-soft-bg);
 }
 
 .studio-toolbar {
@@ -778,16 +756,6 @@ code {
   position: absolute;
   left: 12px;
   right: 12px;
-}
-
-.studio-drawer {
-  grid-column: 1 / -1;
-  border-top: 1px solid var(--border);
-  padding: var(--space-3);
-  font-size: var(--font-size-md);
-  display: grid;
-  gap: var(--space-2);
-  background: var(--panel);
 }
 
 .run-card {
@@ -899,24 +867,10 @@ code {
   border-radius: var(--radius);
 }
 
-/* studio right sidebar tabs + chat panel (V2 PR-4) */
+/* studio right sidebar + chat panel (V2 PR-4) */
 .studio-aside-flex {
   display: flex;
   flex-direction: column;
-}
-
-.studio-tabs {
-  display: flex;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-
-.studio-tabs .btn {
-  flex: 1;
-}
-
-.studio-tab-hidden {
-  display: none;
 }
 
 .chat-panel {
