@@ -1,88 +1,75 @@
 import { NextResponse } from 'next/server';
-import {
-  AgentTurnOutputSchema,
-  PostChatMessageRequestSchema,
-  makeApiError,
-  type WorkflowCommand,
-} from '@studio/contracts';
-import {
-  amountToMicrounits,
-  listEnabledModels,
-  microunitsToAmount,
-  resolveModelRegistry,
-  WORKFLOW_WRITE_ROLES,
-  type WorkflowGraph,
-} from '@studio/domain';
-import {
-  prisma,
-  newId,
-  AssetRepository,
-  ChatRepository,
-  WorkflowRepository,
-} from '@studio/db';
+import { PostChatMessageRequestSchema, makeApiError } from '@studio/contracts';
+import { prisma, ChatRepository, WorkflowRepository } from '@studio/db';
 import {
   ChatProviderError,
-  createChatAgentProvider,
-  type ChatAgentMessage,
-  type ChatAgentTurnOutput,
+  kieChatCompletion,
+  resolveChatProviderKind,
+  KIE_DEFAULT_BASE_URL,
+  type KieChatMessage,
 } from '@studio/providers';
 import { getOrCreateRequestId } from '@/lib/request-id';
 import { paidGateResponse, requireWorkspaceRoles } from '@/lib/workspace-access';
-import { applyCommandsToWorkflow } from '@/lib/apply-commands';
-import { guardAgentCommands } from '@/lib/agent-command-guard';
-import { resolveAgentNodeIds } from '@/lib/resolve-agent-node-ids';
 import { serializeChatMessage } from '@/lib/chat-serialize';
+import { resolveChatModel } from '@/lib/chat-models';
 import { NODE_TYPE_ZH } from '@/lib/zh-labels';
+import { WORKFLOW_WRITE_ROLES, type WorkflowGraph } from '@studio/domain';
 
 type Ctx = {
   params: Promise<{ workspaceId: string; projectId: string; sessionId: string }>;
 };
 
-type RunCommand = Extract<WorkflowCommand, { type: 'run' }>;
-
-/** Compact text rendering of the current draft graph for the agent prompt. */
+/** Compact text rendering of the current draft graph, as advisor context. */
 function summarizeGraph(graph: WorkflowGraph): string {
   if (graph.nodes.length === 0) return '（空画布）';
   const nodes = graph.nodes
     .map((n) => {
-      const title =
-        typeof (n.config as Record<string, unknown> | undefined)?.title === 'string'
-          ? ((n.config as { title: string }).title)
-          : '';
+      const cfg = n.config as Record<string, unknown> | undefined;
+      const title = typeof cfg?.title === 'string' ? cfg.title : '';
+      const prompt = typeof cfg?.prompt === 'string' ? cfg.prompt.slice(0, 60) : '';
       const typeZh = NODE_TYPE_ZH[n.type] ?? n.type;
-      return title ? `节点 ${n.id}（${typeZh}「${title}」）` : `节点 ${n.id}（${typeZh}）`;
+      const extras = [title && `「${title}」`, prompt && `提示词：${prompt}`]
+        .filter(Boolean)
+        .join(' ');
+      return `${typeZh}${extras ? ` ${extras}` : ''}`;
     })
     .join('\n');
-  const edges =
-    graph.edges.length > 0
-      ? graph.edges.map((e) => `边 ${e.source}→${e.target}`).join('\n')
-      : '（无连线）';
-  return `${nodes}\n${edges}`;
+  return nodes;
 }
 
-async function buildCatalog(workspaceId: string, projectId: string): Promise<string> {
-  const assets = new AssetRepository(prisma);
-  const assetRows = (await assets.listByProject(workspaceId, projectId)).slice(0, 20);
-  const assetLines = assetRows.map(
-    (a) =>
-      `素材 ${a.id} "${a.originalFilename ?? '(未命名)'}" (currentVersionId=${a.currentVersionId ?? '无'})`,
-  );
-  const models = listEnabledModels(resolveModelRegistry(process.env.IMAGE_PROVIDER));
-  const modelLines = models.map((m) => `模型 ${m.key}: ${m.displayName}`);
+function buildAdvisorSystemPrompt(graphSummary: string): string {
   return [
-    assetLines.length > 0 ? assetLines.join('\n') : '（项目暂无素材）',
-    modelLines.join('\n'),
+    '你是「亚马逊产品图创意参谋」，服务于一个电商生图画布工具。你的职责只有两件：',
+    '1. 优化提示词：把用户的粗略想法改写成高质量的文生图/图生图提示词',
+    '2. 创意建议：场景方向、构图、光线、卖点视觉化',
+    '',
+    '规则：',
+    '- 全程用中文交流；但输出的提示词正文用英文（生图模型对英文更稳定），并用 ``` 代码块包裹方便复制',
+    '- 回答简洁，一次最多给 3 条可执行建议，不要长篇大论',
+    '- 你不能操作画布；如果用户让你搭建或修改画布，告诉他可以双击空白建卡、从卡片边缘拖线连接',
+    '- 建议尽量贴合下方当前画布的内容',
+    '',
+    '当前画布概况：',
+    graphSummary,
+  ].join('\n');
+}
+
+/** Fake 参谋（CHAT_PROVIDER=fake 或未配 key 时的演示回复）。 */
+function fakeAdvisorReply(userText: string): string {
+  return [
+    `（演示参谋）收到：「${userText.slice(0, 80)}」。配置真实 LLM 后我会给出针对性建议。`,
+    '',
+    '先送你一条通用的亚马逊主图提示词模板：',
+    '```',
+    'Professional product photography of {产品}, centered on a clean white background, soft diffused studio lighting, sharp focus, high detail, e-commerce main image, 1:1',
+    '```',
   ].join('\n');
 }
 
 /**
- * POST /workspaces/{ws}/projects/{pid}/chat-sessions/{sid}/messages — V2 PR-4
- * agent turn (synchronous). Appends the USER message, runs the chat agent
- * provider, validates the turn output against contracts AgentTurnOutputSchema,
- * applies the session budget gate to any run command, executes surviving
- * commands through lib/apply-commands as one undoable batch, accumulates the
- * run's estimateMicrounits into the session spend, and appends the ASSISTANT
- * message.
+ * POST /workspaces/{ws}/projects/{pid}/chat-sessions/{sid}/messages — 创意参谋回合
+ * （同步）。追加 USER 消息，调用所选 LLM 生成参谋回复，追加 ASSISTANT 消息。
+ * 参谋不执行任何画布命令——只做提示词优化与创意建议。
  *
  * Provider transport failure semantics: the USER message stays persisted but
  * no ASSISTANT message is written; the error maps to 502 CHAT_AUTH_FAILED
@@ -93,7 +80,7 @@ export async function POST(request: Request, context: Ctx) {
   const { workspaceId, projectId, sessionId } = await context.params;
   const access = await requireWorkspaceRoles(workspaceId, requestId, [...WORKFLOW_WRITE_ROLES]);
   if (!access.ok) return access.response;
-  // PR-6: every agent turn calls the chat LLM provider — paid action in local mode.
+  // PR-6: every advisor turn calls the chat LLM provider — paid action in local mode.
   const paidGate = await paidGateResponse(requestId);
   if (paidGate) return paidGate;
 
@@ -132,40 +119,58 @@ export async function POST(request: Request, context: Ctx) {
     actorUserId: access.session.userId,
   });
 
-  // ── context: graph summary + catalog + recent history ─────────────────────
-  const workflows = new WorkflowRepository(prisma);
-  let draftGraph: WorkflowGraph | null = null;
-  let graphSummary: string;
-  if (!session.workflowId) {
-    graphSummary = '（本会话未绑定画布）';
-  } else {
+  // ── context: graph summary + recent history ───────────────────────────────
+  let graphSummary = '（本会话未绑定画布）';
+  if (session.workflowId) {
+    const workflows = new WorkflowRepository(prisma);
     const wf = await workflows.getWithDraft(workspaceId, session.workflowId);
-    draftGraph = wf?.draft ? workflows.parseGraph(wf.draft) : null;
+    const draftGraph = wf?.draft ? workflows.parseGraph(wf.draft) : null;
     graphSummary = draftGraph ? summarizeGraph(draftGraph) : '（画布不存在或已删除）';
   }
-  const catalog = await buildCatalog(workspaceId, projectId);
 
   const history = await chat.getWithMessages(workspaceId, sessionId, { limit: 20 });
-  const messages: ChatAgentMessage[] = (history?.messages ?? [])
+  const historyMessages: KieChatMessage[] = (history?.messages ?? [])
     .filter((m) => m.role !== 'SYSTEM')
     .map((m) => ({
       role: m.role === 'USER' ? ('user' as const) : ('assistant' as const),
-      text:
+      content:
         typeof (m.contentJson as { text?: unknown }).text === 'string'
-          ? ((m.contentJson as { text: string }).text)
+          ? (m.contentJson as { text: string }).text
           : '',
     }));
 
-  // ── agent turn ────────────────────────────────────────────────────────────
-  const turnNonce = newId();
-  let turn: ChatAgentTurnOutput;
+  // ── advisor turn ──────────────────────────────────────────────────────────
+  const modelSlug = resolveChatModel(parsed.data.model);
+  let reply: string;
+  let providerName: string;
+  let latencyMs = 0;
+  const started = Date.now();
   try {
-    turn = await createChatAgentProvider().runTurn({
-      messages,
-      graphSummary,
-      catalog,
-      turnNonce,
-    });
+    if (resolveChatProviderKind() === 'kie') {
+      const apiKey = process.env.KIE_API_KEY?.trim();
+      if (!apiKey) {
+        throw new ChatProviderError('AUTH', 'KIE_API_KEY is required when CHAT_PROVIDER=kie');
+      }
+      const result = await kieChatCompletion({
+        config: {
+          apiKey,
+          baseUrl: process.env.KIE_BASE_URL?.trim() || KIE_DEFAULT_BASE_URL,
+          model: modelSlug,
+        },
+        messages: [
+          { role: 'system', content: buildAdvisorSystemPrompt(graphSummary) },
+          ...historyMessages,
+        ],
+        temperature: 0.8,
+      });
+      reply = result.text;
+      latencyMs = result.latencyMs;
+      providerName = 'kie-llm-advisor';
+    } else {
+      reply = fakeAdvisorReply(parsed.data.content);
+      latencyMs = Date.now() - started;
+      providerName = 'fake-llm-advisor';
+    }
   } catch (err) {
     if (err instanceof ChatProviderError) {
       const isAuth = err.errorClass === 'AUTH';
@@ -182,163 +187,16 @@ export async function POST(request: Request, context: Ctx) {
     throw err;
   }
 
-  // Double-check against the contracts schema (single source of truth); on
-  // failure degrade to a text-only reply instead of failing the turn.
-  let reply = turn.reply;
-  let commands: WorkflowCommand[] = [];
-  let degraded = turn.meta.degraded === true;
-  const validated = AgentTurnOutputSchema.safeParse({ reply: turn.reply, commands: turn.commands });
-  if (validated.success) {
-    commands = validated.data.commands;
-  } else {
-    reply = `（模型输出未通过校验，已忽略画布命令。原始回复：${turn.reply.slice(0, 200)}）`;
-    degraded = true;
-  }
-
-  // Normalize run placement: the command layer requires at most one run as the
-  // last command — move the first run to the tail and drop any extra runs.
-  const runIndexes = commands.map((c, i) => (c.type === 'run' ? i : -1)).filter((i) => i >= 0);
-  if (runIndexes.length > 0) {
-    const wasSingleTailRun = runIndexes.length === 1 && runIndexes[0] === commands.length - 1;
-    const firstRun = runIndexes[0] as number;
-    const runCommand = commands[firstRun] as RunCommand;
-    commands = commands.filter((_, i) => !runIndexes.includes(i));
-    commands.push(runCommand);
-    if (!wasSingleTailRun) {
-      degraded = true;
-    }
-  }
-
-  // ── agent 命令白名单（白名单之外丢弃；删除超 2 张整批拒绝）───────────────
-  const guard = guardAgentCommands(commands);
-  if (!guard.ok) {
-    reply += `\n（${guard.message}，本轮画布命令未执行。）`;
-    degraded = true;
-    commands = [];
-  } else {
-    commands = guard.commands;
-    if (guard.droppedTypes.length > 0) {
-      reply += `\n（已忽略不支持的命令：${guard.droppedTypes.join('、')}。）`;
-      degraded = true;
-    }
-  }
-
-  // ── @卡片名 → 节点 id 解析（失败整批拒绝）────────────────────────────────
-  if (commands.length > 0 && draftGraph) {
-    const resolved = resolveAgentNodeIds(commands, draftGraph);
-    if (!resolved.ok) {
-      reply += `\n（${resolved.message}，本轮画布命令未执行。）`;
-      degraded = true;
-      commands = [];
-    } else {
-      commands = resolved.commands;
-    }
-  }
-
-  // ── session budget gate (only when the turn wants to run) ─────────────────
-  let budgetRejected = false;
-  const runIdx = commands.findIndex((c) => c.type === 'run');
-  if (runIdx >= 0) {
-    const budget = await chat.getBudgetState(workspaceId, sessionId);
-    const limitMicrounits = budget?.budgetLimit
-      ? amountToMicrounits(budget.budgetLimit.amount)
-      : null;
-    const remainingMicrounits =
-      limitMicrounits !== null ? limitMicrounits - (budget?.spentMicrounits ?? 0) : null;
-    if (remainingMicrounits === null || remainingMicrounits <= 0) {
-      commands = commands.filter((_, i) => i !== runIdx);
-      reply += '\n（本轮会话预算不足或未设置预算，未执行运行；其余画布命令已照常应用。）';
-      budgetRejected = true;
-    } else {
-      // Never trust the LLM's key/limit: derive both server-side.
-      commands[runIdx] = {
-        ...(commands[runIdx] as RunCommand),
-        budgetLimit: {
-          currency: budget?.budgetLimit?.currency ?? 'USD',
-          amount: microunitsToAmount(remainingMicrounits),
-        },
-        confirmBudget: true,
-        idempotencyKey: `chat-run-${turnNonce}`,
-      };
-    }
-  }
-
-  // ── execute surviving commands as one undoable batch ──────────────────────
-  let batchId: string | null = null;
-  let run: unknown;
-  let errorDetails: { status: number; code: string; message: string; details?: unknown } | null =
-    null;
-  if (commands.length > 0) {
-    if (!session.workflowId) {
-      reply += '\n（本会话未绑定画布，画布命令未执行。请先在绑定 workflow 的会话中操作。）';
-      degraded = true;
-      commands = [];
-    } else {
-      batchId = newId();
-      const outcome = await applyCommandsToWorkflow({
-        workspaceId,
-        workflowId: session.workflowId,
-        batchId,
-        actorUserId: access.session.userId,
-        commands,
-        requestId,
-      });
-      if (!outcome.ok) {
-        const apiErr = outcome.body.error;
-        errorDetails = {
-          status: outcome.status,
-          code: apiErr.code,
-          message: apiErr.message,
-          details: apiErr.details,
-        };
-        const applied =
-          apiErr.details !== null &&
-          typeof apiErr.details === 'object' &&
-          (apiErr.details as { commandsApplied?: unknown }).commandsApplied === true;
-        reply += `\n（画布命令执行失败：${apiErr.code} — ${apiErr.message}${applied ? '；注意：图命令已应用并推进了草稿版本，仅运行创建失败' : ''}）`;
-        const detailsBatchId =
-          apiErr.details !== null && typeof apiErr.details === 'object'
-            ? (apiErr.details as { batchId?: unknown }).batchId
-            : undefined;
-        if (typeof detailsBatchId !== 'string') {
-          batchId = null;
-        }
-      } else {
-        run = outcome.body.run;
-        if (run && typeof (run as { estimateMicrounits?: unknown }).estimateMicrounits === 'number') {
-          await chat.addSpentMicrounits(
-            workspaceId,
-            sessionId,
-            (run as { estimateMicrounits: number }).estimateMicrounits,
-          );
-        }
-      }
-    }
-  }
-
   // ── persist the assistant turn ────────────────────────────────────────────
-  const commandsSummary =
-    commands.length > 0 || degraded
-      ? {
-          count: commands.length,
-          types: commands.map((c) => c.type),
-          ...(degraded ? { degraded: true } : {}),
-        }
-      : undefined;
   const assistantMessage = await chat.appendMessage({
     workspaceId,
     sessionId,
     role: 'ASSISTANT',
-    content: {
-      text: reply,
-      ...(commandsSummary ? { commandsSummary } : {}),
-      ...(budgetRejected ? { budgetRejected: true } : {}),
-      ...(errorDetails ? { error: errorDetails } : {}),
-    },
-    batchId,
-    provider: turn.meta.provider,
-    modelId: turn.meta.model ?? null,
-    latencyMs: turn.meta.latencyMs,
+    content: { text: reply },
+    batchId: null,
+    provider: providerName,
+    modelId: modelSlug,
+    latencyMs,
     actorUserId: access.session.userId,
   });
 
@@ -346,9 +204,6 @@ export async function POST(request: Request, context: Ctx) {
     {
       userMessage: serializeChatMessage(userMessage),
       assistantMessage: serializeChatMessage(assistantMessage),
-      ...(batchId ? { batchId } : {}),
-      ...(run !== undefined ? { run } : {}),
-      ...(budgetRejected ? { budgetRejected: true } : {}),
     },
     { status: 200, headers: { 'x-request-id': requestId } },
   );

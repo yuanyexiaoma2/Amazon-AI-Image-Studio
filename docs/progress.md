@@ -759,6 +759,8 @@ One branch / one PR / one review each; merge unlocks the next segment.
 | PR-7-11 | H 结果一键下载 | DONE | GenerateNodeResults 缩略图 hover ⤓ → download-url 预签名 → 下载 `卡片名-N.png`（commit `390b715`） |
 | PR-7-12 | 自主 UX 修正 | DONE | Legacy 算子卡固定宽度防碎块重叠 + 清理死样式（`ddedf48`）；走查修复 2 项（`1a350ec`）：①「需重跑」此前只在 run 活跃期 3s 轮询，run 结束后改提示词徽标不更新——handleCommandResult 在任意落表修订后 refreshNodeResults()；②下载 a[download] 指跨源 MinIO 被浏览器忽略导致整页跳离画布——改 blob objectURL 下载，失败回退新标签页 |
 | PR-7-13 | 二轮全量验证 + 浏览器走查 | DONE | lint/typecheck/test/build 全绿（web 71 passed、domain 167、contracts 25、providers 82）。tabbit 走查（dev:local :3001，Fake）：左栏套装入口 ✓、套装创建 4→8 节点含连线 ✓、抠图快捷操作 8→9 ✓、▶ 运行→Fake 出图 ✓、改提示词→「需重跑」徽标即时出现 ✓（API stale:true + UI 渲染）、标题双击改名「抠图→白底抠图卡」✓、download-url API 200 + blob 下载不跳页 ✓（CORS 通；Tabbit harness 不落盘 download 事件，真实浏览器行为为另存为）。模型禁用态：fake 注册表 3 项均 t2i+i2i 双全，无 i2i-only 生成模型可演示置灰（校验逻辑由 domain 单测覆盖）。走查残留卡片已全部删除，画布还原原有 4 节点 |
+| PR-7-14 | 创意参谋改造（助手只当参谋 + 可切换 LLM） | DONE | owner ruling 2026-09-19：助手不再执行画布命令，只做提示词优化/创意参谋。messages route 重写为纯对话回合（系统提示词=亚马逊产品图参谋，中文交流+英文提示词代码块；画布概况作上下文）；contracts `PostChatMessageRequestSchema` 加可选 `model`；`lib/chat-models.ts` 白名单（Gemini 3 Flash 默认 / 3.1 Pro / Claude Sonnet 4.6 / GPT-5.2，`CHAT_MODELS` env 可覆盖）。ChatPanel：头部模型下拉（localStorage 记忆）、建议卡改参谋向（优化提示词/卖点→画面 填入输入框、场景灵感直发）、助手消息带「用作提示词」（提取代码块写入选中生图卡）+ 模型署名。真实 kie 验证：Gemini 3 Flash 回复质量达标（中文建议+英文提示词代码块），「用作提示词」277 字符写入生图卡 ✓ |
+| PR-7-15 | 界面打磨（owner 走查反馈） | DONE | 项目切换器去掉 SKU 只留项目名；左栏 emoji 换 18px SVG 图标；`site-header-dark` 并入深色变量作用域修复白胶囊徽章；素材库缩略图两段式删除（hover ✕ → 3 秒内再点「删？」，走软删除 API）；生图卡折叠态（未选中只显示标题栏+结果大图/占位图井，点击选中展开参数） |
 
 ### PR-7 commands / evidence (implementer)
 

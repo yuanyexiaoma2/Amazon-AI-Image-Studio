@@ -1666,6 +1666,19 @@ function StudioCanvasInner(props: {
     })();
   }
 
+  // 创意参谋「用作提示词」：写入当前选中的生图卡
+  function handleUsePrompt(text: string) {
+    const target = nodesRef.current.find(
+      (n) => n.selected && String((n.data as { nodeType?: string }).nodeType ?? '') === 'generate',
+    );
+    if (!target) {
+      setStatus('先在画布上选中一张生图卡，再点「用作提示词」');
+      return;
+    }
+    updateNodeConfig(target.id, 'prompt', text);
+    setStatus('已写入提示词到选中的生图卡');
+  }
+
   return (
     <div
       role="application"
@@ -1955,7 +1968,7 @@ function StudioCanvasInner(props: {
         )}
       </div>
 
-      <aside className="studio-aside studio-aside-right studio-aside-flex" aria-label="画布助手">
+      <aside className="studio-aside studio-aside-right studio-aside-flex" aria-label="创意参谋">
         <div className="chat-panel">
           <ChatPanel
             workspaceId={workspaceId}
@@ -1963,6 +1976,7 @@ function StudioCanvasInner(props: {
             workflowId={draft?.workflowId ?? null}
             getRevision={getRevision}
             onGraphChanged={handleGraphChanged}
+            onUsePrompt={handleUsePrompt}
           />
         </div>
       </aside>

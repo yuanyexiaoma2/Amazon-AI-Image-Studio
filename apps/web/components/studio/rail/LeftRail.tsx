@@ -167,7 +167,7 @@ function HelpFlyout() {
       <div>· 底部提示词条：选中一张生图卡后绑定它，否则提交时新建</div>
       <div>· 素材库 / 历史里的图片可以直接拖进画布</div>
       <div>· Ctrl/Cmd+Z 撤销，Ctrl/Cmd+Y 重做，Ctrl/Cmd+C/V 复制粘贴</div>
-      <div>· 右侧「画布助手」可以用自然语言让它帮你搭画布</div>
+      <div>· 右侧「创意参谋」可以帮你优化提示词、出场景创意，回复可一键写入生图卡</div>
     </div>
   );
 }

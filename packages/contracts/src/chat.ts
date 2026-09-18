@@ -65,6 +65,8 @@ export type CreateChatSessionRequest = z.infer<typeof CreateChatSessionRequestSc
 
 export const PostChatMessageRequestSchema = z.object({
   content: z.string().min(1).max(4000),
+  /** 参谋模式：可选的 LLM slug（服务端白名单校验，缺省用默认模型）。 */
+  model: z.string().min(1).max(100).optional(),
 });
 
 export type PostChatMessageRequest = z.infer<typeof PostChatMessageRequestSchema>;
