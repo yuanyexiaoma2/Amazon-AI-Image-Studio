@@ -1030,6 +1030,23 @@ code {
   z-index: 50;
 }
 
+/* Studio 画布页：顶栏跟随深色工作台（对齐 .studio-dark 变量） */
+.site-header-dark {
+  background: #111113;
+  border-bottom-color: #232327;
+}
+
+.site-header-dark .site-brand,
+.site-header-dark .site-nav a,
+.site-header-dark .site-nav .muted,
+.site-header-dark .site-nav span {
+  color: #e4e4e7;
+}
+
+.site-header-dark .site-nav a:hover {
+  color: #ffffff;
+}
+
 .site-brand {
   font-size: var(--font-size-lg);
   font-weight: 700;

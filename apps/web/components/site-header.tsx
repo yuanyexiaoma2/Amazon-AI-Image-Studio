@@ -6,7 +6,7 @@
  * Replaces the inline header previously hard-coded in app/layout.tsx.
  */
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { useMe } from '@/lib/use-me';
 import { zh, ROLE_ZH } from '@/lib/zh-labels';
@@ -15,13 +15,15 @@ import { Badge, Button } from '@/components/ui';
 export function SiteHeader() {
   const { me, loading } = useMe();
   const search = useSearchParams();
+  const pathname = usePathname();
+  const dark = pathname.includes('/studio');
   const workspaceId = search.get('workspaceId');
   const workspace =
     me?.workspaces.find((w) => w.id === workspaceId) ?? me?.workspaces[0] ?? null;
   const isAdmin = me?.workspaces.some((w) => w.role === 'OWNER' || w.role === 'ADMIN') ?? false;
 
   return (
-    <header className="site-header">
+    <header className={dark ? 'site-header site-header-dark' : 'site-header'}>
       <Link href="/" className="site-brand">
         亚马逊 AI 生图工作台
       </Link>

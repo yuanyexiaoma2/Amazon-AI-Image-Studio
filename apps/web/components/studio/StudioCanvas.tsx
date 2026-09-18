@@ -1575,6 +1575,7 @@ function StudioCanvasInner(props: {
           onSelectionChange={handleSelectionChange}
           fitView
           colorMode="dark"
+          zoomOnDoubleClick={false}
           deleteKeyCode={['Backspace', 'Delete']}
           multiSelectionKeyCode="Shift"
           proOptions={{ hideAttribution: true }}
