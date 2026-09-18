@@ -13,6 +13,8 @@ export const NodeConfigBaseSchema = z.object({
 
 export const SourceImageConfigSchema = NodeConfigBaseSchema.extend({
   assetVersionId: z.string().uuid().optional().nullable(),
+  /** 卡片标题（@卡片名 定位用），空串 = 未命名。 */
+  title: z.string().max(64).optional().default(''),
 });
 
 export const ProductTruthConfigSchema = NodeConfigBaseSchema.extend({
@@ -26,6 +28,8 @@ export const PromptConfigSchema = NodeConfigBaseSchema.extend({
   locale: z.string().max(16).optional().default('en-US'),
   shotBriefId: z.string().uuid().optional().nullable(),
   slot: z.string().max(32).optional().nullable(),
+  /** 卡片标题（@卡片名 定位用），空串 = 未命名。 */
+  title: z.string().max(64).optional().default(''),
 });
 
 export const RemoveBackgroundConfigSchema = NodeConfigBaseSchema.extend({
@@ -43,6 +47,8 @@ export const GenerateConfigSchema = NodeConfigBaseSchema.extend({
   briefOrderIndex: z.number().int().optional().nullable(),
   /** 内联提示词（内容卡片范式）：无 prompt 文本卡连线时的兜底；连线优先。 */
   prompt: z.string().max(8000).optional().default(''),
+  /** 卡片标题（@卡片名 定位用），空串 = 未命名。 */
+  title: z.string().max(64).optional().default(''),
 });
 
 export const ReplaceBackgroundConfigSchema = NodeConfigBaseSchema.extend({

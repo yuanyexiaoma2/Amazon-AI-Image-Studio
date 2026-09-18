@@ -30,7 +30,9 @@ import { getOrCreateRequestId } from '@/lib/request-id';
 import { paidGateResponse, requireWorkspaceRoles } from '@/lib/workspace-access';
 import { applyCommandsToWorkflow } from '@/lib/apply-commands';
 import { guardAgentCommands } from '@/lib/agent-command-guard';
+import { resolveAgentNodeIds } from '@/lib/resolve-agent-node-ids';
 import { serializeChatMessage } from '@/lib/chat-serialize';
+import { NODE_TYPE_ZH } from '@/lib/zh-labels';
 
 type Ctx = {
   params: Promise<{ workspaceId: string; projectId: string; sessionId: string }>;
@@ -41,7 +43,16 @@ type RunCommand = Extract<WorkflowCommand, { type: 'run' }>;
 /** Compact text rendering of the current draft graph for the agent prompt. */
 function summarizeGraph(graph: WorkflowGraph): string {
   if (graph.nodes.length === 0) return '（空画布）';
-  const nodes = graph.nodes.map((n) => `节点 ${n.id} (type=${n.type})`).join('\n');
+  const nodes = graph.nodes
+    .map((n) => {
+      const title =
+        typeof (n.config as Record<string, unknown> | undefined)?.title === 'string'
+          ? ((n.config as { title: string }).title)
+          : '';
+      const typeZh = NODE_TYPE_ZH[n.type] ?? n.type;
+      return title ? `节点 ${n.id}（${typeZh}「${title}」）` : `节点 ${n.id}（${typeZh}）`;
+    })
+    .join('\n');
   const edges =
     graph.edges.length > 0
       ? graph.edges.map((e) => `边 ${e.source}→${e.target}`).join('\n')
@@ -123,12 +134,14 @@ export async function POST(request: Request, context: Ctx) {
 
   // ── context: graph summary + catalog + recent history ─────────────────────
   const workflows = new WorkflowRepository(prisma);
+  let draftGraph: WorkflowGraph | null = null;
   let graphSummary: string;
   if (!session.workflowId) {
     graphSummary = '（本会话未绑定画布）';
   } else {
     const wf = await workflows.getWithDraft(workspaceId, session.workflowId);
-    graphSummary = wf?.draft ? summarizeGraph(workflows.parseGraph(wf.draft)) : '（画布不存在或已删除）';
+    draftGraph = wf?.draft ? workflows.parseGraph(wf.draft) : null;
+    graphSummary = draftGraph ? summarizeGraph(draftGraph) : '（画布不存在或已删除）';
   }
   const catalog = await buildCatalog(workspaceId, projectId);
 
@@ -207,6 +220,18 @@ export async function POST(request: Request, context: Ctx) {
     if (guard.droppedTypes.length > 0) {
       reply += `\n（已忽略不支持的命令：${guard.droppedTypes.join('、')}。）`;
       degraded = true;
+    }
+  }
+
+  // ── @卡片名 → 节点 id 解析（失败整批拒绝）────────────────────────────────
+  if (commands.length > 0 && draftGraph) {
+    const resolved = resolveAgentNodeIds(commands, draftGraph);
+    if (!resolved.ok) {
+      reply += `\n（${resolved.message}，本轮画布命令未执行。）`;
+      degraded = true;
+      commands = [];
+    } else {
+      commands = resolved.commands;
     }
   }
 

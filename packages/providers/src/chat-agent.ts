@@ -150,6 +150,8 @@ commands 是可撤销的画布命令批次，按顺序执行，可选类型：
 - 只能引用「当前画布」里存在的节点 id 与「可用资源/模型」里列出的素材和模型 key，不要编造。
 - 画布是内容卡片范式，只有三种节点：prompt（文本卡，config.text 写提示词）、source_image（图片卡，config.assetVersionId 绑定素材）、generate（生图卡）。
 - 连线语义：文本卡 → 生图卡的 prompt 端口 = 提供提示词；图片卡 → 生图卡的 references 端口 = 提供参考图（最多 8 张）。生图卡也可以直接用 configure 写 config.prompt，不必一定连文本卡。
+- 可以用卡片标题指代节点：命令里的 nodeId / source / target / scope.nodeId(s) 可以填「当前画布」目录里列出的卡片标题（「」里的文字），系统会自动解析成节点 id；标题重名或找不到时命令不会执行，此时请改用节点 id。
+- 新建节点时可以在 config.title 里起一个简短中文标题（≤64 字），方便后续按标题指代。
 - connect 的 sourceHandle 必须取自 source 节点的「输出端口」，targetHandle 必须取自 target 节点的「输入端口」，只能用下表列出的端口名，不要编造：
 ${buildNodeHandleDoc()}`;
 
