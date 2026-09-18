@@ -2,7 +2,8 @@ import { z } from 'zod';
 
 /**
  * W3-05 — Zod config schemas for MVP node types (spec §8.3).
- * Palette nodes: 11; approval_selector is system-only (not manually created).
+ * V2 内容卡片重构后 palette 节点：source_image / prompt / generate 三种；
+ * 其余类型保留 schema 以兼容旧画布数据。
  * Every config carries schemaVersion for draft migrations (spec §8.4).
  */
 
@@ -40,6 +41,8 @@ export const GenerateConfigSchema = NodeConfigBaseSchema.extend({
   seed: z.number().int().optional().nullable(),
   briefSlot: z.string().max(32).optional().nullable(),
   briefOrderIndex: z.number().int().optional().nullable(),
+  /** 内联提示词（内容卡片范式）：无 prompt 文本卡连线时的兜底；连线优先。 */
+  prompt: z.string().max(8000).optional().default(''),
 });
 
 export const ReplaceBackgroundConfigSchema = NodeConfigBaseSchema.extend({
@@ -100,19 +103,11 @@ export const NODE_CONFIG_SCHEMAS = {
 
 export type WorkflowNodeConfigType = keyof typeof NODE_CONFIG_SCHEMAS;
 
-/** The 11 MVP palette node types (approval_selector excluded). */
+/** The 3 content-card palette node types (V2 内容卡片重构；legacy operator types are hidden). */
 export const PALETTE_NODE_CONFIG_TYPES = [
   'source_image',
-  'product_truth',
   'prompt',
-  'remove_background',
   'generate',
-  'replace_background',
-  'inpaint',
-  'outpaint',
-  'upscale',
-  'qa_gate',
-  'export',
 ] as const satisfies ReadonlyArray<WorkflowNodeConfigType>;
 
 export function isWorkflowNodeConfigType(type: string): type is WorkflowNodeConfigType {

@@ -350,8 +350,8 @@ describe('applyWorkflowCommands — atomicity', () => {
     expectCommandError(
       () =>
         applyWorkflowCommands(base, [
-          { type: 'addNode', nodeType: 'upscale', nodeId: 'u1', position: { x: 0, y: 0 } },
-          { type: 'connect', source: 'u1', sourceHandle: 'image', target: 'u1', targetHandle: 'image' },
+          { type: 'addNode', nodeType: 'generate', nodeId: 'u1', position: { x: 0, y: 0 } },
+          { type: 'connect', source: 'u1', sourceHandle: 'images', target: 'u1', targetHandle: 'references' },
         ]),
       'SELF_LOOP',
       1,
@@ -361,8 +361,8 @@ describe('applyWorkflowCommands — atomicity', () => {
 
   it('applies multi-command batches in order', () => {
     const result = applyWorkflowCommands(baseGraph(), [
-      { type: 'addNode', nodeType: 'upscale', nodeId: 'u1', position: { x: 100, y: 0 } },
-      { type: 'connect', source: 's', sourceHandle: 'image', target: 'u1', targetHandle: 'image' },
+      { type: 'addNode', nodeType: 'generate', nodeId: 'u1', position: { x: 100, y: 0 } },
+      { type: 'connect', source: 's', sourceHandle: 'image', target: 'u1', targetHandle: 'references' },
       { type: 'rename', name: 'batch flow' },
     ]);
     expect(result.graph.nodes).toHaveLength(5);
