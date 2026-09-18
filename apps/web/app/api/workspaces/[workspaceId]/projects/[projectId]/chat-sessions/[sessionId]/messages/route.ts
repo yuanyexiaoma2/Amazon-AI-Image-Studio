@@ -29,6 +29,7 @@ import {
 import { getOrCreateRequestId } from '@/lib/request-id';
 import { paidGateResponse, requireWorkspaceRoles } from '@/lib/workspace-access';
 import { applyCommandsToWorkflow } from '@/lib/apply-commands';
+import { guardAgentCommands } from '@/lib/agent-command-guard';
 import { serializeChatMessage } from '@/lib/chat-serialize';
 
 type Ctx = {
@@ -191,6 +192,20 @@ export async function POST(request: Request, context: Ctx) {
     commands = commands.filter((_, i) => !runIndexes.includes(i));
     commands.push(runCommand);
     if (!wasSingleTailRun) {
+      degraded = true;
+    }
+  }
+
+  // ── agent 命令白名单（白名单之外丢弃；删除超 2 张整批拒绝）───────────────
+  const guard = guardAgentCommands(commands);
+  if (!guard.ok) {
+    reply += `\n（${guard.message}，本轮画布命令未执行。）`;
+    degraded = true;
+    commands = [];
+  } else {
+    commands = guard.commands;
+    if (guard.droppedTypes.length > 0) {
+      reply += `\n（已忽略不支持的命令：${guard.droppedTypes.join('、')}。）`;
       degraded = true;
     }
   }
