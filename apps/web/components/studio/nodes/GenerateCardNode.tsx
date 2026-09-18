@@ -75,6 +75,7 @@ export function GenerateCardNode(props: NodeProps) {
           workspaceId={data.workspaceId ?? null}
           versionIds={results}
           size={72}
+          nameBase={title.trim() || '生图'}
         />
       ) : null}
       <Handle

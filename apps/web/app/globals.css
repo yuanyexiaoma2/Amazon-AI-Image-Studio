@@ -1381,6 +1381,38 @@ code {
   color: var(--text);
 }
 
+/* 生成结果缩略图：hover 露出下载钮 */
+.studio-result-thumb {
+  position: relative;
+  display: inline-flex;
+}
+
+.studio-result-download {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.65);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.studio-result-thumb:hover .studio-result-download,
+.studio-result-download:focus-visible {
+  opacity: 1;
+}
+
 /* 卡片左右「+」连接钮（React Flow Handle 的圆形加号皮肤） */
 .react-flow__handle.studio-card-handle {
   width: 22px;
