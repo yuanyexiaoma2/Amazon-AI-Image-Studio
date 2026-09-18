@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent } from 'react';
-import Link from 'next/link';
 import {
   ReactFlow,
   Background,
@@ -23,7 +22,6 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
-  listPaletteNodeTypes,
   validateEdge,
   arePortTypesCompatible,
   getNodeDefinition,
@@ -49,22 +47,16 @@ import {
   type StarterTemplateId,
 } from './starter-templates';
 import { IMAGE_FILE_RE, useAssetUpload } from '@/lib/use-asset-upload';
-import {
-  PropertiesPanel,
-  type MaskEditorState,
-  type SelectedNodeInfo,
-} from './PropertiesPanel';
 import { ChatPanel } from './ChatPanel';
 import { applyConfigEdit } from './config-options';
 import { zh, RUN_STATUS_ZH, NODE_TYPE_ZH, CONFIG_FIELD_ZH, formatCommandErrorZh } from '@/lib/zh-labels';
 import { NodeActionContext, PORT_LABEL_ZH, type NodeActionContextValue } from './nodes/context';
 import { studioNodeTypes } from './nodes';
 import { PromptBar, type PromptBarValues } from './PromptBar';
+import { LeftRail, type RailPanelKind } from './rail/LeftRail';
+import { HistoryPanel, type RunAllOutcome } from './rail/HistoryPanel';
 
 type CanvasSnapshot = { nodes: Node[]; edges: Edge[] };
-
-/** Result of a whole-canvas run, shared by the toolbar button and TaskDrawer. */
-type RunAllOutcome = { message: string; authRequired: boolean };
 
 function nodeLabelZh(type: string): string {
   return NODE_TYPE_ZH[type] ?? getNodeDefinition(type)?.label ?? type;
@@ -140,7 +132,6 @@ function StudioCanvasInner(props: {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [status, setStatus] = useState<string>('加载中…');
 
-  const [maskEditor, setMaskEditor] = useState<MaskEditorState>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const [edgeError, setEdgeError] = useState<string | null>(null);
   const [cmdError, setCmdError] = useState<string | null>(null);
@@ -148,12 +139,12 @@ function StudioCanvasInner(props: {
   const [runBusy, setRunBusy] = useState(false);
   const [narrow, setNarrow] = useState(false);
   const [narrowDismissed, setNarrowDismissed] = useState(false);
-  const [rightTab, setRightTab] = useState<'properties' | 'chat'>('properties');
+  const [railPanel, setRailPanel] = useState<RailPanelKind | null>(null);
   const [starterDismissed, setStarterDismissed] = useState(false);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const [runAllBusy, setRunAllBusy] = useState(false);
   const [runAllMsg, setRunAllMsg] = useState<RunAllOutcome | null>(null);
-  const [drawerExpanded, setDrawerExpanded] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [nodeResults, setNodeResults] = useState<Record<string, string[]>>({});
   const [runsActive, setRunsActive] = useState(false);
   const revisionRef = useRef(0);
@@ -186,29 +177,7 @@ function StudioCanvasInner(props: {
     if (nodes.length > 0 && starterDismissed) setStarterDismissed(false);
   }, [nodes.length, starterDismissed]);
 
-  // 常用优先排序（不按 registry 顺序）；未列出的类型排最后。
-  const palette = useMemo(() => {
-    const order = [
-      'source_image',
-      'prompt',
-      'product_truth',
-      'generate',
-      'remove_background',
-      'replace_background',
-      'inpaint',
-      'outpaint',
-      'upscale',
-      'qa_gate',
-      'export',
-    ];
-    const rank = (t: string) => {
-      const i = order.indexOf(t);
-      return i === -1 ? order.length : i;
-    };
-    return [...listPaletteNodeTypes()].sort((a, b) => rank(a.type) - rank(b.type));
-  }, []);
-
-  const { uploadAsset } = useAssetUpload(workspaceId, projectId);
+  const { uploadAsset, uploading: railUploading } = useAssetUpload(workspaceId, projectId);
 
   const handleSelectionChange = useCallback(({ nodes: sel }: { nodes: Array<{ id: string }> }) => {
     setSelectedIds((prev) => {
@@ -243,7 +212,7 @@ function StudioCanvasInner(props: {
       setCmdError(null);
       setStatus(`已保存 · 修订 ${b.revisionNumber}`);
       if (b.run) {
-        // Run 已提交：拉结果兜底（inline 同步完成时 TaskDrawer 可能来不及看到
+        // Run 已提交：拉结果兜底（inline 同步完成时历史面板可能来不及看到
         // 活跃态，轮询不启动；多次延时刷新覆盖结果落表的时点）。
         void refreshNodeResults();
         setTimeout(() => void refreshNodeResults(), 3000);
@@ -408,22 +377,6 @@ function StudioCanvasInner(props: {
   }, []);
 
   const selected = nodes.find((n) => n.id === selectedIds[0]) ?? null;
-  const selectedInfo: SelectedNodeInfo | null = useMemo(() => {
-    if (!selected) return null;
-    const data = selected.data as {
-      nodeType?: string;
-      label?: string;
-      config?: Record<string, unknown>;
-    };
-    return {
-      id: selected.id,
-      nodeType: String(data.nodeType ?? ''),
-      label: String(data.label ?? data.nodeType ?? ''),
-      position: { x: selected.position.x, y: selected.position.y },
-      config: data.config ?? { schemaVersion: 1 },
-    };
-  }, [selected]);
-  const selectedConfig = selectedInfo?.config ?? { schemaVersion: 1 };
 
   const sourceAssetVersionId = useMemo(() => {
     const src = nodes.find(
@@ -439,7 +392,7 @@ function StudioCanvasInner(props: {
     workspaceId,
     projectId,
     sourceAssetVersionId,
-    activeNodeId: selectedInfo?.id ?? null,
+    activeNodeId: selected?.id ?? null,
   });
 
   // 模型注册表加载后，把节点上已不可用的模型（例如切换到 kie 后被禁用的
@@ -838,9 +791,17 @@ function StudioCanvasInner(props: {
     [setNodes, setEdges, commands, handleCommandResult, makeRollback, workspaceId],
   );
 
-  function addNode(type: string) {
-    addNodeAt(type);
-  }
+  // 左栏「＋添加」：点击加到视图中心
+  const addNodeAtCenter = useCallback(
+    (type: string) => {
+      const rect = wrapRef.current?.getBoundingClientRect();
+      const center = rect
+        ? screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+        : undefined;
+      addNodeAt(type, center ? { x: center.x - 120, y: center.y - 60 } : undefined);
+    },
+    [addNodeAt, screenToFlowPosition],
+  );
 
   function updateNodeConfig(id: string, key: string, raw: string) {
     const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
@@ -871,12 +832,6 @@ function StudioCanvasInner(props: {
       [{ type: 'configure', nodeId: id, config }],
       makeRollback(snapshot),
     );
-  }
-
-  function updateSelectedConfig(key: string, raw: string) {
-    const id = selectedIds[0];
-    if (!id) return;
-    updateNodeConfig(id, key, raw);
   }
 
   // PR-6 node-card upload: 「上传图片」 button on an empty source_image node.
@@ -1249,11 +1204,11 @@ function StudioCanvasInner(props: {
     };
   }, [commands, handleCommandResult]);
 
-  // Shared whole-canvas run trigger (toolbar button + TaskDrawer button).
+  // Shared whole-canvas run trigger (toolbar button; history flyout shows the outcome).
   const triggerRunAll = useCallback(async () => {
     setRunAllBusy(true);
     setRunAllMsg(null);
-    setDrawerExpanded(true);
+    setRailPanel('history');
     try {
       setRunAllMsg(await runAll());
     } finally {
@@ -1419,11 +1374,50 @@ function StudioCanvasInner(props: {
 
   const onCanvasDragOver = useCallback((ev: ReactDragEvent<HTMLDivElement>) => {
     const types = ev.dataTransfer.types;
-    if (types.includes('application/studio-node') || types.includes('Files')) {
+    if (
+      types.includes('application/studio-node') ||
+      types.includes('application/studio-asset') ||
+      types.includes('Files')
+    ) {
       ev.preventDefault();
       ev.dataTransfer.dropEffect = 'copy';
     }
   }, []);
+
+  // 素材库 / 历史面板拖入：在落点建图片卡并绑定该素材版本
+  const dropAssetCard = useCallback(
+    (assetVersionId: string, position: { x: number; y: number }) => {
+      const id = `n-source_image-${Date.now()}`;
+      const config = {
+        ...(defaultNodeConfig('source_image') as Record<string, unknown>),
+        assetVersionId,
+      };
+      const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+      const next: Node = {
+        id,
+        type: 'studio',
+        position,
+        selected: true,
+        data: {
+          label: nodeLabelZh('source_image'),
+          nodeType: 'source_image',
+          config,
+          workspaceId,
+        },
+      };
+      const nextNodes = [...nodesRef.current.map((n) => ({ ...n, selected: false })), next];
+      setNodes(nextNodes);
+      nodesRef.current = nextNodes;
+      setSelectedIds((prev) => (prev.length === 1 && prev[0] === id ? prev : [id]));
+      void commands
+        .applyNow(
+          [{ type: 'addNode', nodeType: 'source_image', nodeId: id, position, config }],
+          makeRollback(snapshot),
+        )
+        .then(handleCommandResult);
+    },
+    [commands, handleCommandResult, makeRollback, setNodes, workspaceId],
+  );
 
   const onCanvasDrop = useCallback(
     (ev: ReactDragEvent<HTMLDivElement>) => {
@@ -1432,6 +1426,12 @@ function StudioCanvasInner(props: {
       if (nodeType) {
         ev.preventDefault();
         if (getNodeDefinition(nodeType)?.palette) addNodeAt(nodeType, position);
+        return;
+      }
+      const assetVersionId = ev.dataTransfer.getData('application/studio-asset');
+      if (assetVersionId) {
+        ev.preventDefault();
+        dropAssetCard(assetVersionId, position);
         return;
       }
       const file = [...ev.dataTransfer.files].find((f) => IMAGE_FILE_RE.test(f.name));
@@ -1486,6 +1486,7 @@ function StudioCanvasInner(props: {
       screenToFlowPosition,
       uploadAsset,
       addNodeAt,
+      dropAssetCard,
       commands,
       handleCommandResult,
       makeRollback,
@@ -1494,71 +1495,56 @@ function StudioCanvasInner(props: {
     ],
   );
 
-  async function openMaskEditor() {
-    const fromSelected =
-      typeof selectedConfig.assetVersionId === 'string' && selectedConfig.assetVersionId
-        ? selectedConfig.assetVersionId
-        : null;
-    const versionId = fromSelected ?? sourceAssetVersionId;
-    if (!versionId) {
-      setStatus('请先在「参考图」节点选择素材版本，再编辑蒙版');
-      return;
-    }
-    const res = await fetch(
-      `/api/workspaces/${workspaceId}/asset-versions/${versionId}/download-url?kind=NORMALIZED_PNG`,
-    );
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
-      setStatus(`蒙版编辑器：${json?.error?.message ?? res.status}`);
-      return;
-    }
-    setMaskEditor({ imageUrl: json.url, versionId, width: 1024, height: 1024 });
-  }
-
-  function onMaskSaved(id: string) {
-    if (selectedInfo?.nodeType === 'replace_background' || selectedInfo?.nodeType === 'inpaint') {
-      updateSelectedConfig('maskId', id);
-    }
-    configOptions.reloadMasks();
-    setStatus(`蒙版已保存 ${id.slice(0, 8)}…`);
-  }
-
   const errorBar = edgeError
     ? `非法连线已阻止：${edgeError}`
     : cmdError
       ? `操作失败：${cmdError}`
       : null;
 
+  // 素材库面板「上传」：走共享上传流程，完成后刷新素材列表
+  function onRailUploadFile(file: File) {
+    void (async () => {
+      setUploadNotice(`正在上传 ${file.name}…`);
+      try {
+        const asset = await uploadAsset(file, (m) => setUploadNotice(`${file.name} — ${m}`));
+        configOptions.reload();
+        setUploadNotice(
+          asset.status === 'REJECTED' ? `${file.name} 未通过检查 — 请更换图片` : `已上传 ${file.name}`,
+        );
+      } catch {
+        setUploadNotice(`上传失败：${file.name}`);
+      }
+    })();
+  }
+
   return (
     <div
       role="application"
       aria-label="工作流画布"
-      className={belowStepper ? 'studio-grid studio-grid-below-stepper' : 'studio-grid'}
+      className={
+        belowStepper
+          ? 'studio-dark studio-grid studio-grid-v2 studio-grid-below-stepper'
+          : 'studio-dark studio-grid studio-grid-v2'
+      }
     >
-      <aside aria-label="节点库" className="studio-aside studio-aside-left">
-        <div style={{ fontWeight: 700, marginBottom: 'var(--space-2)' }} id="node-library-heading">
-          节点库
-        </div>
-        <div className="faint" style={{ fontSize: 'var(--font-size-xs)', marginBottom: 'var(--space-2)' }}>
-          三种内容卡片 · 点击添加或拖到画布 · 双击画布空白处也可创建 · 直接拖入图片文件
-        </div>
-        {palette.map((n) => (
-          <button
-            key={n.type}
-            type="button"
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData('application/studio-node', n.type);
-              e.dataTransfer.effectAllowed = 'copy';
-            }}
-            onClick={() => addNode(n.type)}
-            className="palette-btn"
-            title="点击添加，或拖拽到画布指定位置"
-          >
-            {nodeLabelZh(n.type)}
-          </button>
-        ))}
-      </aside>
+      <LeftRail
+        panel={railPanel}
+        onToggle={(kind) => setRailPanel((prev) => (prev === kind ? null : kind))}
+        onAddNode={addNodeAtCenter}
+        workspaceId={workspaceId}
+        assets={configOptions.assets}
+        uploading={railUploading}
+        onUploadFile={onRailUploadFile}
+        historyPanel={
+          <HistoryPanel
+            workspaceId={workspaceId}
+            projectId={projectId}
+            workflowId={draft?.workflowId ?? null}
+            msg={runAllMsg}
+            onActiveChange={setRunsActive}
+          />
+        }
+      />
 
       <div
         ref={wrapRef}
@@ -1588,6 +1574,7 @@ function StudioCanvasInner(props: {
           nodeTypes={studioNodeTypes}
           onSelectionChange={handleSelectionChange}
           fitView
+          colorMode="dark"
           deleteKeyCode={['Backspace', 'Delete']}
           multiSelectionKeyCode="Shift"
           proOptions={{ hideAttribution: true }}
@@ -1597,18 +1584,17 @@ function StudioCanvasInner(props: {
           <Controls />
           <Panel position="top-left">
             <div className="studio-toolbar">
-              <span role="status" aria-live="polite">{status}</span>
-              <button type="button" className="btn" onClick={() => void reload()}>
-                重新加载
-              </button>
-              <button type="button" className="btn" onClick={() => void snapshot()}>
-                快照
-              </button>
+              <span className="studio-toolbar-status" role="status" aria-live="polite">
+                {status}
+              </span>
               <button type="button" className="btn" onClick={() => undo()} title="Ctrl/Cmd+Z">
                 撤销
               </button>
               <button type="button" className="btn" onClick={() => redo()} title="Ctrl/Cmd+Y">
                 重做
+              </button>
+              <button type="button" className="btn" onClick={() => void snapshot()}>
+                快照
               </button>
               <button
                 type="button"
@@ -1619,22 +1605,62 @@ function StudioCanvasInner(props: {
               >
                 {runAllBusy ? '启动中…' : '▶ 运行整图'}
               </button>
-              <button type="button" className="btn" onClick={() => copySelected()} title="Ctrl/Cmd+C">
-                复制
-              </button>
-              <button type="button" className="btn" onClick={() => pasteClipboard()} title="Ctrl/Cmd+V">
-                粘贴
-              </button>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => {
-                  void fitView({ padding: 0.2, duration: 200 });
-                  setStatus('适应视图');
-                }}
-              >
-                适应视图
-              </button>
+              <span className="studio-toolbar-more">
+                <button
+                  type="button"
+                  className="btn"
+                  aria-label="更多操作"
+                  aria-expanded={moreOpen}
+                  onClick={() => setMoreOpen((v) => !v)}
+                >
+                  ⋯
+                </button>
+                {moreOpen ? (
+                  <span className="studio-toolbar-menu" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        void reload();
+                      }}
+                    >
+                      重新加载
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        copySelected();
+                      }}
+                    >
+                      复制所选
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        pasteClipboard();
+                      }}
+                    >
+                      粘贴
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        void fitView({ padding: 0.2, duration: 200 });
+                        setStatus('适应视图');
+                      }}
+                    >
+                      适应视图
+                    </button>
+                  </span>
+                ) : null}
+              </span>
             </div>
           </Panel>
           <Panel position="bottom-center">
@@ -1692,7 +1718,7 @@ function StudioCanvasInner(props: {
         {draft !== null && nodes.length === 0 && !starterDismissed && (
           <div className="starter-overlay">
             <div className="starter-panel" role="dialog" aria-label="画布起始模板">
-              <div style={{ fontWeight: 700 }}>三步出图：选模板 → 在节点上上传图片、写提示词 → ▶ 运行整图</div>
+              <div style={{ fontWeight: 700 }}>三步出图：选模板 → 在卡片上上传图片、写提示词 → ▶ 运行整图</div>
               <div className="starter-grid">
                 {STARTER_TEMPLATES.map((t) => (
                   <button
@@ -1707,7 +1733,7 @@ function StudioCanvasInner(props: {
                 ))}
               </div>
               <div className="faint" style={{ fontSize: 'var(--font-size-sm)' }}>
-                也可以直接把图片文件拖进画布，或从左侧节点库拖节点进来。
+                也可以直接把图片文件拖进画布，或点左侧「＋」、双击画布空白处新建卡片。
               </div>
             </div>
           </div>
@@ -1776,47 +1802,8 @@ function StudioCanvasInner(props: {
         )}
       </div>
 
-      <aside className="studio-aside studio-aside-right studio-aside-flex">
-        <div className="studio-tabs" role="tablist" aria-label="右侧面板切换">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={rightTab === 'properties'}
-            className={rightTab === 'properties' ? 'btn btn-primary' : 'btn'}
-            onClick={() => setRightTab('properties')}
-          >
-            属性
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={rightTab === 'chat'}
-            className={rightTab === 'chat' ? 'btn btn-primary' : 'btn'}
-            onClick={() => setRightTab('chat')}
-          >
-            助手
-          </button>
-        </div>
-        <div className={rightTab === 'properties' ? undefined : 'studio-tab-hidden'}>
-          <PropertiesPanel
-            workspaceId={workspaceId}
-            selected={selectedInfo}
-            options={configOptions}
-            sourceAssetVersionId={sourceAssetVersionId}
-            draftRevision={draft?.revisionNumber ?? null}
-            runBusy={runBusy}
-            onConfigChange={updateSelectedConfig}
-            onRunNode={(id) => void runNode(id)}
-            onOpenMaskEditor={() => void openMaskEditor()}
-            maskEditor={maskEditor}
-            maskEditorMaskId={
-              typeof selectedConfig.maskId === 'string' ? selectedConfig.maskId : null
-            }
-            onMaskSaved={onMaskSaved}
-            onMaskClose={() => setMaskEditor(null)}
-          />
-        </div>
-        <div className={rightTab === 'chat' ? 'chat-panel' : 'studio-tab-hidden'}>
+      <aside className="studio-aside studio-aside-right studio-aside-flex" aria-label="画布助手">
+        <div className="chat-panel">
           <ChatPanel
             workspaceId={workspaceId}
             projectId={projectId}
@@ -1826,209 +1813,6 @@ function StudioCanvasInner(props: {
           />
         </div>
       </aside>
-
-      <TaskDrawer
-        workspaceId={workspaceId}
-        projectId={projectId}
-        ready={draft !== null}
-        expanded={drawerExpanded}
-        onToggleExpanded={() => setDrawerExpanded((v) => !v)}
-        onExpand={() => setDrawerExpanded(true)}
-        busy={runAllBusy}
-        msg={runAllMsg}
-        onRunAll={triggerRunAll}
-        onActiveChange={setRunsActive}
-      />
-    </div>
-  );
-}
-
-
-function TaskDrawer(props: {
-  workspaceId: string;
-  projectId: string;
-  ready: boolean;
-  expanded: boolean;
-  onToggleExpanded: () => void;
-  onExpand: () => void;
-  busy: boolean;
-  msg: RunAllOutcome | null;
-  onRunAll: () => Promise<void>;
-  /** 有 run 处于 QUEUED/RUNNING 时置 true（驱动节点结果轮询）。 */
-  onActiveChange?: (active: boolean) => void;
-}) {
-  const { workspaceId, projectId, ready, expanded, onToggleExpanded, onExpand, busy, msg, onRunAll, onActiveChange } =
-    props;
-  const [runs, setRuns] = useState<
-    Array<{
-      id: string;
-      status: string;
-      estimateMicrounits: number;
-      items: Array<{
-        id: string;
-        nodeId: string;
-        status: string;
-        attempts: Array<{
-          id: string;
-          attemptNo: number;
-          status: string;
-          progress: number;
-          errorClass?: string | null;
-          errorMessage?: string | null;
-        }>;
-      }>;
-    }>
-  >([]);
-  const [events, setEvents] = useState<string[]>([]);
-
-  const refresh = useCallback(async () => {
-    const res = await fetch(
-      `/api/workspaces/${workspaceId}/projects/${projectId}/runs`,
-      { credentials: 'include' },
-    );
-    if (res.ok) {
-      const data = await res.json();
-      setRuns(data.runs ?? []);
-    }
-  }, [workspaceId, projectId]);
-
-  useEffect(() => {
-    void refresh();
-    const es = new EventSource(
-      `/api/workspaces/${workspaceId}/events?projectId=${projectId}`,
-      // cookies included same-origin
-    );
-    const push = (type: string, ev: MessageEvent) => {
-      setEvents((prev) => [`${type}: ${ev.data}`.slice(0, 180), ...prev].slice(0, 8));
-      void refresh();
-    };
-    es.addEventListener('attempt.running', (e) => push('运行中', e as MessageEvent));
-    es.addEventListener('attempt.progress', (e) => push('进度', e as MessageEvent));
-    es.addEventListener('attempt.succeeded', (e) => push('成功', e as MessageEvent));
-    es.addEventListener('attempt.failed', (e) => push('失败', e as MessageEvent));
-    es.onerror = () => {
-      /* browser auto-reconnects */
-    };
-    const t = setInterval(() => void refresh(), 3000);
-    return () => {
-      es.close();
-      clearInterval(t);
-    };
-  }, [workspaceId, projectId, refresh]);
-
-  // Auto-expand while anything is queued/running.
-  const anyActive = runs.some((r) => r.status === 'RUNNING' || r.status === 'QUEUED');
-  useEffect(() => {
-    if (anyActive) onExpand();
-  }, [anyActive, onExpand]);
-
-  // 通知画布：是否有活跃 run（驱动节点结果 3 秒轮询与收尾刷新）。
-  useEffect(() => {
-    onActiveChange?.(anyActive);
-  }, [anyActive, onActiveChange]);
-
-  async function runAll() {
-    await onRunAll();
-    await refresh();
-  }
-
-  async function cancelRun(runId: string) {
-    await fetch(`/api/workspaces/${workspaceId}/runs/${runId}/cancel`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-    await refresh();
-  }
-
-  async function retryAttempt(attemptId: string) {
-    await fetch(`/api/workspaces/${workspaceId}/attempts/${attemptId}/retry`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-    await refresh();
-  }
-
-  return (
-    <div className="studio-drawer">
-      <div className="row">
-        <strong>任务抽屉</strong>
-        <button type="button" className="btn" disabled={busy || !ready} onClick={() => void runAll()}>
-          {busy ? '启动中…' : '运行整图（演示模式 · 预算 $5）'}
-        </button>
-        <button type="button" className="btn" onClick={() => void refresh()}>
-          刷新
-        </button>
-        {msg && (
-          <span style={{ opacity: 0.85 }}>
-            {msg.authRequired ? (
-              <>
-                生图需要登录账号 — <Link href="/login">去登录</Link>
-              </>
-            ) : (
-              msg.message
-            )}
-          </span>
-        )}
-        <span style={{ marginLeft: 'auto' }}>
-          <button type="button" className="btn" onClick={onToggleExpanded}>
-            {expanded ? '收起 ▾' : `展开 ▴（${runs.length} 个运行）`}
-          </button>
-        </span>
-      </div>
-      {!expanded ? null : (
-        <>
-          <div className="stack" style={{ gap: 6, maxHeight: 160, overflow: 'auto' }}>
-        {runs.length === 0 && (
-          <div role="status" className="faint">暂无运行 — 排队 / 运行中 / 成功 / 失败会显示在这里。</div>
-        )}
-        {runs.map((r) => (
-          <div key={r.id} className="run-card">
-            <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'space-between' }}>
-              <span>
-                <code>{r.id.slice(0, 8)}</code> · <strong>{zh(RUN_STATUS_ZH, r.status)}</strong> · 预估{' '}
-                {(r.estimateMicrounits / 1_000_000).toFixed(3)} 美元
-              </span>
-              {(r.status === 'QUEUED' || r.status === 'RUNNING') && (
-                <button type="button" className="btn" onClick={() => void cancelRun(r.id)}>
-                  取消
-                </button>
-              )}
-            </div>
-            {r.items.map((it) => {
-              const latest = it.attempts[it.attempts.length - 1];
-              return (
-                <div key={it.id} style={{ fontSize: 'var(--font-size-sm)', opacity: 0.9, paddingLeft: 8 }}>
-                  节点 <code>{it.nodeId}</code> · {zh(RUN_STATUS_ZH, it.status)}
-                  {latest && (
-                    <>
-                      {' '}
-                      · 尝试 #{latest.attemptNo} {zh(RUN_STATUS_ZH, latest.status)}（{latest.progress}%）
-                      {latest.errorClass && (
-                        <span style={{ color: 'var(--danger-text)' }}>
-                          {' '}
-                          {latest.errorClass}: {latest.errorMessage}
-                        </span>
-                      )}
-                      {(latest.status === 'FAILED_FINAL' || latest.status === 'FAILED_RETRYABLE') && (
-                        <button type="button" className="btn" style={{ marginLeft: 8 }} onClick={() => void retryAttempt(latest.id)}>
-                          重试
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-          </div>
-          {events.length > 0 && (
-            <div className="faint" style={{ fontSize: 'var(--font-size-xs)' }}>
-              实时事件：{events[0]}
-            </div>
-          )}
-        </>
-      )}
     </div>
   );
 }

@@ -4,7 +4,6 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { StudioCanvas } from '@/components/studio/StudioCanvas';
-import { ProjectStepper } from '@/components/project-stepper';
 import { ProjectSwitcher } from '@/components/project-switcher';
 import { Spinner } from '@/components/ui';
 import { useWorkspace } from '@/lib/use-workspace';
@@ -32,10 +31,12 @@ function StudioInner() {
   }
 
   return (
-    <div>
+    <div className="studio-dark">
       <div className="stepper-bar studio-topbar">
         <ProjectSwitcher workspaceId={workspaceId} projectId={projectId} />
-        <ProjectStepper projectId={projectId} input={{ hasWorkflow: true }} />
+        <span className="faint" style={{ fontSize: 'var(--font-size-sm)' }}>
+          画布工作台
+        </span>
       </div>
       <StudioCanvas
         workspaceId={workspaceId}
