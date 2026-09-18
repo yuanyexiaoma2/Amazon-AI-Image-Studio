@@ -134,7 +134,7 @@ export function ChatPanel(props: {
   /** Live optimistic-concurrency revision of the canvas draft (revisionRef). */
   getRevision: () => number;
   onGraphChanged: (graph: WorkflowGraph, revisionNumber: number) => void;
-  /** 把助手回复写入选中生图卡的提示词（未选中时由调用方提示）。 */
+  /** 把助手回复填入底部浮动提示词条。 */
   onUsePrompt?: (text: string) => void;
   /** 收起面板（由外层布局提供）。 */
   onCollapse?: () => void;
@@ -587,7 +587,7 @@ export function ChatPanel(props: {
                         <button
                           type="button"
                           className="chat-use-prompt"
-                          title="把这条回复（优先取代码块）写入选中生图卡的提示词"
+                          title="把这条回复（优先取代码块）填入下方提示词条，回车即生成"
                           onClick={() => onUsePrompt(extractPromptText(m.content.text))}
                         >
                           用作提示词
