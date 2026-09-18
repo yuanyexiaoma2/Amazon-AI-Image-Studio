@@ -39,15 +39,26 @@ export function GenerateNodeResults(props: {
   };
 
   const download = (versionId: string, index: number) => {
-    void fetchUrl(versionId).then((url) => {
+    void fetchUrl(versionId).then(async (url) => {
       if (!url) return;
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${sanitizeFilename(nameBase)}-${index + 1}.png`;
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      const filename = `${sanitizeFilename(nameBase)}-${index + 1}.png`;
+      // 预签名 URL 指向 MinIO（跨源），a[download] 会被浏览器忽略并整页跳转；
+      // 先取成 blob 换同源 object URL，保证触发真正的「另存为」且不离开画布。
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(String(res.status));
+        const blobUrl = URL.createObjectURL(await res.blob());
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
+      } catch {
+        window.open(url, '_blank', 'noopener');
+      }
     });
   };
 

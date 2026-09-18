@@ -219,6 +219,9 @@ function StudioCanvasInner(props: {
       setDraft((prev) => (prev ? { ...prev, name: b.name, revisionNumber: b.revisionNumber } : prev));
       setCmdError(null);
       setStatus(`已保存 · 修订 ${b.revisionNumber}`);
+      // 任何落表的修订都可能改变节点指纹（config/连线变化）——重新拉取
+      // node-results 让「需重跑」徽标即时刷新，不必等下一次 run。
+      void refreshNodeResults();
       if (b.run) {
         // Run 已提交：拉结果兜底（inline 同步完成时历史面板可能来不及看到
         // 活跃态，轮询不启动；多次延时刷新覆盖结果落表的时点）。
