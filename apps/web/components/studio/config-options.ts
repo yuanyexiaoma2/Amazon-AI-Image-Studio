@@ -246,6 +246,10 @@ export type ModelOptionItem = {
   key: string;
   displayName: string;
   operations: string[];
+  /** 文生图/图生图分面（kie *-text-to-image 条目 t2i-only，*-image-to-image 条目 i2i-only）。 */
+  capabilities?: { t2i: boolean; i2i: boolean };
+  /** 人类可读的中文使用约束说明。 */
+  rules?: string[];
   ratios?: string[];
   resolutionTiers?: string[];
   pricing?: { currency: string; unit: string; estimatedUnitCost: number };

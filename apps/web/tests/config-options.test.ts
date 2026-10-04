@@ -65,3 +65,24 @@ describe('config option builders (V2 PR-2 dropdowns)', () => {
     expect(merged[1]).toEqual(list[0]);
   });
 });
+
+describe('modelDisabledReason（A-UI 模型 × 参考图置灰）', () => {
+  // 延迟 import 避免循环错觉：与顶部同源
+  it('t2i-only 模型在已连参考图时禁用，无参考图时可用', async () => {
+    const { modelDisabledReason } = await import('../components/studio/generate-options');
+    const t2i = { key: 'm1', displayName: 'M1', operations: ['GENERATE'], capabilities: { t2i: true, i2i: false } };
+    expect(modelDisabledReason(t2i, true)).toBe('该模型不支持参考图');
+    expect(modelDisabledReason(t2i, false)).toBeNull();
+  });
+
+  it('i2i-only 模型在无参考图时禁用；双能模型恒可用；无 capabilities 字段视为兼容', async () => {
+    const { modelDisabledReason } = await import('../components/studio/generate-options');
+    const i2i = { key: 'm2', displayName: 'M2', operations: ['GENERATE'], capabilities: { t2i: false, i2i: true } };
+    expect(modelDisabledReason(i2i, false)).toBe('该模型必须连接参考图');
+    expect(modelDisabledReason(i2i, true)).toBeNull();
+    expect(
+      modelDisabledReason({ key: 'm3', displayName: 'M3', operations: ['GENERATE'], capabilities: { t2i: true, i2i: true } }, true),
+    ).toBeNull();
+    expect(modelDisabledReason({ key: 'm4', displayName: 'M4', operations: ['GENERATE'] }, true)).toBeNull();
+  });
+});

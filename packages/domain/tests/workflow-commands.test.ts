@@ -205,13 +205,22 @@ describe('applyWorkflowCommands — connect', () => {
     );
   });
 
-  it('rejects duplicate edge', () => {
+  it('connect 已存在的相同边 → 幂等跳过（不抛错、图不变）', () => {
+    const before = baseGraph();
+    const result = applyWorkflowCommands(before, [
+      { type: 'connect', source: 'p', sourceHandle: 'prompt', target: 'g', targetHandle: 'prompt' },
+    ]);
+    expect(result.graph.edges).toEqual(before.edges);
+    expect(result.graph.nodes).toEqual(before.nodes);
+  });
+
+  it('同端点但端口不同的边仍会走校验（不允许双输入）', () => {
     expectCommandError(
       () =>
         applyWorkflowCommands(baseGraph(), [
-          { type: 'connect', source: 'p', sourceHandle: 'prompt', target: 'g', targetHandle: 'prompt' },
+          { type: 'connect', source: 'p', sourceHandle: 'prompt', target: 'g', targetHandle: 'references' },
         ]),
-      'DUPLICATE_EDGE',
+      'PORT_TYPE_MISMATCH',
       0,
     );
   });
@@ -350,8 +359,8 @@ describe('applyWorkflowCommands — atomicity', () => {
     expectCommandError(
       () =>
         applyWorkflowCommands(base, [
-          { type: 'addNode', nodeType: 'upscale', nodeId: 'u1', position: { x: 0, y: 0 } },
-          { type: 'connect', source: 'u1', sourceHandle: 'image', target: 'u1', targetHandle: 'image' },
+          { type: 'addNode', nodeType: 'generate', nodeId: 'u1', position: { x: 0, y: 0 } },
+          { type: 'connect', source: 'u1', sourceHandle: 'images', target: 'u1', targetHandle: 'references' },
         ]),
       'SELF_LOOP',
       1,
@@ -361,8 +370,8 @@ describe('applyWorkflowCommands — atomicity', () => {
 
   it('applies multi-command batches in order', () => {
     const result = applyWorkflowCommands(baseGraph(), [
-      { type: 'addNode', nodeType: 'upscale', nodeId: 'u1', position: { x: 100, y: 0 } },
-      { type: 'connect', source: 's', sourceHandle: 'image', target: 'u1', targetHandle: 'image' },
+      { type: 'addNode', nodeType: 'generate', nodeId: 'u1', position: { x: 100, y: 0 } },
+      { type: 'connect', source: 's', sourceHandle: 'image', target: 'u1', targetHandle: 'references' },
       { type: 'rename', name: 'batch flow' },
     ]);
     expect(result.graph.nodes).toHaveLength(5);

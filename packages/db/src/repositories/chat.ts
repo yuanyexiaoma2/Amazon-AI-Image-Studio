@@ -128,6 +128,17 @@ export class ChatRepository {
     });
   }
 
+  /** Rename a session (auto-title from first message, or manual rename). */
+  async renameSession(
+    workspaceId: string,
+    sessionId: string,
+    title: string,
+  ): Promise<ChatSession | null> {
+    const existing = await this.getSession(workspaceId, sessionId);
+    if (!existing) return null;
+    return this.db.chatSession.update({ where: { id: existing.id }, data: { title } });
+  }
+
   /** Session + newest messages (createdAt asc, capped at `limit`, default 50). */
   async getWithMessages(
     workspaceId: string,

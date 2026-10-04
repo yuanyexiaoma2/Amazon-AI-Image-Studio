@@ -3,10 +3,13 @@ import {
   computeOutpaintCanvas,
   computeUpscaleTargetDims,
   extractOutpaintParams,
+  extractPromptFromInputs,
   extractUpscaleParams,
   operationForNodeType,
   parseAspectRatio,
+  type ResolvedPortInput,
 } from '../src/node-execution.js';
+import type { GraphNode } from '../src/workflow-graph.js';
 
 describe('W5-C node-execution outpaint/upscale', () => {
   it('maps outpaint → OUTPAINT and upscale → UPSCALE', () => {
@@ -116,5 +119,40 @@ describe('W5-C node-execution outpaint/upscale', () => {
     expect(t.width).toBe(5000);
     expect(t.height).toBe(4000);
     expect(t.scale).toBe(1);
+  });
+});
+
+describe('extractPromptFromInputs（连线文本 + config.prompt 后缀）', () => {
+  const gen = (config: Record<string, unknown>): GraphNode => ({
+    id: 'g',
+    type: 'generate',
+    position: { x: 0, y: 0 },
+    config,
+  });
+  const promptInput = (text: string): ResolvedPortInput => ({
+    portId: 'prompt',
+    sourceNodeId: 'p',
+    sourceType: 'prompt',
+    sourceConfig: { text },
+    order: 0,
+  });
+
+  it('无连线 → config.prompt 单独生效', () => {
+    expect(extractPromptFromInputs(gen({ prompt: '白底主图' }), []).prompt).toBe('白底主图');
+  });
+
+  it('有连线且无后缀 → 连线文本', () => {
+    expect(extractPromptFromInputs(gen({}), [promptInput('一只猫')]).prompt).toBe('一只猫');
+  });
+
+  it('有连线且有 config.prompt → 拼接为「连线文本，后缀」', () => {
+    expect(
+      extractPromptFromInputs(gen({ prompt: '白底主图，简洁干净' }), [promptInput('一只猫')]).prompt,
+    ).toBe('一只猫，白底主图，简洁干净');
+  });
+
+  it('空白后缀不拼接；空 config.prompt 且无连线 → 兜底占位', () => {
+    expect(extractPromptFromInputs(gen({ prompt: '  ' }), [promptInput('一只猫')]).prompt).toBe('一只猫');
+    expect(extractPromptFromInputs(gen({ prompt: '' }), []).prompt).toContain('Execute');
   });
 });

@@ -28,11 +28,34 @@ function edge(
 }
 
 describe('node registry', () => {
-  it('exposes palette nodes and hides approval_selector', () => {
+  it('内容卡片范式：palette 只暴露 source_image / prompt / generate 三种卡片', () => {
     const palette = listPaletteNodeTypes();
-    expect(palette.some((n) => n.type === 'generate')).toBe(true);
-    expect(palette.some((n) => n.type === 'approval_selector')).toBe(false);
-    expect(getNodeDefinition('approval_selector')?.palette).toBe(false);
+    expect(palette.map((n) => n.type).sort()).toEqual(['generate', 'prompt', 'source_image']);
+    expect(getNodeDefinition('source_image')?.cardKind).toBe('image');
+    expect(getNodeDefinition('prompt')?.cardKind).toBe('text');
+    expect(getNodeDefinition('generate')?.cardKind).toBe('generate');
+  });
+
+  it('hides legacy operator nodes and approval_selector from palette', () => {
+    for (const legacy of [
+      'product_truth',
+      'remove_background',
+      'replace_background',
+      'inpaint',
+      'outpaint',
+      'upscale',
+      'qa_gate',
+      'approval_selector',
+      'export',
+    ]) {
+      expect(getNodeDefinition(legacy)?.palette).toBe(false);
+    }
+  });
+
+  it('generate 的 prompt / truth 端口均为可选（个人工作台无 Truth Pack）', () => {
+    const def = getNodeDefinition('generate');
+    expect(def?.inputPorts.find((p) => p.id === 'prompt')?.required).toBe(false);
+    expect(def?.inputPorts.find((p) => p.id === 'truth')?.required).toBe(false);
   });
 
   it('IMAGE may feed IMAGE_LIST', () => {

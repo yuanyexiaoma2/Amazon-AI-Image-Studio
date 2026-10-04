@@ -1,7 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   ReactFlow,
   Background,
@@ -18,14 +17,11 @@ import {
   type EdgeChange,
   type Node,
   type NodeChange,
-  type NodeTypes,
-  Handle,
-  Position,
-  type NodeProps,
+  type OnConnectEnd,
+  type OnConnectStart,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
-  listPaletteNodeTypes,
   validateEdge,
   arePortTypesCompatible,
   getNodeDefinition,
@@ -45,62 +41,22 @@ import {
   type WorkflowDraftPayload,
 } from './use-workflow-commands';
 import { useConfigOptions } from './use-config-options';
-import {
-  STARTER_TEMPLATES,
-  buildStarterTemplateCommands,
-  type StarterTemplateId,
-} from './starter-templates';
+import { buildSuiteCommands } from './suite-template';
 import { IMAGE_FILE_RE, useAssetUpload } from '@/lib/use-asset-upload';
-import {
-  PropertiesPanel,
-  type MaskEditorState,
-  type SelectedNodeInfo,
-} from './PropertiesPanel';
 import { ChatPanel } from './ChatPanel';
-import { AssetImage } from '../asset-image';
-import { applyConfigEdit, type ModelOptionItem } from './config-options';
-import { zh, RUN_STATUS_ZH, NODE_TYPE_ZH, CONFIG_FIELD_ZH, formatCommandErrorZh, modelLabelZh } from '@/lib/zh-labels';
+import { applyConfigEdit } from './config-options';
+import { zh, RUN_STATUS_ZH, NODE_TYPE_ZH, CONFIG_FIELD_ZH, formatCommandErrorZh } from '@/lib/zh-labels';
+import { NodeActionContext, PORT_LABEL_ZH, type ImageQuickAction, type NodeActionContextValue } from './nodes/context';
+import { studioNodeTypes } from './nodes';
+import { PromptBar, type PromptBarValues } from './PromptBar';
+import { LeftRail, type RailPanelKind } from './rail/LeftRail';
+import { HistoryPanel, type RunAllOutcome } from './rail/HistoryPanel';
 
 type CanvasSnapshot = { nodes: Node[]; edges: Edge[] };
-
-/** Result of a whole-canvas run, shared by the toolbar button and TaskDrawer. */
-type RunAllOutcome = { message: string; authRequired: boolean };
 
 function nodeLabelZh(type: string): string {
   return NODE_TYPE_ZH[type] ?? getNodeDefinition(type)?.label ?? type;
 }
-
-const PORT_LABEL_ZH: Record<string, string> = {
-  image: '图片',
-  images: '图片',
-  mask: '蒙版',
-  prompt: '提示词',
-  truth: '产品图',
-  references: '参考图',
-  shotBrief: '分镜说明',
-  report: '质检报告',
-  candidates: '候选图',
-  approvedAssets: '已选定图',
-  assets: '已选定图',
-};
-
-/** Node-card affordances provided by StudioCanvasInner (upload / hints). */
-type NodeActionContextValue = {
-  uploadIntoNode: (nodeId: string) => void;
-  missingPorts: (nodeId: string) => string[];
-  updateConfig: (nodeId: string, key: string, raw: string) => void;
-  models: ModelOptionItem[] | null;
-  /** nodeId → 已生成图片的 assetVersionIds（当前快照修订的 SUCCEEDED 结果）。 */
-  resultImages: (nodeId: string) => string[];
-};
-
-const NodeActionContext = createContext<NodeActionContextValue>({
-  uploadIntoNode: () => {},
-  missingPorts: () => [],
-  updateConfig: () => {},
-  models: null,
-  resultImages: () => [],
-});
 
 function toFlowNodes(graph: WorkflowGraph, workspaceId: string): Node[] {
   return graph.nodes.map((n) => ({
@@ -158,275 +114,6 @@ function cloneGraph(nodes: Node[], edges: Edge[]): CanvasSnapshot {
   };
 }
 
-function StudioNodeView(props: NodeProps) {
-  const nodeType = String((props.data as { nodeType?: string }).nodeType ?? '');
-  const def = getNodeDefinition(nodeType);
-  const label = String((props.data as { label?: string }).label ?? nodeType);
-  const actions = useContext(NodeActionContext);
-  const data = props.data as {
-    workspaceId?: string;
-    config?: Record<string, unknown>;
-  };
-  const sourceVersionId =
-    nodeType === 'source_image' && typeof data.config?.assetVersionId === 'string'
-      ? (data.config.assetVersionId as string)
-      : null;
-  const truthRevisionId =
-    nodeType === 'product_truth' && typeof data.config?.truthRevisionId === 'string'
-      ? (data.config.truthRevisionId as string)
-      : null;
-  const promptText =
-    nodeType === 'prompt' && typeof data.config?.text === 'string'
-      ? data.config.text.trim()
-      : '';
-  const missing = actions.missingPorts(props.id);
-  return (
-    <div className={props.selected ? 'studio-node studio-node-selected' : 'studio-node'}>
-      <div style={{ fontWeight: 600 }}>{label}</div>
-      {sourceVersionId ? (
-        <div style={{ marginTop: 4 }}>
-          <AssetImage
-            workspaceId={data.workspaceId ?? null}
-            versionId={sourceVersionId}
-            size={36}
-            alt={label}
-          />
-        </div>
-      ) : null}
-      {nodeType === 'source_image' && !sourceVersionId ? (
-        <button
-          type="button"
-          className="btn studio-node-upload nodrag"
-          onClick={(e) => {
-            e.stopPropagation();
-            actions.uploadIntoNode(props.id);
-          }}
-        >
-          上传图片
-        </button>
-      ) : null}
-      {nodeType === 'product_truth' ? (
-        truthRevisionId ? (
-          <div className="studio-node-preview">
-            已绑定产品图资料 ✓{' '}
-            <button
-              type="button"
-              className="studio-node-relink nodrag"
-              onClick={(e) => {
-                e.stopPropagation();
-                actions.uploadIntoNode(props.id);
-              }}
-            >
-              换一张
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="btn studio-node-upload nodrag"
-            onClick={(e) => {
-              e.stopPropagation();
-              actions.uploadIntoNode(props.id);
-            }}
-          >
-            上传产品图
-          </button>
-        )
-      ) : null}
-      {nodeType === 'prompt' ? (
-        <div className={promptText ? 'studio-node-preview' : 'studio-node-preview faint'}>
-          {promptText
-            ? promptText.length > 60
-              ? `${promptText.slice(0, 60)}…`
-              : promptText
-            : '点选我，在右侧写提示词'}
-        </div>
-      ) : null}
-      {nodeType === 'generate' ? (
-        <>
-          <GenerateNodeControls nodeId={props.id} config={data.config} />
-          <GenerateNodeResults
-            workspaceId={data.workspaceId ?? null}
-            versionIds={actions.resultImages(props.id)}
-          />
-        </>
-      ) : null}
-      {def && def.inputPorts.length > 0 ? (
-        <div className="studio-node-ports">
-          {def.inputPorts.map((p) => (
-            <div
-              key={`in-${p.id}`}
-              className={p.required ? 'studio-node-port' : 'studio-node-port faint'}
-            >
-              <Handle
-                id={p.id}
-                type="target"
-                position={Position.Left}
-                className="studio-handle studio-handle-in"
-                title={`输入 · ${PORT_LABEL_ZH[p.id] ?? p.id}`}
-              />
-              {PORT_LABEL_ZH[p.id] ?? p.id}
-              {p.required ? '' : '（可选）'}
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {def && def.outputPorts.length > 0 ? (
-        <div className="studio-node-ports">
-          {def.outputPorts.map((p) => (
-            <div key={`out-${p.id}`} className="studio-node-port studio-node-port-out">
-              <Handle
-                id={p.id}
-                type="source"
-                position={Position.Right}
-                className="studio-handle studio-handle-out"
-                title={`输出 · ${PORT_LABEL_ZH[p.id] ?? p.id}`}
-              />
-              {PORT_LABEL_ZH[p.id] ?? p.id}
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {missing.length > 0 ? (
-        <div className="studio-node-missing">缺连线：{missing.join(' / ')}</div>
-      ) : null}
-    </div>
-  );
-}
-
-const RESOLUTION_ZH: Record<string, string> = {
-  '1K': '标准（1K）',
-  '2K': '高清（2K）',
-  '4K': '超清（4K）',
-};
-
-const FALLBACK_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
-const FALLBACK_RESOLUTIONS = ['1K', '2K', '4K'];
-
-/** 智能匹配时的安全档：谷歌/GPT 文生图与图生图三方交集，1K/2K 全兼容。 */
-const AUTO_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
-const AUTO_RESOLUTIONS = ['1K', '2K'];
-
-function withCurrentValue(options: string[], current: string): string[] {
-  return current && !options.includes(current) ? [current, ...options] : options;
-}
-
-/** 生成节点卡片内联控件：模型 / 比例 / 清晰度（比例与清晰度跟随所选模型的能力）。 */
-function GenerateNodeControls(props: { nodeId: string; config?: Record<string, unknown> }) {
-  const actions = useContext(NodeActionContext);
-  const cfg = props.config ?? {};
-  const modelKey = typeof cfg.modelKey === 'string' ? cfg.modelKey : '';
-  const ratio = typeof cfg.ratio === 'string' && cfg.ratio ? cfg.ratio : '1:1';
-  const resolution = typeof cfg.resolution === 'string' && cfg.resolution ? cfg.resolution : '2K';
-  const models = (actions.models ?? []).filter((m) => m.operations.includes('GENERATE'));
-  const isAuto = modelKey === 'auto' || modelKey === '';
-  const current = isAuto ? undefined : models.find((m) => m.key === modelKey);
-  const ratioOptions = withCurrentValue(
-    isAuto ? AUTO_RATIOS : (current?.ratios ?? FALLBACK_RATIOS),
-    ratio,
-  );
-  const resolutionOptions = withCurrentValue(
-    isAuto ? AUTO_RESOLUTIONS : (current?.resolutionTiers ?? FALLBACK_RESOLUTIONS),
-    resolution,
-  );
-  return (
-    <div className="studio-node-controls nodrag" onClick={(e) => e.stopPropagation()}>
-      <label className="studio-node-field">
-        <span>模型</span>
-        <select
-          value={isAuto ? 'auto' : modelKey}
-          onChange={(e) => actions.updateConfig(props.nodeId, 'modelKey', e.target.value)}
-        >
-          <option value="auto">智能匹配（自动）</option>
-          {actions.models !== null && !isAuto && !current && modelKey ? (
-            <option value={modelKey}>{modelLabelZh({ key: modelKey })}（不可用）</option>
-          ) : null}
-          {models.map((m) => (
-            <option key={m.key} value={m.key}>
-              {modelLabelZh(m)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="studio-node-field">
-        <span>比例</span>
-        <select
-          value={ratio}
-          onChange={(e) => actions.updateConfig(props.nodeId, 'ratio', e.target.value)}
-        >
-          {ratioOptions.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="studio-node-field">
-        <span>清晰度</span>
-        <select
-          value={resolution}
-          onChange={(e) => actions.updateConfig(props.nodeId, 'resolution', e.target.value)}
-        >
-          {resolutionOptions.map((r) => (
-            <option key={r} value={r}>
-              {RESOLUTION_ZH[r] ?? r}
-            </option>
-          ))}
-        </select>
-      </label>
-      {isAuto ? (
-        <div className="studio-node-cost faint">只写提示词 → 文生图；连了参考图 → 图生图</div>
-      ) : current?.pricing ? (
-        <div className="studio-node-cost faint">
-          约 ${current.pricing.estimatedUnitCost}/张
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-/** 生成节点结果缩略图：一行小图，点击在新标签页打开大图（预签名 URL）。 */
-function GenerateNodeResults(props: { workspaceId: string | null; versionIds: string[] }) {
-  const { workspaceId, versionIds } = props;
-  if (versionIds.length === 0) return null;
-
-  const openLarge = (versionId: string) => {
-    if (!workspaceId) return;
-    void fetch(
-      `/api/workspaces/${workspaceId}/asset-versions/${versionId}/download-url?kind=NORMALIZED_PNG`,
-      { credentials: 'include' },
-    )
-      .then(async (res) => {
-        if (!res.ok) return;
-        const json = await res.json().catch(() => null);
-        if (json?.url) window.open(json.url as string, '_blank', 'noopener');
-      })
-      .catch(() => undefined);
-  };
-
-  return (
-    <div
-      className="studio-node-results nodrag"
-      style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {versionIds.map((id) => (
-        <button
-          key={id}
-          type="button"
-          title="点击看大图"
-          style={{ border: 'none', background: 'none', padding: 0, cursor: 'zoom-in' }}
-          onClick={() => openLarge(id)}
-        >
-          <AssetImage workspaceId={workspaceId} versionId={id} size={40} alt="生成结果" />
-        </button>
-      ))}
-    </div>
-  );
-}
-
-const nodeTypes: NodeTypes = { studio: StudioNodeView };
-
 function StudioCanvasInner(props: {
   workspaceId: string;
   projectId: string;
@@ -441,7 +128,6 @@ function StudioCanvasInner(props: {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [status, setStatus] = useState<string>('加载中…');
 
-  const [maskEditor, setMaskEditor] = useState<MaskEditorState>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const [edgeError, setEdgeError] = useState<string | null>(null);
   const [cmdError, setCmdError] = useState<string | null>(null);
@@ -449,54 +135,85 @@ function StudioCanvasInner(props: {
   const [runBusy, setRunBusy] = useState(false);
   const [narrow, setNarrow] = useState(false);
   const [narrowDismissed, setNarrowDismissed] = useState(false);
-  const [rightTab, setRightTab] = useState<'properties' | 'chat'>('properties');
-  const [starterDismissed, setStarterDismissed] = useState(false);
+  const [railPanel, setRailPanel] = useState<RailPanelKind | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const [runAllBusy, setRunAllBusy] = useState(false);
   const [runAllMsg, setRunAllMsg] = useState<RunAllOutcome | null>(null);
-  const [drawerExpanded, setDrawerExpanded] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [nodeResults, setNodeResults] = useState<Record<string, string[]>>({});
+  const [nodeStale, setNodeStale] = useState<Record<string, boolean>>({});
   const [runsActive, setRunsActive] = useState(false);
+  // 参谋面板：可折叠 + 拖拽调宽（localStorage 记忆）
+  const [asideW, setAsideW] = useState<number>(() => {
+    if (typeof window === 'undefined') return 320;
+    const v = Number(window.localStorage.getItem('studio.asideW'));
+    return Number.isFinite(v) && v >= 240 && v <= 640 ? v : 320;
+  });
+  const [asideCollapsed, setAsideCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('studio.asideCollapsed') === '1';
+  });
+  const asideDragRef = useRef<{ startX: number; startW: number } | null>(null);
+
+  const onAsideDragStart = useCallback((e: ReactMouseEvent) => {
+    e.preventDefault();
+    asideDragRef.current = { startX: e.clientX, startW: asideW };
+    const onMove = (ev: MouseEvent) => {
+      const start = asideDragRef.current;
+      if (!start) return;
+      // 右栏：向左拖变宽、向右拖变窄
+      const next = Math.min(640, Math.max(240, start.startW + (start.startX - ev.clientX)));
+      setAsideW(next);
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      setAsideW((w) => {
+        try {
+          window.localStorage.setItem('studio.asideW', String(w));
+        } catch {
+          /* 忽略 */
+        }
+        return w;
+      });
+      asideDragRef.current = null;
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [asideW]);
+
+  const toggleAside = useCallback((collapsed: boolean) => {
+    setAsideCollapsed(collapsed);
+    try {
+      window.localStorage.setItem('studio.asideCollapsed', collapsed ? '1' : '0');
+    } catch {
+      /* 忽略 */
+    }
+  }, []);
   const revisionRef = useRef(0);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
   const clipboardRef = useRef<CanvasSnapshot | null>(null);
   const draftRef = useRef<WorkflowDraftPayload | null>(null);
   const dragSnapshotRef = useRef<CanvasSnapshot | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const connectStartRef = useRef<{
+    nodeId: string;
+    handleId: string | null;
+    handleType: string | null;
+  } | null>(null);
+  /** 双击空白处的三选一建点菜单：屏幕坐标（相对 wrap）+ 对应画布坐标。 */
+  const [createMenu, setCreateMenu] = useState<{
+    x: number;
+    y: number;
+    fx: number;
+    fy: number;
+  } | null>(null);
   nodesRef.current = nodes;
   edgesRef.current = edges;
   draftRef.current = draft;
 
-  // Re-offer starter templates whenever the canvas becomes empty again (e.g.
-  // after undoing a template batch) — "dismissed" only sticks while the
-  // canvas stays empty (空白画布 choice).
-  useEffect(() => {
-    if (nodes.length > 0 && starterDismissed) setStarterDismissed(false);
-  }, [nodes.length, starterDismissed]);
-
-  // 常用优先排序（不按 registry 顺序）；未列出的类型排最后。
-  const palette = useMemo(() => {
-    const order = [
-      'source_image',
-      'prompt',
-      'product_truth',
-      'generate',
-      'remove_background',
-      'replace_background',
-      'inpaint',
-      'outpaint',
-      'upscale',
-      'qa_gate',
-      'export',
-    ];
-    const rank = (t: string) => {
-      const i = order.indexOf(t);
-      return i === -1 ? order.length : i;
-    };
-    return [...listPaletteNodeTypes()].sort((a, b) => rank(a.type) - rank(b.type));
-  }, []);
-
-  const { uploadAsset } = useAssetUpload(workspaceId, projectId);
+  const { uploadAsset, uploading: railUploading } = useAssetUpload(workspaceId, projectId);
 
   const handleSelectionChange = useCallback(({ nodes: sel }: { nodes: Array<{ id: string }> }) => {
     setSelectedIds((prev) => {
@@ -517,8 +234,14 @@ function StudioCanvasInner(props: {
         credentials: 'include',
       });
       if (!res.ok) return;
-      const json = (await res.json().catch(() => null)) as Record<string, string[]> | null;
-      if (json && typeof json === 'object') setNodeResults(json);
+      const json = (await res.json().catch(() => null)) as {
+        results?: Record<string, string[]>;
+        stale?: Record<string, boolean>;
+      } | null;
+      if (json && typeof json === 'object' && json.results) {
+        setNodeResults(json.results);
+        setNodeStale(json.stale ?? {});
+      }
     } catch {
       /* 轮询失败保持旧数据 */
     }
@@ -530,8 +253,11 @@ function StudioCanvasInner(props: {
       setDraft((prev) => (prev ? { ...prev, name: b.name, revisionNumber: b.revisionNumber } : prev));
       setCmdError(null);
       setStatus(`已保存 · 修订 ${b.revisionNumber}`);
+      // 任何落表的修订都可能改变节点指纹（config/连线变化）——重新拉取
+      // node-results 让「需重跑」徽标即时刷新，不必等下一次 run。
+      void refreshNodeResults();
       if (b.run) {
-        // Run 已提交：拉结果兜底（inline 同步完成时 TaskDrawer 可能来不及看到
+        // Run 已提交：拉结果兜底（inline 同步完成时历史面板可能来不及看到
         // 活跃态，轮询不启动；多次延时刷新覆盖结果落表的时点）。
         void refreshNodeResults();
         setTimeout(() => void refreshNodeResults(), 3000);
@@ -672,6 +398,7 @@ function StudioCanvasInner(props: {
 
   useEffect(() => {
     setNodeResults({});
+    setNodeStale({});
     void refreshNodeResults();
   }, [resultsWorkflowId, refreshNodeResults]);
 
@@ -696,22 +423,6 @@ function StudioCanvasInner(props: {
   }, []);
 
   const selected = nodes.find((n) => n.id === selectedIds[0]) ?? null;
-  const selectedInfo: SelectedNodeInfo | null = useMemo(() => {
-    if (!selected) return null;
-    const data = selected.data as {
-      nodeType?: string;
-      label?: string;
-      config?: Record<string, unknown>;
-    };
-    return {
-      id: selected.id,
-      nodeType: String(data.nodeType ?? ''),
-      label: String(data.label ?? data.nodeType ?? ''),
-      position: { x: selected.position.x, y: selected.position.y },
-      config: data.config ?? { schemaVersion: 1 },
-    };
-  }, [selected]);
-  const selectedConfig = selectedInfo?.config ?? { schemaVersion: 1 };
 
   const sourceAssetVersionId = useMemo(() => {
     const src = nodes.find(
@@ -727,7 +438,7 @@ function StudioCanvasInner(props: {
     workspaceId,
     projectId,
     sourceAssetVersionId,
-    activeNodeId: selectedInfo?.id ?? null,
+    activeNodeId: selected?.id ?? null,
   });
 
   // 模型注册表加载后，把节点上已不可用的模型（例如切换到 kie 后被禁用的
@@ -798,6 +509,158 @@ function StudioCanvasInner(props: {
         .then(handleCommandResult);
     },
     [setEdges, commands, handleCommandResult, makeRollback],
+  );
+
+  // 「+」拖线生下游：记录连线起点，松手落在空白 pane 时自动建下游/上游卡片并连线。
+  const onConnectStart = useCallback<OnConnectStart>((_ev, params) => {
+    connectStartRef.current = {
+      nodeId: params.nodeId ?? '',
+      handleId: params.handleId ?? null,
+      handleType: params.handleType ?? null,
+    };
+  }, []);
+
+  const spawnConnectedNode = useCallback(
+    (start: { nodeId: string; handleId: string | null; handleType: string | null }, clientX: number, clientY: number) => {
+      const anchor = nodesRef.current.find((n) => n.id === start.nodeId);
+      if (!anchor) return;
+      const anchorDef = getNodeDefinition(
+        String((anchor.data as { nodeType?: string }).nodeType ?? ''),
+      );
+      if (!anchorDef) return;
+      const drop = screenToFlowPosition({ x: clientX, y: clientY });
+
+      let newType: string;
+      let sourceNodeId: string;
+      let sourceHandle: string;
+      let targetNodeId: string;
+      let targetHandle: string;
+      if (start.handleType === 'target') {
+        // 从输入端口反向拖出：按端口类型补一张上游卡片
+        const port =
+          anchorDef.inputPorts.find((p) => p.id === start.handleId) ??
+          (anchorDef.inputPorts.length === 1 ? anchorDef.inputPorts[0] : undefined);
+        if (!port) return;
+        if (port.type === 'PROMPT') {
+          newType = 'prompt';
+          sourceHandle = 'prompt';
+        } else if (port.type === 'IMAGE' || port.type === 'IMAGE_LIST') {
+          newType = 'source_image';
+          sourceHandle = 'image';
+        } else {
+          return;
+        }
+        targetNodeId = anchor.id;
+        targetHandle = port.id;
+        sourceNodeId = '';
+      } else {
+        const outPort =
+          anchorDef.outputPorts.find((p) => p.id === start.handleId) ??
+          anchorDef.outputPorts[0];
+        if (!outPort) return;
+        if (outPort.type !== 'PROMPT' && outPort.type !== 'IMAGE' && outPort.type !== 'IMAGE_LIST') {
+          return;
+        }
+        newType = 'generate';
+        sourceNodeId = anchor.id;
+        sourceHandle = outPort.id;
+        targetNodeId = '';
+        targetHandle = outPort.type === 'PROMPT' ? 'prompt' : 'references';
+      }
+
+      const id = `n-${newType}-${Date.now()}`;
+      if (sourceNodeId === '') sourceNodeId = id;
+      else targetNodeId = id;
+      const config = isWorkflowNodeConfigType(newType)
+        ? (defaultNodeConfig(newType) as Record<string, unknown>)
+        : { schemaVersion: 1 };
+      const pos = { x: drop.x - 120, y: drop.y - 60 };
+      const edgeId = `e-${sourceNodeId}-${sourceHandle}-${targetNodeId}-${targetHandle}-${Date.now()}`;
+      const graphWithNew: WorkflowGraph = {
+        schemaVersion: 1,
+        nodes: [
+          ...fromFlow(nodesRef.current, edgesRef.current).nodes,
+          { id, type: newType, position: pos, config },
+        ],
+        edges: fromFlow(nodesRef.current, edgesRef.current).edges,
+      };
+      const candidate: GraphEdge = {
+        id: edgeId,
+        source: sourceNodeId,
+        sourceHandle,
+        target: targetNodeId,
+        targetHandle,
+      };
+      const check = validateEdge(graphWithNew, candidate);
+      if (!check.ok) {
+        setEdgeError(check.issues.map((i) => i.message).join('; '));
+        return;
+      }
+      setEdgeError(null);
+      const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+      const next: Node = {
+        id,
+        type: 'studio',
+        position: pos,
+        selected: true,
+        data: { label: nodeLabelZh(newType), nodeType: newType, config, workspaceId },
+      };
+      const nextNodes = [...nodesRef.current.map((n) => ({ ...n, selected: false })), next];
+      const nextEdges = [...edgesRef.current, { ...candidate } as Edge];
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      nodesRef.current = nextNodes;
+      edgesRef.current = nextEdges;
+      setSelectedIds((prev) => (prev.length === 1 && prev[0] === id ? prev : [id]));
+      void commands
+        .applyNow(
+          [
+            { type: 'addNode', nodeType: newType, nodeId: id, position: pos, config },
+            {
+              type: 'connect',
+              edgeId,
+              source: sourceNodeId,
+              sourceHandle,
+              target: targetNodeId,
+              targetHandle,
+            },
+          ],
+          makeRollback(snapshot),
+        )
+        .then(handleCommandResult);
+    },
+    [screenToFlowPosition, setNodes, setEdges, commands, handleCommandResult, makeRollback, workspaceId],
+  );
+
+  const onConnectEnd = useCallback<OnConnectEnd>(
+    (ev, connectionState) => {
+      const start = connectStartRef.current;
+      connectStartRef.current = null;
+      if (!start || connectionState.toNode) return;
+      // 只响应「拖线松手落在空白画布」；单击手柄不算（target 是手柄而非 pane）
+      const t = ev.target as HTMLElement | null;
+      if (!t || !t.classList.contains('react-flow__pane')) return;
+      if (!(ev instanceof MouseEvent)) return;
+      spawnConnectedNode(start, ev.clientX, ev.clientY);
+    },
+    [spawnConnectedNode],
+  );
+
+  // 双击空白画布：在点击位置弹出三选一建点菜单
+  const onCanvasDoubleClick = useCallback(
+    (ev: ReactMouseEvent<HTMLDivElement>) => {
+      const t = ev.target as HTMLElement;
+      if (!t.classList.contains('react-flow__pane')) return;
+      const rect = wrapRef.current?.getBoundingClientRect();
+      const flow = screenToFlowPosition({ x: ev.clientX, y: ev.clientY });
+      setCreateMenu({
+        x: ev.clientX - (rect?.left ?? 0),
+        y: ev.clientY - (rect?.top ?? 0),
+        fx: flow.x,
+        fy: flow.y,
+      });
+    },
+    [screenToFlowPosition],
   );
 
   const onNodesChangeWrapped = useCallback(
@@ -974,9 +837,17 @@ function StudioCanvasInner(props: {
     [setNodes, setEdges, commands, handleCommandResult, makeRollback, workspaceId],
   );
 
-  function addNode(type: string) {
-    addNodeAt(type);
-  }
+  // 左栏「＋添加」：点击加到视图中心
+  const addNodeAtCenter = useCallback(
+    (type: string) => {
+      const rect = wrapRef.current?.getBoundingClientRect();
+      const center = rect
+        ? screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+        : undefined;
+      addNodeAt(type, center ? { x: center.x - 120, y: center.y - 60 } : undefined);
+    },
+    [addNodeAt, screenToFlowPosition],
+  );
 
   function updateNodeConfig(id: string, key: string, raw: string) {
     const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
@@ -1007,12 +878,6 @@ function StudioCanvasInner(props: {
       [{ type: 'configure', nodeId: id, config }],
       makeRollback(snapshot),
     );
-  }
-
-  function updateSelectedConfig(key: string, raw: string) {
-    const id = selectedIds[0];
-    if (!id) return;
-    updateNodeConfig(id, key, raw);
   }
 
   // PR-6 node-card upload: 「上传图片」 button on an empty source_image node.
@@ -1116,6 +981,135 @@ function StudioCanvasInner(props: {
     return map;
   }, [nodes, edges]);
 
+  // 生图卡的连线提示词摘要：prompt 端口 ← 文本卡
+  const connectedPromptByNode = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const e of edges) {
+      if (e.targetHandle !== 'prompt') continue;
+      const src = nodes.find((n) => n.id === e.source);
+      if (!src) continue;
+      if (String((src.data as { nodeType?: string }).nodeType ?? '') !== 'prompt') continue;
+      const text = (src.data as { config?: Record<string, unknown> }).config?.text;
+      if (typeof text === 'string' && text.trim()) map.set(e.target, text.trim());
+    }
+    return map;
+  }, [nodes, edges]);
+
+  // references 端口已连参考图的节点集合（驱动模型 t2i/i2i 置灰）
+  const nodesWithReferences = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of edges) {
+      if (e.targetHandle === 'references' || e.targetHandle === 'image') set.add(e.target);
+    }
+    return set;
+  }, [edges]);
+
+  // 图片卡底部小字：assetVersionId → 素材文件名
+  const assetNameByVersion = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of configOptions.assets ?? []) {
+      if (a.currentVersionId) map.set(a.currentVersionId, a.originalFilename ?? a.id);
+    }
+    return map;
+  }, [configOptions.assets]);
+
+  const runNode = useCallback(
+    async (nodeId: string) => {
+      setRunBusy(true);
+      setStatus('正在启动节点运行…');
+      try {
+        const r = await commands.applyNow([
+          {
+            type: 'run',
+            scope: { type: 'NODES', nodeIds: [nodeId] },
+            idempotencyKey: crypto.randomUUID(),
+            budgetLimit: { currency: 'USD', amount: 5 },
+            confirmBudget: true,
+          },
+        ]);
+        handleCommandResult(r);
+        if (r.ok && r.batch.run) {
+          setStatus(
+            `运行${zh(RUN_STATUS_ZH, r.batch.run.status)}（${r.batch.run.id.slice(0, 8)}…）· 修订 ${r.batch.revisionNumber}`,
+          );
+        }
+      } finally {
+        setRunBusy(false);
+      }
+    },
+    [commands, handleCommandResult],
+  );
+
+  // 图片卡快捷操作：右侧派生一张生图卡（预填提示词/数量/标题），自动连参考图，一个批次。
+  const spawnGenerateFrom = useCallback(
+    (sourceId: string, preset: ImageQuickAction) => {
+      const source = nodesRef.current.find((n) => n.id === sourceId);
+      if (!source) return;
+      const id = `n-generate-${Date.now()}`;
+      const pos = { x: source.position.x + 300, y: source.position.y };
+      const config: Record<string, unknown> = {
+        ...(defaultNodeConfig('generate') as Record<string, unknown>),
+        prompt: preset.prompt,
+        count: preset.count,
+        title: preset.title,
+      };
+      const edgeId = `e-${sourceId}-image-${id}-references-${Date.now()}`;
+      const candidate: GraphEdge = {
+        id: edgeId,
+        source: sourceId,
+        sourceHandle: 'image',
+        target: id,
+        targetHandle: 'references',
+      };
+      const graphWithNew: WorkflowGraph = {
+        schemaVersion: 1,
+        nodes: [
+          ...fromFlow(nodesRef.current, edgesRef.current).nodes,
+          { id, type: 'generate', position: pos, config },
+        ],
+        edges: fromFlow(nodesRef.current, edgesRef.current).edges,
+      };
+      const check = validateEdge(graphWithNew, candidate);
+      if (!check.ok) {
+        setEdgeError(check.issues.map((i) => i.message).join('; '));
+        return;
+      }
+      setEdgeError(null);
+      const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+      const next: Node = {
+        id,
+        type: 'studio',
+        position: pos,
+        selected: true,
+        data: { label: nodeLabelZh('generate'), nodeType: 'generate', config, workspaceId },
+      };
+      const nextNodes = [...nodesRef.current.map((n) => ({ ...n, selected: false })), next];
+      const nextEdges = [...edgesRef.current, { ...candidate } as Edge];
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      nodesRef.current = nextNodes;
+      edgesRef.current = nextEdges;
+      setSelectedIds((prev) => (prev.length === 1 && prev[0] === id ? prev : [id]));
+      void commands
+        .applyNow(
+          [
+            { type: 'addNode', nodeType: 'generate', nodeId: id, position: pos, config },
+            {
+              type: 'connect',
+              edgeId,
+              source: sourceId,
+              sourceHandle: 'image',
+              target: id,
+              targetHandle: 'references',
+            },
+          ],
+          makeRollback(snapshot),
+        )
+        .then(handleCommandResult);
+    },
+    [setNodes, setEdges, commands, handleCommandResult, makeRollback, workspaceId],
+  );
+
   const nodeActions = useMemo<NodeActionContextValue>(
     () => ({
       uploadIntoNode,
@@ -1123,8 +1117,27 @@ function StudioCanvasInner(props: {
       updateConfig: (nodeId, key, raw) => updateNodeConfig(nodeId, key, raw),
       models: configOptions.models,
       resultImages: (nodeId) => nodeResults[nodeId] ?? [],
+      isStale: (nodeId) => nodeStale[nodeId] === true,
+      spawnGenerateFrom,
+      hasReferences: (nodeId) => nodesWithReferences.has(nodeId),
+      runNode: (nodeId) => void runNode(nodeId),
+      runBusy,
+      connectedPromptText: (nodeId) => connectedPromptByNode.get(nodeId) ?? null,
+      assetLabel: (versionId) => assetNameByVersion.get(versionId) ?? null,
     }),
-    [uploadIntoNode, missingPortsByNode, configOptions.models, nodeResults],
+    [
+      uploadIntoNode,
+      missingPortsByNode,
+      configOptions.models,
+      nodeResults,
+      nodeStale,
+      spawnGenerateFrom,
+      nodesWithReferences,
+      runNode,
+      runBusy,
+      connectedPromptByNode,
+      assetNameByVersion,
+    ],
   );
 
   const handleUndoRedo = useCallback(
@@ -1234,6 +1247,10 @@ function StudioCanvasInner(props: {
 
   useEffect(() => {
     function onKey(ev: KeyboardEvent) {
+      if (ev.key === 'Escape') {
+        setCreateMenu(null);
+        return;
+      }
       const meta = ev.metaKey || ev.ctrlKey;
       if (meta && ev.key.toLowerCase() === 'z' && !ev.shiftKey) {
         ev.preventDefault();
@@ -1287,33 +1304,6 @@ function StudioCanvasInner(props: {
     setStatus(`快照 r${json.revision.revision} · 草稿修订 ${json.draft.revisionNumber}`);
   }
 
-  const runNode = useCallback(
-    async (nodeId: string) => {
-      setRunBusy(true);
-      setStatus('正在启动节点运行…');
-      try {
-        const r = await commands.applyNow([
-          {
-            type: 'run',
-            scope: { type: 'NODES', nodeIds: [nodeId] },
-            idempotencyKey: crypto.randomUUID(),
-            budgetLimit: { currency: 'USD', amount: 5 },
-            confirmBudget: true,
-          },
-        ]);
-        handleCommandResult(r);
-        if (r.ok && r.batch.run) {
-          setStatus(
-            `运行${zh(RUN_STATUS_ZH, r.batch.run.status)}（${r.batch.run.id.slice(0, 8)}…）· 修订 ${r.batch.revisionNumber}`,
-          );
-        }
-      } finally {
-        setRunBusy(false);
-      }
-    },
-    [commands, handleCommandResult],
-  );
-
   const runAll = useCallback(async (): Promise<RunAllOutcome> => {
     const r = await commands.applyNow([
       {
@@ -1345,11 +1335,11 @@ function StudioCanvasInner(props: {
     };
   }, [commands, handleCommandResult]);
 
-  // Shared whole-canvas run trigger (toolbar button + TaskDrawer button).
+  // Shared whole-canvas run trigger (toolbar button; history flyout shows the outcome).
   const triggerRunAll = useCallback(async () => {
     setRunAllBusy(true);
     setRunAllMsg(null);
-    setDrawerExpanded(true);
+    setRailPanel('history');
     try {
       setRunAllMsg(await runAll());
     } finally {
@@ -1357,58 +1347,198 @@ function StudioCanvasInner(props: {
     }
   }, [runAll]);
 
-  // Starter templates: one applyNow batch (one undo step), then adopt the
-  // authoritative graph from the response and fit the view.
-  const applyTemplate = useCallback(
-    (templateId: StarterTemplateId) => {
-      if (templateId === 'blank') {
-        setStarterDismissed(true);
+  // 底部浮动提示词条：选中唯一生图卡时绑定它
+  const boundGenerate = useMemo(() => {
+    if (selectedIds.length !== 1) return null;
+    const n = nodes.find((x) => x.id === selectedIds[0]);
+    if (!n) return null;
+    if (String((n.data as { nodeType?: string }).nodeType ?? '') !== 'generate') return null;
+    return {
+      id: n.id,
+      config:
+        (n.data as { config?: Record<string, unknown> }).config ?? ({ schemaVersion: 1 } as Record<string, unknown>),
+    };
+  }, [selectedIds, nodes]);
+
+  // 提示词条提交：configure + 单节点 run（同一批次，一次撤销单位）；
+  // 未绑定时先在视图中心建一张生图卡。
+  const promptBarSubmit = useCallback(
+    (values: PromptBarValues, boundId: string | null) => {
+      const count = Math.min(8, Math.max(1, Number(values.count) || 2));
+      const runCmd: WorkflowCommand = {
+        type: 'run',
+        scope: { type: 'NODES', nodeIds: [boundId ?? ''] },
+        idempotencyKey: crypto.randomUUID(),
+        budgetLimit: { currency: 'USD', amount: 5 },
+        confirmBudget: true,
+      };
+      setRunBusy(true);
+      setStatus('正在启动生成…');
+      if (boundId) {
+        const node = nodesRef.current.find((n) => n.id === boundId);
+        if (!node) {
+          setRunBusy(false);
+          return;
+        }
+        const config: Record<string, unknown> = {
+          ...(defaultNodeConfig('generate') as Record<string, unknown>),
+          ...((node.data as { config?: Record<string, unknown> }).config ?? {}),
+          prompt: values.prompt,
+          modelKey: values.modelKey,
+          ratio: values.ratio,
+          resolution: values.resolution,
+          count,
+        };
+        const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+        const nextNodes = nodesRef.current.map((n) =>
+          n.id === boundId ? { ...n, data: { ...n.data, config } } : n,
+        );
+        setNodes(nextNodes);
+        nodesRef.current = nextNodes;
+        void commands
+          .applyNow(
+            [{ type: 'configure', nodeId: boundId, config }, { ...runCmd, scope: { type: 'NODES', nodeIds: [boundId] } }],
+            makeRollback(snapshot),
+          )
+          .then((r) => {
+            handleCommandResult(r);
+            if (r.ok && r.batch.run) {
+              setStatus(
+                `运行${zh(RUN_STATUS_ZH, r.batch.run.status)}（${r.batch.run.id.slice(0, 8)}…）· 修订 ${r.batch.revisionNumber}`,
+              );
+            }
+          })
+          .finally(() => setRunBusy(false));
         return;
       }
-      setStarterDismissed(true);
-      setStatus('正在应用模板…');
+      const rect = wrapRef.current?.getBoundingClientRect();
+      const center = rect
+        ? screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+        : { x: 200, y: 200 };
+      const pos = { x: center.x - 140, y: center.y - 110 };
+      const id = `n-generate-${Date.now()}`;
+      const config: Record<string, unknown> = {
+        ...(defaultNodeConfig('generate') as Record<string, unknown>),
+        prompt: values.prompt,
+        modelKey: values.modelKey,
+        ratio: values.ratio,
+        resolution: values.resolution,
+        count,
+      };
       const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+      const next: Node = {
+        id,
+        type: 'studio',
+        position: pos,
+        selected: true,
+        data: { label: nodeLabelZh('generate'), nodeType: 'generate', config, workspaceId },
+      };
+      const nextNodes = [...nodesRef.current.map((n) => ({ ...n, selected: false })), next];
+      setNodes(nextNodes);
+      nodesRef.current = nextNodes;
+      setSelectedIds((prev) => (prev.length === 1 && prev[0] === id ? prev : [id]));
       void commands
-        .applyNow(buildStarterTemplateCommands(templateId), makeRollback(snapshot))
+        .applyNow(
+          [
+            { type: 'addNode', nodeType: 'generate', nodeId: id, position: pos, config },
+            { ...runCmd, scope: { type: 'NODES', nodeIds: [id] } },
+          ],
+          makeRollback(snapshot),
+        )
+        .then((r) => {
+          handleCommandResult(r);
+          if (r.ok && r.batch.run) {
+            setStatus(
+              `运行${zh(RUN_STATUS_ZH, r.batch.run.status)}（${r.batch.run.id.slice(0, 8)}…）· 修订 ${r.batch.revisionNumber}`,
+            );
+          }
+        })
+        .finally(() => setRunBusy(false));
+    },
+    [commands, handleCommandResult, makeRollback, screenToFlowPosition, setNodes, workspaceId],
+  );
+
+  // 左栏「套装」：一句话 → 1 文本卡 + 3 生图卡（白底/场景/细节），一个批次，采纳权威图。
+  const addSuite = useCallback(
+    (description: string) => {
+      const desc = description.trim();
+      if (!desc) return;
+      const rect = wrapRef.current?.getBoundingClientRect();
+      const center = rect
+        ? screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+        : { x: 400, y: 300 };
+      const { commands: cmds, selectId } = buildSuiteCommands(desc, {
+        x: center.x - 290,
+        y: center.y - 190,
+      });
+      const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+      setStatus('正在生成套装…');
+      setRailPanel(null);
+      void commands
+        .applyNow(cmds, makeRollback(snapshot))
         .then((r) => {
           handleCommandResult(r);
           if (r.ok) {
-            // Select the key node: the batch's first 参考图 (source_image),
-            // falling back to the first added node.
-            const pick =
-              r.batch.graph.nodes.find((n) => n.type === 'source_image') ??
-              r.batch.graph.nodes[0];
             const flowNodes = toFlowNodes(r.batch.graph, workspaceId).map((n) => ({
               ...n,
-              selected: n.id === pick?.id,
+              selected: n.id === selectId,
             }));
-            applyLocalSnapshot({
-              nodes: flowNodes,
-              edges: toFlowEdges(r.batch.graph),
-            });
-            if (pick) {
-              const pickId = pick.id;
-              setSelectedIds((prev) =>
-                prev.length === 1 && prev[0] === pickId ? prev : [pickId],
-              );
-            }
-            setStatus(`已应用模板 · 修订 ${r.batch.revisionNumber}`);
+            applyLocalSnapshot({ nodes: flowNodes, edges: toFlowEdges(r.batch.graph) });
+            setSelectedIds([selectId]);
+            setStatus(`已生成套装（1 文本 + 3 生图）· 修订 ${r.batch.revisionNumber}`);
             setTimeout(() => void fitView({ padding: 0.2, duration: 200 }), 50);
-          } else {
-            setStarterDismissed(false);
           }
         });
     },
-    [commands, handleCommandResult, makeRollback, applyLocalSnapshot, workspaceId, fitView],
+    [commands, handleCommandResult, makeRollback, applyLocalSnapshot, screenToFlowPosition, workspaceId, fitView],
   );
 
   const onCanvasDragOver = useCallback((ev: ReactDragEvent<HTMLDivElement>) => {
     const types = ev.dataTransfer.types;
-    if (types.includes('application/studio-node') || types.includes('Files')) {
+    if (
+      types.includes('application/studio-node') ||
+      types.includes('application/studio-asset') ||
+      types.includes('Files')
+    ) {
       ev.preventDefault();
       ev.dataTransfer.dropEffect = 'copy';
     }
   }, []);
+
+  // 素材库 / 历史面板拖入：在落点建图片卡并绑定该素材版本
+  const dropAssetCard = useCallback(
+    (assetVersionId: string, position: { x: number; y: number }) => {
+      const id = `n-source_image-${Date.now()}`;
+      const config = {
+        ...(defaultNodeConfig('source_image') as Record<string, unknown>),
+        assetVersionId,
+      };
+      const snapshot = cloneGraph(nodesRef.current, edgesRef.current);
+      const next: Node = {
+        id,
+        type: 'studio',
+        position,
+        selected: true,
+        data: {
+          label: nodeLabelZh('source_image'),
+          nodeType: 'source_image',
+          config,
+          workspaceId,
+        },
+      };
+      const nextNodes = [...nodesRef.current.map((n) => ({ ...n, selected: false })), next];
+      setNodes(nextNodes);
+      nodesRef.current = nextNodes;
+      setSelectedIds((prev) => (prev.length === 1 && prev[0] === id ? prev : [id]));
+      void commands
+        .applyNow(
+          [{ type: 'addNode', nodeType: 'source_image', nodeId: id, position, config }],
+          makeRollback(snapshot),
+        )
+        .then(handleCommandResult);
+    },
+    [commands, handleCommandResult, makeRollback, setNodes, workspaceId],
+  );
 
   const onCanvasDrop = useCallback(
     (ev: ReactDragEvent<HTMLDivElement>) => {
@@ -1417,6 +1547,12 @@ function StudioCanvasInner(props: {
       if (nodeType) {
         ev.preventDefault();
         if (getNodeDefinition(nodeType)?.palette) addNodeAt(nodeType, position);
+        return;
+      }
+      const assetVersionId = ev.dataTransfer.getData('application/studio-asset');
+      if (assetVersionId) {
+        ev.preventDefault();
+        dropAssetCard(assetVersionId, position);
         return;
       }
       const file = [...ev.dataTransfer.files].find((f) => IMAGE_FILE_RE.test(f.name));
@@ -1471,6 +1607,7 @@ function StudioCanvasInner(props: {
       screenToFlowPosition,
       uploadAsset,
       addNodeAt,
+      dropAssetCard,
       commands,
       handleCommandResult,
       makeRollback,
@@ -1479,76 +1616,93 @@ function StudioCanvasInner(props: {
     ],
   );
 
-  async function openMaskEditor() {
-    const fromSelected =
-      typeof selectedConfig.assetVersionId === 'string' && selectedConfig.assetVersionId
-        ? selectedConfig.assetVersionId
-        : null;
-    const versionId = fromSelected ?? sourceAssetVersionId;
-    if (!versionId) {
-      setStatus('请先在「参考图」节点选择素材版本，再编辑蒙版');
-      return;
-    }
-    const res = await fetch(
-      `/api/workspaces/${workspaceId}/asset-versions/${versionId}/download-url?kind=NORMALIZED_PNG`,
-    );
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
-      setStatus(`蒙版编辑器：${json?.error?.message ?? res.status}`);
-      return;
-    }
-    setMaskEditor({ imageUrl: json.url, versionId, width: 1024, height: 1024 });
-  }
-
-  function onMaskSaved(id: string) {
-    if (selectedInfo?.nodeType === 'replace_background' || selectedInfo?.nodeType === 'inpaint') {
-      updateSelectedConfig('maskId', id);
-    }
-    configOptions.reloadMasks();
-    setStatus(`蒙版已保存 ${id.slice(0, 8)}…`);
-  }
-
   const errorBar = edgeError
     ? `非法连线已阻止：${edgeError}`
     : cmdError
       ? `操作失败：${cmdError}`
       : null;
 
+  // 素材库面板「上传」：走共享上传流程，完成后刷新素材列表
+  function onRailUploadFile(file: File) {
+    void (async () => {
+      setUploadNotice(`正在上传 ${file.name}…`);
+      try {
+        const asset = await uploadAsset(file, (m) => setUploadNotice(`${file.name} — ${m}`));
+        configOptions.reload();
+        setUploadNotice(
+          asset.status === 'REJECTED' ? `${file.name} 未通过检查 — 请更换图片` : `已上传 ${file.name}`,
+        );
+      } catch {
+        setUploadNotice(`上传失败：${file.name}`);
+      }
+    })();
+  }
+
+  // 素材库面板「删除」：软删除（ARCHIVED）后刷新列表；画布上已引用它的卡片不受影响
+  function onRailDeleteAsset(assetId: string, name: string) {
+    void (async () => {
+      try {
+        const res = await fetch(`/api/workspaces/${workspaceId}/assets/${assetId}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        configOptions.reload();
+        setUploadNotice(`已删除素材 ${name}`);
+      } catch {
+        setUploadNotice(`删除失败：${name}`);
+      }
+    })();
+  }
+
+  // 创意参谋「用作提示词」：直接填入底部提示词条并聚焦，回车即生成
+  const [promptInject, setPromptInject] = useState<{ text: string; nonce: number } | null>(null);
+  function handleUsePrompt(text: string) {
+    if (!text.trim()) return;
+    setPromptInject({ text, nonce: Date.now() });
+    setStatus('已填入下方提示词条 — 回车即可生成');
+  }
+
   return (
     <div
       role="application"
       aria-label="工作流画布"
-      className={belowStepper ? 'studio-grid studio-grid-below-stepper' : 'studio-grid'}
+      className={
+        belowStepper
+          ? 'studio-dark studio-grid studio-grid-v2 studio-grid-below-stepper'
+          : 'studio-dark studio-grid studio-grid-v2'
+      }
+      style={{
+        gridTemplateColumns: asideCollapsed ? '52px 1fr 0px' : `52px 1fr ${asideW}px`,
+      }}
     >
-      <aside aria-label="节点库" className="studio-aside studio-aside-left">
-        <div style={{ fontWeight: 700, marginBottom: 'var(--space-2)' }} id="node-library-heading">
-          节点库
-        </div>
-        <div className="faint" style={{ fontSize: 'var(--font-size-xs)', marginBottom: 'var(--space-2)' }}>
-          11 种节点 · 点击添加或拖到画布 · 也可直接拖入图片文件
-        </div>
-        {palette.map((n) => (
-          <button
-            key={n.type}
-            type="button"
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData('application/studio-node', n.type);
-              e.dataTransfer.effectAllowed = 'copy';
-            }}
-            onClick={() => addNode(n.type)}
-            className="palette-btn"
-            title="点击添加，或拖拽到画布指定位置"
-          >
-            {nodeLabelZh(n.type)}
-          </button>
-        ))}
-      </aside>
+      <LeftRail
+        panel={railPanel}
+        onToggle={(kind) => setRailPanel((prev) => (prev === kind ? null : kind))}
+        onAddNode={addNodeAtCenter}
+        onAddSuite={addSuite}
+        workspaceId={workspaceId}
+        assets={configOptions.assets}
+        uploading={railUploading}
+        onUploadFile={onRailUploadFile}
+        onDeleteAsset={onRailDeleteAsset}
+        historyPanel={
+          <HistoryPanel
+            workspaceId={workspaceId}
+            projectId={projectId}
+            workflowId={draft?.workflowId ?? null}
+            msg={runAllMsg}
+            onActiveChange={setRunsActive}
+          />
+        }
+      />
 
       <div
+        ref={wrapRef}
         className="studio-canvas-wrap"
         onDragOver={onCanvasDragOver}
         onDrop={onCanvasDrop}
+        onDoubleClick={onCanvasDoubleClick}
       >
         <input
           ref={nodeFileInputRef}
@@ -1564,10 +1718,15 @@ function StudioCanvasInner(props: {
           onNodesChange={onNodesChangeWrapped}
           onEdgesChange={onEdgesChangeWrapped}
           onConnect={onConnect}
+          onConnectStart={onConnectStart}
+          onConnectEnd={onConnectEnd}
+          onPaneClick={() => setCreateMenu(null)}
           isValidConnection={isValidConnection}
-          nodeTypes={nodeTypes}
+          nodeTypes={studioNodeTypes}
           onSelectionChange={handleSelectionChange}
           fitView
+          colorMode="dark"
+          zoomOnDoubleClick={false}
           deleteKeyCode={['Backspace', 'Delete']}
           multiSelectionKeyCode="Shift"
           proOptions={{ hideAttribution: true }}
@@ -1577,18 +1736,17 @@ function StudioCanvasInner(props: {
           <Controls />
           <Panel position="top-left">
             <div className="studio-toolbar">
-              <span role="status" aria-live="polite">{status}</span>
-              <button type="button" className="btn" onClick={() => void reload()}>
-                重新加载
-              </button>
-              <button type="button" className="btn" onClick={() => void snapshot()}>
-                快照
-              </button>
+              <span className="studio-toolbar-status" role="status" aria-live="polite">
+                {status}
+              </span>
               <button type="button" className="btn" onClick={() => undo()} title="Ctrl/Cmd+Z">
                 撤销
               </button>
               <button type="button" className="btn" onClick={() => redo()} title="Ctrl/Cmd+Y">
                 重做
+              </button>
+              <button type="button" className="btn" onClick={() => void snapshot()}>
+                快照
               </button>
               <button
                 type="button"
@@ -1599,45 +1757,123 @@ function StudioCanvasInner(props: {
               >
                 {runAllBusy ? '启动中…' : '▶ 运行整图'}
               </button>
-              <button type="button" className="btn" onClick={() => copySelected()} title="Ctrl/Cmd+C">
-                复制
-              </button>
-              <button type="button" className="btn" onClick={() => pasteClipboard()} title="Ctrl/Cmd+V">
-                粘贴
-              </button>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => {
-                  void fitView({ padding: 0.2, duration: 200 });
-                  setStatus('适应视图');
-                }}
-              >
-                适应视图
-              </button>
+              <span className="studio-toolbar-more">
+                <button
+                  type="button"
+                  className="btn"
+                  aria-label="更多操作"
+                  aria-expanded={moreOpen}
+                  onClick={() => setMoreOpen((v) => !v)}
+                >
+                  ⋯
+                </button>
+                {moreOpen ? (
+                  <span className="studio-toolbar-menu" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        void reload();
+                      }}
+                    >
+                      重新加载
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        copySelected();
+                      }}
+                    >
+                      复制所选
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        pasteClipboard();
+                      }}
+                    >
+                      粘贴
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        void fitView({ padding: 0.2, duration: 200 });
+                        setStatus('适应视图');
+                      }}
+                    >
+                      适应视图
+                    </button>
+                  </span>
+                ) : null}
+              </span>
             </div>
+          </Panel>
+          <Panel position="bottom-center">
+            <PromptBar
+              bound={boundGenerate}
+              boundHasReferences={boundGenerate ? nodesWithReferences.has(boundGenerate.id) : false}
+              models={configOptions.models}
+              busy={runBusy || runAllBusy}
+              onSubmit={promptBarSubmit}
+              inject={promptInject}
+            />
           </Panel>
         </ReactFlow>
         </NodeActionContext.Provider>
-        {draft !== null && nodes.length === 0 && !starterDismissed && (
+        {createMenu && (
+          <div
+            className="studio-create-menu"
+            role="menu"
+            aria-label="新建卡片"
+            style={{ left: createMenu.x, top: createMenu.y }}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                const m = createMenu;
+                setCreateMenu(null);
+                addNodeAt('prompt', { x: m.fx - 120, y: m.fy - 40 });
+              }}
+            >
+              文本
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                const m = createMenu;
+                setCreateMenu(null);
+                addNodeAt('source_image', { x: m.fx - 120, y: m.fy - 40 });
+              }}
+            >
+              图片
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                const m = createMenu;
+                setCreateMenu(null);
+                addNodeAt('generate', { x: m.fx - 120, y: m.fy - 40 });
+              }}
+            >
+              生图
+            </button>
+          </div>
+        )}
+        {draft !== null && nodes.length === 0 && (
           <div className="starter-overlay">
-            <div className="starter-panel" role="dialog" aria-label="画布起始模板">
-              <div style={{ fontWeight: 700 }}>三步出图：选模板 → 在节点上上传图片、写提示词 → ▶ 运行整图</div>
-              <div className="starter-grid">
-                {STARTER_TEMPLATES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    className="starter-card"
-                    onClick={() => applyTemplate(t.id)}
-                  >
-                    <span className="starter-card-title">{t.title}</span>
-                    <span className="starter-card-desc">{t.description}</span>
-                  </button>
-                ))}
-              </div>
+            <div className="starter-panel" role="note" aria-label="空画布提示">
               <div className="faint" style={{ fontSize: 'var(--font-size-sm)' }}>
-                也可以直接把图片文件拖进画布，或从左侧节点库拖节点进来。
+                双击空白处新建卡片，或点左侧「＋」添加 / 生成套装，也可以直接把图片文件拖进来。
               </div>
             </div>
           </div>
@@ -1706,258 +1942,41 @@ function StudioCanvasInner(props: {
         )}
       </div>
 
-      <aside className="studio-aside studio-aside-right studio-aside-flex">
-        <div className="studio-tabs" role="tablist" aria-label="右侧面板切换">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={rightTab === 'properties'}
-            className={rightTab === 'properties' ? 'btn btn-primary' : 'btn'}
-            onClick={() => setRightTab('properties')}
-          >
-            属性
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={rightTab === 'chat'}
-            className={rightTab === 'chat' ? 'btn btn-primary' : 'btn'}
-            onClick={() => setRightTab('chat')}
-          >
-            助手
-          </button>
-        </div>
-        <div className={rightTab === 'properties' ? undefined : 'studio-tab-hidden'}>
-          <PropertiesPanel
-            workspaceId={workspaceId}
-            selected={selectedInfo}
-            options={configOptions}
-            sourceAssetVersionId={sourceAssetVersionId}
-            draftRevision={draft?.revisionNumber ?? null}
-            runBusy={runBusy}
-            onConfigChange={updateSelectedConfig}
-            onRunNode={(id) => void runNode(id)}
-            onOpenMaskEditor={() => void openMaskEditor()}
-            maskEditor={maskEditor}
-            maskEditorMaskId={
-              typeof selectedConfig.maskId === 'string' ? selectedConfig.maskId : null
-            }
-            onMaskSaved={onMaskSaved}
-            onMaskClose={() => setMaskEditor(null)}
+      {!asideCollapsed ? (
+        <aside
+          className="studio-aside studio-aside-right studio-aside-flex"
+          aria-label="创意参谋"
+        >
+          <div
+            className="studio-aside-resizer"
+            onMouseDown={onAsideDragStart}
+            title="拖拽调整面板宽度"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整参谋面板宽度"
           />
-        </div>
-        <div className={rightTab === 'chat' ? 'chat-panel' : 'studio-tab-hidden'}>
-          <ChatPanel
-            workspaceId={workspaceId}
-            projectId={projectId}
-            workflowId={draft?.workflowId ?? null}
-            getRevision={getRevision}
-            onGraphChanged={handleGraphChanged}
-          />
-        </div>
-      </aside>
-
-      <TaskDrawer
-        workspaceId={workspaceId}
-        projectId={projectId}
-        ready={draft !== null}
-        expanded={drawerExpanded}
-        onToggleExpanded={() => setDrawerExpanded((v) => !v)}
-        onExpand={() => setDrawerExpanded(true)}
-        busy={runAllBusy}
-        msg={runAllMsg}
-        onRunAll={triggerRunAll}
-        onActiveChange={setRunsActive}
-      />
-    </div>
-  );
-}
-
-
-function TaskDrawer(props: {
-  workspaceId: string;
-  projectId: string;
-  ready: boolean;
-  expanded: boolean;
-  onToggleExpanded: () => void;
-  onExpand: () => void;
-  busy: boolean;
-  msg: RunAllOutcome | null;
-  onRunAll: () => Promise<void>;
-  /** 有 run 处于 QUEUED/RUNNING 时置 true（驱动节点结果轮询）。 */
-  onActiveChange?: (active: boolean) => void;
-}) {
-  const { workspaceId, projectId, ready, expanded, onToggleExpanded, onExpand, busy, msg, onRunAll, onActiveChange } =
-    props;
-  const [runs, setRuns] = useState<
-    Array<{
-      id: string;
-      status: string;
-      estimateMicrounits: number;
-      items: Array<{
-        id: string;
-        nodeId: string;
-        status: string;
-        attempts: Array<{
-          id: string;
-          attemptNo: number;
-          status: string;
-          progress: number;
-          errorClass?: string | null;
-          errorMessage?: string | null;
-        }>;
-      }>;
-    }>
-  >([]);
-  const [events, setEvents] = useState<string[]>([]);
-
-  const refresh = useCallback(async () => {
-    const res = await fetch(
-      `/api/workspaces/${workspaceId}/projects/${projectId}/runs`,
-      { credentials: 'include' },
-    );
-    if (res.ok) {
-      const data = await res.json();
-      setRuns(data.runs ?? []);
-    }
-  }, [workspaceId, projectId]);
-
-  useEffect(() => {
-    void refresh();
-    const es = new EventSource(
-      `/api/workspaces/${workspaceId}/events?projectId=${projectId}`,
-      // cookies included same-origin
-    );
-    const push = (type: string, ev: MessageEvent) => {
-      setEvents((prev) => [`${type}: ${ev.data}`.slice(0, 180), ...prev].slice(0, 8));
-      void refresh();
-    };
-    es.addEventListener('attempt.running', (e) => push('运行中', e as MessageEvent));
-    es.addEventListener('attempt.progress', (e) => push('进度', e as MessageEvent));
-    es.addEventListener('attempt.succeeded', (e) => push('成功', e as MessageEvent));
-    es.addEventListener('attempt.failed', (e) => push('失败', e as MessageEvent));
-    es.onerror = () => {
-      /* browser auto-reconnects */
-    };
-    const t = setInterval(() => void refresh(), 3000);
-    return () => {
-      es.close();
-      clearInterval(t);
-    };
-  }, [workspaceId, projectId, refresh]);
-
-  // Auto-expand while anything is queued/running.
-  const anyActive = runs.some((r) => r.status === 'RUNNING' || r.status === 'QUEUED');
-  useEffect(() => {
-    if (anyActive) onExpand();
-  }, [anyActive, onExpand]);
-
-  // 通知画布：是否有活跃 run（驱动节点结果 3 秒轮询与收尾刷新）。
-  useEffect(() => {
-    onActiveChange?.(anyActive);
-  }, [anyActive, onActiveChange]);
-
-  async function runAll() {
-    await onRunAll();
-    await refresh();
-  }
-
-  async function cancelRun(runId: string) {
-    await fetch(`/api/workspaces/${workspaceId}/runs/${runId}/cancel`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-    await refresh();
-  }
-
-  async function retryAttempt(attemptId: string) {
-    await fetch(`/api/workspaces/${workspaceId}/attempts/${attemptId}/retry`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-    await refresh();
-  }
-
-  return (
-    <div className="studio-drawer">
-      <div className="row">
-        <strong>任务抽屉</strong>
-        <button type="button" className="btn" disabled={busy || !ready} onClick={() => void runAll()}>
-          {busy ? '启动中…' : '运行整图（演示模式 · 预算 $5）'}
-        </button>
-        <button type="button" className="btn" onClick={() => void refresh()}>
-          刷新
-        </button>
-        {msg && (
-          <span style={{ opacity: 0.85 }}>
-            {msg.authRequired ? (
-              <>
-                生图需要登录账号 — <Link href="/login">去登录</Link>
-              </>
-            ) : (
-              msg.message
-            )}
-          </span>
-        )}
-        <span style={{ marginLeft: 'auto' }}>
-          <button type="button" className="btn" onClick={onToggleExpanded}>
-            {expanded ? '收起 ▾' : `展开 ▴（${runs.length} 个运行）`}
-          </button>
-        </span>
-      </div>
-      {!expanded ? null : (
-        <>
-          <div className="stack" style={{ gap: 6, maxHeight: 160, overflow: 'auto' }}>
-        {runs.length === 0 && (
-          <div role="status" className="faint">暂无运行 — 排队 / 运行中 / 成功 / 失败会显示在这里。</div>
-        )}
-        {runs.map((r) => (
-          <div key={r.id} className="run-card">
-            <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'space-between' }}>
-              <span>
-                <code>{r.id.slice(0, 8)}</code> · <strong>{zh(RUN_STATUS_ZH, r.status)}</strong> · 预估{' '}
-                {(r.estimateMicrounits / 1_000_000).toFixed(3)} 美元
-              </span>
-              {(r.status === 'QUEUED' || r.status === 'RUNNING') && (
-                <button type="button" className="btn" onClick={() => void cancelRun(r.id)}>
-                  取消
-                </button>
-              )}
-            </div>
-            {r.items.map((it) => {
-              const latest = it.attempts[it.attempts.length - 1];
-              return (
-                <div key={it.id} style={{ fontSize: 'var(--font-size-sm)', opacity: 0.9, paddingLeft: 8 }}>
-                  节点 <code>{it.nodeId}</code> · {zh(RUN_STATUS_ZH, it.status)}
-                  {latest && (
-                    <>
-                      {' '}
-                      · 尝试 #{latest.attemptNo} {zh(RUN_STATUS_ZH, latest.status)}（{latest.progress}%）
-                      {latest.errorClass && (
-                        <span style={{ color: 'var(--danger-text)' }}>
-                          {' '}
-                          {latest.errorClass}: {latest.errorMessage}
-                        </span>
-                      )}
-                      {(latest.status === 'FAILED_FINAL' || latest.status === 'FAILED_RETRYABLE') && (
-                        <button type="button" className="btn" style={{ marginLeft: 8 }} onClick={() => void retryAttempt(latest.id)}>
-                          重试
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
+          <div className="chat-panel">
+            <ChatPanel
+              workspaceId={workspaceId}
+              projectId={projectId}
+              workflowId={draft?.workflowId ?? null}
+              getRevision={getRevision}
+              onGraphChanged={handleGraphChanged}
+              onUsePrompt={handleUsePrompt}
+              onCollapse={() => toggleAside(true)}
+            />
           </div>
-        ))}
-          </div>
-          {events.length > 0 && (
-            <div className="faint" style={{ fontSize: 'var(--font-size-xs)' }}>
-              实时事件：{events[0]}
-            </div>
-          )}
-        </>
+        </aside>
+      ) : (
+        <button
+          type="button"
+          className="chat-reopen-btn"
+          onClick={() => toggleAside(false)}
+          title="展开创意参谋"
+          aria-label="展开创意参谋"
+        >
+          ✦
+        </button>
       )}
     </div>
   );
