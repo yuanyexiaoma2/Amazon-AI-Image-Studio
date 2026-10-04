@@ -38,3 +38,6 @@ packages/db/prisma/*.db-journal
 test-results/
 playwright-report/
 .env.bak
+
+# third-party recon dumps (account identifiers); do not commit
+libtv-recon/
