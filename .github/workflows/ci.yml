@@ -69,12 +69,13 @@ jobs:
 
       - name: Start MinIO (object storage)
         run: |
-          # Prefer quay.io — Docker Hub pulls for minio/minio are intermittently denied on GHA.
+          # Official images left Docker Hub (2026-09) and quay.io stopped anonymous pulls (2026-10-02).
+          # This tag is a public rebuild of upstream MinIO with the same server /data entrypoint.
           docker run -d --name studio-minio \
             -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
-            quay.io/minio/minio:RELEASE.2024-12-18T13-15-44Z server /data
+            ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z server /data
           for i in $(seq 1 45); do
             if curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null; then
               echo "minio ready"
