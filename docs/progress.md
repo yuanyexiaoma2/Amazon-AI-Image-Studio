@@ -770,9 +770,9 @@ One branch / one PR / one review each; merge unlocks the next segment.
 
 | Command | Result |
 |---|---|
-| `pnpm lint` / `typecheck` / `test` / `build` | Exit 0 全绿，2026-09-18 Asia/Shanghai（一轮）/ 2026-09-19（二轮 A–H 后） |
+| `pnpm lint` / `typecheck` / `test` / `build` | 本地曾报全绿，但 GitHub CI run 35333111320（HEAD `3b00c00`）在 `apps/web` 单测失败。2026-10-04 已把 `chat.integration.test.ts` 改成参谋契约：只断言提示词回复，不再要求 `commandsSummary`、画布变更或预算扣减。尚未在本机重跑集成测试（需要 `RUN_INTEGRATION=1` 和 Postgres） |
 | tabbit 浏览器走查（`dev:local` :3000/:3001，Fake provider） | 一轮 6 项交互全过（修复双击缩放冲突）；二轮 A–H 全过（修复 stale 即时刷新 + 下载跨源跳页） |
-| Provider | 全程 **Fake**；未读未用真实 KIE_API_KEY |
+| Provider | 画布走查用 Fake。PR-7-14 / PR-7-16 用过真实 kie 浏览器验证，不能写成「未用 KIE_API_KEY」 |
 | 进程清理 | 两轮验证后 dev server 均已杀，:3000/:3001 无监听；tabbit task 已 finish |
 
 **不修仅记录：** 蒙版编辑器入口随 PropertiesPanel 退役（replace_background/inpaint 已不在 palette；MaskEditor 文件保留，需要时在 Legacy 卡重挂）；`.studio-drawer`/`.palette-btn` 死样式已于 `ddedf48` 清理；tabbit 截图偶发 capture 超时（环境问题，页面 rAF/控制台健康，重试即恢复）；fake 注册表无 i2i-only 生成模型，模型禁用态仅单测覆盖未做 UI 演示。

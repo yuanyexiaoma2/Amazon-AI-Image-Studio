@@ -1,6 +1,6 @@
 /**
- * Route-level tests for the V2 PR-4 chat agent API:
- * chat-sessions create/list/get + POST messages (agent turn, session budget gate).
+ * Route-level tests for the advisor chat API:
+ * chat-sessions create/list/get + POST messages (prompt-only reply, canvas unchanged).
  * Runs only with RUN_INTEGRATION=1 (real Postgres), same gate as other route tests.
  */
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -102,18 +102,17 @@ describe.skipIf(!run)('Chat agent API (real route handlers)', () => {
   }
 
   it(
-    'agent turn: build graph, run with budget accounting, then budget rejects',
+    'advisor turn replies with a prompt and does not touch the canvas',
     { timeout: 30_000 },
     async () => {
     const { owner, project, workflow } = await seed();
     const workspaceId = owner.workspace.id;
     asSession(owner.user.id, owner.user.email);
 
-    // Create a session bound to the workflow with a $0.01 budget (= 1 fake run).
     const created = await postChatSessions(
       post('/chat-sessions', {
         workflowId: workflow.id,
-        title: 'Agent 会话',
+        title: '参谋会话',
         budgetLimit: { currency: 'USD', amount: 0.01 },
       }),
       ctx(workspaceId, project.id),
@@ -123,7 +122,6 @@ describe.skipIf(!run)('Chat agent API (real route handlers)', () => {
     expect(session.workflowId).toBe(workflow.id);
     expect(session.spentMicrounits).toBe(0);
 
-    // Sessions list (filtered by workflowId).
     const listed = await getChatSessions(
       get(`/chat-sessions?workflowId=${workflow.id}`),
       ctx(workspaceId, project.id),
@@ -133,75 +131,46 @@ describe.skipIf(!run)('Chat agent API (real route handlers)', () => {
     expect(listedJson.items).toHaveLength(1);
     expect(listedJson.items[0].id).toBe(session.id);
 
-    // Turn 1: fake agent builds the graph (addNode x2 + connect).
-    const turn1 = await postChatMessage(
+    const before = await workflows.getWithDraft(workspaceId, workflow.id);
+    const graphBefore = workflows.parseGraph(before!.draft!);
+
+    const turn = await postChatMessage(
       post('/messages', { content: '帮我搭建一个生图流程' }),
       sessionCtx(workspaceId, project.id, session.id),
     );
-    expect(turn1.status).toBe(200);
-    const turn1Json = await turn1.json();
-    expect(turn1Json.userMessage.role).toBe('USER');
-    expect(turn1Json.assistantMessage.role).toBe('ASSISTANT');
-    expect(turn1Json.assistantMessage.content.commandsSummary.count).toBe(3);
-    expect(turn1Json.assistantMessage.content.commandsSummary.types).toEqual([
-      'addNode',
-      'addNode',
-      'connect',
-    ]);
-    expect(typeof turn1Json.batchId).toBe('string');
-    expect(turn1Json.assistantMessage.batchId).toBe(turn1Json.batchId);
-    expect(turn1Json.assistantMessage.provider).toBe('fake-chat-agent');
-    expect(turn1Json.run).toBeUndefined();
+    expect(turn.status).toBe(200);
+    const turnJson = await turn.json();
+    expect(turnJson.userMessage.role).toBe('USER');
+    expect(turnJson.assistantMessage.role).toBe('ASSISTANT');
+    expect(turnJson.assistantMessage.content.commandsSummary).toBeUndefined();
+    expect(turnJson.batchId).toBeUndefined();
+    expect(turnJson.assistantMessage.batchId).toBeNull();
+    expect(turnJson.assistantMessage.provider).toBe('fake-llm-advisor');
+    expect(turnJson.run).toBeUndefined();
+    expect(turnJson.assistantMessage.content.text).toContain('演示参谋');
+    expect(turnJson.assistantMessage.content.text).toContain('Professional product photography');
 
-    // Graph was really mutated: source_image + generate + edge.
-    const wfAfterBuild = await workflows.getWithDraft(workspaceId, workflow.id);
-    const graph = workflows.parseGraph(wfAfterBuild!.draft!);
-    expect(graph.nodes.map((n) => n.id).sort()).toEqual(['chat-gen-1', 'chat-src-1']);
-    expect(graph.edges).toHaveLength(1);
-
-    // Turn 2: fake agent runs the graph; run is created and spend accumulates.
-    const turn2 = await postChatMessage(
-      post('/messages', { content: '运行' }),
-      sessionCtx(workspaceId, project.id, session.id),
+    const after = await workflows.getWithDraft(workspaceId, workflow.id);
+    const graphAfter = workflows.parseGraph(after!.draft!);
+    expect(graphAfter.nodes.map((n) => n.id).sort()).toEqual(
+      graphBefore.nodes.map((n) => n.id).sort(),
     );
-    expect(turn2.status).toBe(200);
-    const turn2Json = await turn2.json();
-    expect(turn2Json.run).toBeDefined();
-    expect(turn2Json.run.status).toBeDefined();
-    expect(turn2Json.run.idempotencyKey).toMatch(/^chat-run-/);
-    expect(turn2Json.run.estimateMicrounits).toBe(10_000); // 1 generate node × $0.01
-    expect(turn2Json.budgetRejected).toBeUndefined();
+    expect(graphAfter.edges).toHaveLength(graphBefore.edges.length);
 
-    const budgetAfterRun = await chat.getBudgetState(workspaceId, session.id);
-    expect(budgetAfterRun?.spentMicrounits).toBe(10_000);
+    const budget = await chat.getBudgetState(workspaceId, session.id);
+    expect(budget?.spentMicrounits).toBe(0);
 
-    // Turn 3: budget exhausted — run command rejected, no new run created.
-    const turn3 = await postChatMessage(
-      post('/messages', { content: '再运行一次' }),
-      sessionCtx(workspaceId, project.id, session.id),
-    );
-    expect(turn3.status).toBe(200);
-    const turn3Json = await turn3.json();
-    expect(turn3Json.budgetRejected).toBe(true);
-    expect(turn3Json.run).toBeUndefined();
-    expect(turn3Json.batchId).toBeUndefined();
-    expect(turn3Json.assistantMessage.content.budgetRejected).toBe(true);
-    expect(turn3Json.assistantMessage.content.text).toContain('预算不足');
-
-    // Session detail carries the full transcript (3 user + 3 assistant messages).
     const detail = await getChatSession(
       get(`/chat-sessions/${session.id}`),
       sessionCtx(workspaceId, project.id, session.id),
     );
     expect(detail.status).toBe(200);
     const detailJson = await detail.json();
-    expect(detailJson.id).toBe(session.id);
-    expect(detailJson.spentMicrounits).toBe(10_000);
-    expect(detailJson.messages).toHaveLength(6);
-    expect(detailJson.messages[0].role).toBe('USER');
+    expect(detailJson.messages).toHaveLength(2);
+    expect(detailJson.spentMicrounits).toBe(0);
   });
 
-  it('session without a bound workflow discards canvas commands', async () => {
+  it('session without a bound workflow still only returns advisor text', async () => {
     const { owner, project } = await seed();
     const workspaceId = owner.workspace.id;
     asSession(owner.user.id, owner.user.email);
@@ -221,8 +190,10 @@ describe.skipIf(!run)('Chat agent API (real route handlers)', () => {
     expect(turn.status).toBe(200);
     const turnJson = await turn.json();
     expect(turnJson.batchId).toBeUndefined();
-    expect(turnJson.assistantMessage.content.text).toContain('未绑定画布');
-    expect(turnJson.assistantMessage.content.commandsSummary.degraded).toBe(true);
+    expect(turnJson.assistantMessage.content.commandsSummary).toBeUndefined();
+    expect(turnJson.assistantMessage.content.text).toContain('演示参谋');
+    expect(turnJson.assistantMessage.content.text).not.toContain('未绑定画布');
+    expect(turnJson.assistantMessage.provider).toBe('fake-llm-advisor');
   });
 
   it('rejects workflowId from another project and enforces tenant isolation', async () => {
